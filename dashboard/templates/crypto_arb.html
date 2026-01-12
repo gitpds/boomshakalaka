@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Conditional Arb Scanner{% endblock %}
+{% block page_title %}Conditional Arb Scanner{% endblock %}
+{% block page_subtitle %}Logical relationship arbitrage detection{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div style="margin-bottom: 24px;">
+    <a href="{{ url_for('crypto') }}" style="color: var(--text-muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Back to Crypto
+    </a>
+</div>
+
+<!-- Module Header -->
+<div class="category-header">
+    <div class="category-icon crypto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M16 8l-4 4-4-4"/>
+            <path d="M8 16l4-4 4 4"/>
+        </svg>
+    </div>
+    <div class="category-info">
+        <h2>Conditional Arb Scanner</h2>
+        <p>Finds arbitrage in logically related prediction markets</p>
+    </div>
+</div>
+
+<!-- Status Banner -->
+<div style="background: var(--warning-bg); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 16px 20px; margin-bottom: 32px; display: flex; align-items: center; gap: 12px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+    </svg>
+    <span style="color: var(--warning); font-weight: 500;">This module is available but not currently scheduled. It can be run manually.</span>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon crypto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="8.5" cy="7" r="4"/>
+                    <line x1="20" y1="8" x2="20" y2="14"/>
+                    <line x1="23" y1="11" x2="17" y2="11"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">5</div>
+        <div class="stat-label">Relationship Types</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">--</div>
+        <div class="stat-label">Scan Interval</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon warning">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+            <span class="stat-badge warning">Inactive</span>
+        </div>
+        <div class="stat-value">Manual</div>
+        <div class="stat-label">Run Mode</div>
+    </div>
+</div>
+
+<!-- Relationship Types -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M16 8l-4 4-4-4"/>
+                <path d="M8 16l4-4 4 4"/>
+            </svg>
+            Relationship Types Detected
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            <div class="job-item">
+                <div class="job-status scheduled"></div>
+                <div class="job-info">
+                    <div class="job-name">Mutually Exclusive</div>
+                    <div class="job-schedule">If A happens, B cannot happen (e.g., different candidates winning same race)</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-status scheduled"></div>
+                <div class="job-info">
+                    <div class="job-name">Conditional Positive</div>
+                    <div class="job-schedule">If A happens, B must happen (e.g., winning primary implies being nominee)</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-status scheduled"></div>
+                <div class="job-info">
+                    <div class="job-name">Conditional Negative</div>
+                    <div class="job-schedule">If A happens, B cannot happen (e.g., dropping out implies not winning)</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-status scheduled"></div>
+                <div class="job-info">
+                    <div class="job-name">Sequential</div>
+                    <div class="job-schedule">A must happen before B can happen (e.g., nomination before election win)</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-status scheduled"></div>
+                <div class="job-info">
+                    <div class="job-name">Hierarchical</div>
+                    <div class="job-schedule">B is a subset of A (e.g., winning state implies winning electoral votes)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- How It Works -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            How It Works
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="module-stats" style="margin-bottom: 0;">
+            <div class="module-stat">
+                <div class="module-stat-value">1</div>
+                <div class="module-stat-label">Find Related</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value">2</div>
+                <div class="module-stat-label">Check Logic</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value">3</div>
+                <div class="module-stat-label">Calculate Edge</div>
+            </div>
+        </div>
+        <p style="margin-top: 20px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+            The scanner identifies pairs of Polymarket markets that have logical relationships but are priced independently.
+            When the combined probabilities violate logical constraints (e.g., mutually exclusive events summing to >100%),
+            it identifies arbitrage opportunities.
+        </p>
+    </div>
+</div>
+
+<!-- Example -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
+            Example Scenario
+        </span>
+    </div>
+    <div class="card-body">
+        <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.7; margin-bottom: 16px;">
+            <strong style="color: var(--text-primary);">Mutually Exclusive Mispricing:</strong>
+        </p>
+        <div style="background: var(--bg-tertiary); padding: 16px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8;">
+            Market A: "Candidate X wins election" = 55%<br>
+            Market B: "Candidate Y wins election" = 52%<br>
+            <br>
+            <span style="color: var(--error);">Combined: 107% (impossible!)</span><br>
+            <span style="color: var(--success);">Opportunity: Short both, guaranteed 7% profit</span>
+        </div>
+    </div>
+</div>
+
+<!-- Files -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Module Files
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">detector.py</div>
+                    <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace; color: var(--text-muted);">polymarket/conditional/detector.py</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">scanner.py</div>
+                    <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace; color: var(--text-muted);">polymarket/conditional/scanner.py</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">probability.py</div>
+                    <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace; color: var(--text-muted);">polymarket/conditional/probability.py</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

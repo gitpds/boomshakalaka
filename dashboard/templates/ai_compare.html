@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}Compare - AI Studio{% endblock %}
+{% block page_title %}Compare Generations{% endblock %}
+{% block page_subtitle %}Side-by-side comparison with parameter diffs{% endblock %}
+
+{% block content %}
+<style>
+    .compare-controls {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .grid-selector {
+        display: flex;
+        gap: 8px;
+    }
+
+    .grid-selector button {
+        padding: 8px 16px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .grid-selector button.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
+    .compare-grid {
+        display: grid;
+        gap: 16px;
+    }
+
+    .compare-grid.grid-2x2 { grid-template-columns: 1fr 1fr; }
+    .compare-grid.grid-3x3 { grid-template-columns: 1fr 1fr 1fr; }
+    .compare-grid.grid-4x4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+    .compare-slot {
+        background: var(--bg-card);
+        border: 2px dashed var(--border-color);
+        border-radius: 12px;
+        aspect-ratio: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .compare-slot.filled {
+        border-style: solid;
+    }
+
+    .compare-slot-image {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-tertiary);
+    }
+
+    .compare-slot-image img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+
+    .compare-slot-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: background var(--transition-fast);
+    }
+
+    .compare-slot-empty:hover {
+        background: var(--bg-hover);
+    }
+
+    .compare-slot-empty svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+
+    .compare-slot-params {
+        padding: 12px;
+        font-size: 0.8rem;
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+    }
+
+    .compare-slot-params .param {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+
+    .compare-slot-params .param-label {
+        color: var(--text-muted);
+    }
+
+    .compare-slot-params .param-value {
+        color: var(--text-primary);
+    }
+
+    .compare-slot-params .param-value.diff {
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    .compare-slot-actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        background: var(--bg-tertiary);
+    }
+
+    .compare-slot-actions button {
+        flex: 1;
+        padding: 6px;
+        font-size: 0.8rem;
+    }
+
+    .param-diff-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 24px;
+    }
+
+    .param-diff-row {
+        display: flex;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .param-diff-row:last-child {
+        border-bottom: none;
+    }
+
+    .param-diff-name {
+        width: 120px;
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .param-diff-values {
+        flex: 1;
+        display: flex;
+        gap: 16px;
+    }
+
+    .param-diff-value {
+        flex: 1;
+        text-align: center;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .param-diff-value.different {
+        background: var(--accent-bg);
+        color: var(--accent);
+    }
+</style>
+
+<div class="compare-controls">
+    <span style="color: var(--text-secondary);">Grid Size:</span>
+    <div class="grid-selector">
+        <button onclick="setGridSize('2x2')" class="active" data-grid="2x2">2x2</button>
+        <button onclick="setGridSize('3x3')" data-grid="3x3">3x3</button>
+        <button onclick="setGridSize('4x4')" data-grid="4x4">4x4</button>
+    </div>
+
+    <div style="flex: 1;"></div>
+
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="checkbox" id="sync-zoom" checked>
+        <span>Sync Zoom</span>
+    </label>
+
+    <button class="btn btn-secondary btn-sm" onclick="clearAll()">Clear All</button>
+    <button class="btn btn-primary btn-sm" onclick="exportCollage()">Export Collage</button>
+</div>
+
+<div class="compare-grid grid-2x2" id="compare-grid">
+    <!-- Slots will be generated by JS -->
+</div>
+
+<div class="param-diff-panel" id="param-diff" style="display: none;">
+    <h3 style="margin: 0 0 16px 0;">Parameter Differences</h3>
+    <div id="param-diff-content"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let gridSize = '2x2';
+let slots = [];
+let compareItems = [];
+
+function init() {
+    // Load from localStorage
+    const stored = localStorage.getItem('compareList');
+    if (stored) {
+        compareItems = JSON.parse(stored);
+    }
+    renderGrid();
+}
+
+function setGridSize(size) {
+    gridSize = size;
+    document.querySelectorAll('.grid-selector button').forEach(b => {
+        b.classList.toggle('active', b.dataset.grid === size);
+    });
+
+    const grid = document.getElementById('compare-grid');
+    grid.className = `compare-grid grid-${size}`;
+    renderGrid();
+}
+
+function renderGrid() {
+    const grid = document.getElementById('compare-grid');
+    const [cols, rows] = gridSize.split('x').map(Number);
+    const totalSlots = cols * rows;
+
+    let html = '';
+    for (let i = 0; i < totalSlots; i++) {
+        const item = compareItems[i];
+
+        if (item && item.image_url) {
+            html += `
+                <div class="compare-slot filled" data-index="${i}">
+                    <div class="compare-slot-image">
+                        <img src="${item.image_url}" alt="Generation ${i + 1}">
+                    </div>
+                    <div class="compare-slot-params">
+                        <div class="param">
+                            <span class="param-label">Seed</span>
+                            <span class="param-value">${item.seed || 'Random'}</span>
+                        </div>
+                        <div class="param">
+                            <span class="param-label">CFG</span>
+                            <span class="param-value">${item.cfg_scale || 7}</span>
+                        </div>
+                        <div class="param">
+                            <span class="param-label">Steps</span>
+                            <span class="param-value">${item.steps || 25}</span>
+                        </div>
+                    </div>
+                    <div class="compare-slot-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="useSettings(${i})">Use Settings</button>
+                        <button class="btn btn-secondary btn-sm" onclick="removeSlot(${i})">Remove</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="compare-slot" data-index="${i}">
+                    <div class="compare-slot-empty" onclick="addToSlot(${i})">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        <span>Click to add image</span>
+                        <span style="font-size: 0.8rem; margin-top: 4px;">or drag from history</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    grid.innerHTML = html;
+    updateParamDiff();
+}
+
+function addToSlot(index) {
+    // Open history in modal or redirect to generate with slot target
+    alert('Go to History page and click an image to add it to comparison, or generate new images from the Generate page.');
+}
+
+function removeSlot(index) {
+    compareItems.splice(index, 1);
+    localStorage.setItem('compareList', JSON.stringify(compareItems));
+    renderGrid();
+}
+
+function useSettings(index) {
+    const item = compareItems[index];
+    if (item) {
+        // Store settings and redirect to generate
+        localStorage.setItem('loadSettings', JSON.stringify(item));
+        window.location.href = '/ai/generate';
+    }
+}
+
+function clearAll() {
+    compareItems = [];
+    localStorage.setItem('compareList', JSON.stringify([]));
+    renderGrid();
+}
+
+function updateParamDiff() {
+    const diffPanel = document.getElementById('param-diff');
+    const diffContent = document.getElementById('param-diff-content');
+
+    const filledItems = compareItems.filter(item => item && item.image_url);
+
+    if (filledItems.length < 2) {
+        diffPanel.style.display = 'none';
+        return;
+    }
+
+    diffPanel.style.display = 'block';
+
+    const params = ['seed', 'cfg_scale', 'steps', 'sampler', 'model', 'width', 'height'];
+    let html = '';
+
+    params.forEach(param => {
+        const values = filledItems.map(item => item[param] || '-');
+        const allSame = values.every(v => v === values[0]);
+
+        html += `
+            <div class="param-diff-row">
+                <div class="param-diff-name">${param.replace('_', ' ')}</div>
+                <div class="param-diff-values">
+                    ${values.map(v => `<div class="param-diff-value ${!allSame ? 'different' : ''}">${v}</div>`).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    diffContent.innerHTML = html;
+}
+
+function exportCollage() {
+    alert('Collage export coming soon! Will create a single image with all compared generations.');
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', init);
+</script>
+{% endblock %}

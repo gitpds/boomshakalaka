@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Crypto{% endblock %}
+{% block page_title %}Crypto{% endblock %}
+{% block page_subtitle %}Crypto & prediction market automation{% endblock %}
+
+{% block content %}
+<!-- Category Header -->
+<div class="category-header">
+    <div class="category-icon crypto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+    </div>
+    <div class="category-info">
+        <h2>Crypto & Markets</h2>
+        <p>Polymarket analysis and prediction market tools</p>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="stats-grid">
+    <div class="stat-card crypto">
+        <div class="stat-header">
+            <div class="stat-icon crypto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+            </div>
+            <span class="stat-badge {% if insider_errors > 0 %}warning{% else %}success{% endif %}">
+                {% if insider_errors > 0 %}{{ insider_errors }} errors{% else %}Healthy{% endif %}
+            </span>
+        </div>
+        <div class="stat-value">Insider</div>
+        <div class="stat-label">Every 15 min</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M16 8l-4 4-4-4"/>
+                    <path d="M8 16l4-4 4 4"/>
+                </svg>
+            </div>
+            <span class="stat-badge warning">Not Scheduled</span>
+        </div>
+        <div class="stat-value">Arb</div>
+        <div class="stat-label">Conditional Scanner</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">3</div>
+        <div class="stat-label">Total Modules</div>
+    </div>
+</div>
+
+<!-- Module Cards (Clickable) -->
+<div class="module-grid">
+    <!-- Insider Detector -->
+    <a href="{{ url_for('crypto_insider') }}" class="module-card" style="cursor: pointer; text-decoration: none;">
+        <div class="module-header">
+            <div class="module-title">
+                <div class="module-icon" style="background: var(--crypto-bg); color: var(--crypto-color);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </div>
+                <span class="module-name">Insider Detector</span>
+            </div>
+            <div class="module-status active">
+                <span class="module-status-dot"></span>
+                Active
+            </div>
+        </div>
+        <div class="module-body">
+            <p class="module-description">
+                Monitors Polymarket for suspicious trading activity and unusual volume patterns.
+            </p>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+                Last run: {{ insider_last_run or 'Unknown' }}
+            </div>
+        </div>
+    </a>
+
+    <!-- Conditional Arb Scanner -->
+    <a href="{{ url_for('crypto_arb') }}" class="module-card" style="cursor: pointer; text-decoration: none;">
+        <div class="module-header">
+            <div class="module-title">
+                <div class="module-icon" style="background: var(--crypto-bg); color: var(--crypto-color);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M16 8l-4 4-4-4"/>
+                        <path d="M8 16l4-4 4 4"/>
+                    </svg>
+                </div>
+                <span class="module-name">Conditional Arb Scanner</span>
+            </div>
+            <div class="module-status inactive">
+                <span class="module-status-dot"></span>
+                Not Scheduled
+            </div>
+        </div>
+        <div class="module-body">
+            <p class="module-description">
+                Finds arbitrage opportunities in logically related Polymarket positions.
+            </p>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+                Status: Available but not scheduled
+            </div>
+        </div>
+    </a>
+
+    <!-- Political Data -->
+    <div class="module-card" style="opacity: 0.7;">
+        <div class="module-header">
+            <div class="module-title">
+                <div class="module-icon" style="background: var(--crypto-bg); color: var(--crypto-color);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 20V10"/>
+                        <path d="M12 20V4"/>
+                        <path d="M6 20v-6"/>
+                    </svg>
+                </div>
+                <span class="module-name">Political Data Aggregator</span>
+            </div>
+            <div class="module-status inactive">
+                <span class="module-status-dot"></span>
+                Not Scheduled
+            </div>
+        </div>
+        <div class="module-body">
+            <p class="module-description">
+                Aggregates polling data from FiveThirtyEight, RealClearPolitics, Google Trends, and GDELT.
+            </p>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+                Status: Available but not scheduled
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Recent Activity
+        </span>
+        <a href="{{ url_for('logs') }}" class="btn btn-secondary btn-sm">View All Logs</a>
+    </div>
+    <div class="card-body">
+        <div class="activity-list">
+            <div class="activity-item">
+                <div class="activity-icon {% if insider_errors > 0 %}warning{% else %}success{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">Insider Detector</div>
+                    <div class="activity-description">
+                        {% if insider_errors > 0 %}{{ insider_errors }} error(s) in last 24h{% else %}Running normally{% endif %}
+                    </div>
+                </div>
+                <div class="activity-time">{{ insider_last_run or 'Unknown' }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

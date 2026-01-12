@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+
+{% block title %}Sports Replays{% endblock %}
+{% block page_title %}Sports Replays{% endblock %}
+{% block page_subtitle %}Daily YouTube highlights for your favorite teams{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div style="margin-bottom: 24px;">
+    <a href="{{ url_for('sports') }}" style="color: var(--text-muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Back to Sports
+    </a>
+</div>
+
+<!-- Module Header -->
+<div class="category-header">
+    <div class="category-icon sports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+    </div>
+    <div class="category-info">
+        <h2>Sports Replays</h2>
+        <p>Automated daily email digest of YouTube highlights</p>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card sports">
+        <div class="stat-header">
+            <div class="stat-icon sports">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">4</div>
+        <div class="stat-label">Teams Tracked</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">4 AM</div>
+        <div class="stat-label">Daily Run Time</div>
+    </div>
+
+    <div class="stat-card {% if errors > 0 %}warning{% else %}success{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if errors > 0 %}warning{% else %}success{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    {% if errors > 0 %}
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    {% else %}
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                    {% endif %}
+                </svg>
+            </div>
+            <span class="stat-badge {% if errors > 0 %}warning{% else %}success{% endif %}">24h</span>
+        </div>
+        <div class="stat-value">{{ errors }}</div>
+        <div class="stat-label">Errors Today</div>
+    </div>
+</div>
+
+<!-- Teams Configuration with Videos -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+            </svg>
+            Tracked Teams
+        </span>
+        <button class="btn btn-secondary btn-sm" onclick="refreshAllVideos()">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Refresh Videos
+        </button>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% for team_name, team_data in team_videos.items() %}
+        <div class="team-section">
+            <button class="team-header" onclick="toggleTeam(this)">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div class="job-status running"></div>
+                    <div>
+                        <div class="team-name">{{ team_name }}</div>
+                        <div class="team-league">{{ team_data.league }}</div>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="badge badge-accent">{{ team_data.videos|length }} videos</span>
+                    <svg class="team-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </div>
+            </button>
+            <div class="team-videos">
+                {% if team_data.videos %}
+                {% for video in team_data.videos %}
+                <a href="{{ video.link }}" target="_blank" class="video-item">
+                    <div class="video-thumbnail {% if video.thumbnail and '.svg' in video.thumbnail %}logo-thumbnail{% endif %}" data-team="{{ team_name }}">
+                        <img src="{{ video.thumbnail or 'https://i.ytimg.com/vi/' ~ video.video_id ~ '/mqdefault.jpg' }}" alt="{{ video.title }}" loading="lazy">
+                        <div class="video-play">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title">{{ video.title }}</div>
+                        <div class="video-meta">
+                            {% if video.is_highlight %}<span class="badge badge-success" style="margin-right: 8px;">Highlight</span>{% endif %}
+                            {{ video.published }}
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+                {% else %}
+                <div style="padding: 20px; color: var(--text-muted); text-align: center;">
+                    No recent videos found
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.team-section {
+    border-bottom: 1px solid var(--border-color);
+}
+.team-section:last-child {
+    border-bottom: none;
+}
+.team-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    text-align: left;
+}
+.team-header:hover {
+    background: var(--bg-hover);
+}
+.team-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.team-league {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.team-chevron {
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+}
+.team-section.expanded .team-chevron {
+    transform: rotate(180deg);
+}
+.team-videos {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: var(--bg-tertiary);
+}
+.team-section.expanded .team-videos {
+    max-height: 600px;
+    overflow-y: auto;
+}
+.video-item {
+    display: flex;
+    gap: 16px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background var(--transition-fast);
+    text-decoration: none;
+    color: inherit;
+}
+.video-item:last-child {
+    border-bottom: none;
+}
+.video-item:hover {
+    background: var(--bg-hover);
+}
+.video-thumbnail {
+    position: relative;
+    width: 160px;
+    height: 90px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--bg-primary);
+}
+.video-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.video-thumbnail.logo-thumbnail {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+}
+.video-thumbnail.logo-thumbnail img {
+    width: 60%;
+    height: 60%;
+    object-fit: contain;
+}
+/* Team-specific logo backgrounds */
+.video-thumbnail.logo-thumbnail[data-team="Liverpool FC"] {
+    background: linear-gradient(135deg, #c8102e 0%, #8b0000 100%);
+}
+.video-thumbnail.logo-thumbnail[data-team="Detroit Tigers"] {
+    background: linear-gradient(135deg, #0c2340 0%, #0a1628 100%);
+}
+.video-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+.video-item:hover .video-play {
+    opacity: 1;
+}
+.video-play svg {
+    width: 16px;
+    height: 16px;
+    color: white;
+    margin-left: 2px;
+}
+.video-info {
+    flex: 1;
+    min-width: 0;
+}
+.video-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.video-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spinning {
+    animation: spin 1s linear infinite;
+}
+</style>
+
+<!-- How It Works -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            How It Works
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="module-stats" style="margin-bottom: 0;">
+            <div class="module-stat">
+                <div class="module-stat-value">1</div>
+                <div class="module-stat-label">Fetch RSS</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value">2</div>
+                <div class="module-stat-label">Filter Videos</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value">3</div>
+                <div class="module-stat-label">Send Email</div>
+            </div>
+        </div>
+        <p style="margin-top: 20px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+            Every day at 4:00 AM, the system fetches YouTube RSS feeds for each team's official channel,
+            filters for recent highlight videos, and compiles them into a formatted email digest sent to your inbox.
+        </p>
+    </div>
+</div>
+
+<!-- Schedule -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Schedule
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-item" style="background: var(--bg-tertiary); border-radius: 12px;">
+            <div class="job-status running"></div>
+            <div class="job-info">
+                <div class="job-name">Daily Highlights Email</div>
+                <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace;">0 4 * * *</div>
+            </div>
+            <div class="job-meta">
+                <span class="badge badge-success">Active</span>
+            </div>
+        </div>
+        <p style="margin-top: 16px; color: var(--text-muted); font-size: 12px;">
+            <strong>Last run:</strong> {{ last_run or 'Unknown' }}
+        </p>
+    </div>
+</div>
+
+<!-- Recent Logs -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Recent Logs
+        </span>
+        <button class="btn btn-secondary btn-sm" onclick="toggleAutoRefresh(this)">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Auto-refresh: Off
+        </button>
+    </div>
+    <div class="log-content" id="log-content">{{ log_content }}</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', highlightLogs);
+
+// Team expand/collapse
+function toggleTeam(button) {
+    const section = button.closest('.team-section');
+    section.classList.toggle('expanded');
+}
+
+function refreshAllVideos() {
+    // Show loading state
+    const btn = document.querySelector('[onclick="refreshAllVideos()"]');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = `<svg class="btn-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+    </svg> Loading...`;
+    btn.disabled = true;
+
+    fetch('/api/all-team-videos')
+        .then(response => response.json())
+        .then(data => {
+            // Reload page to show new videos
+            location.reload();
+        })
+        .catch(err => {
+            console.error('Error refreshing videos:', err);
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        });
+}
+
+// Auto-refresh for this page (renamed to avoid conflict with app.js)
+let replayLogRefreshInterval = null;
+
+function toggleAutoRefresh(button) {
+    if (replayLogRefreshInterval) {
+        clearInterval(replayLogRefreshInterval);
+        replayLogRefreshInterval = null;
+        button.innerHTML = `<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg> Auto-refresh: Off`;
+        button.classList.remove('btn-primary');
+        button.classList.add('btn-secondary');
+    } else {
+        refreshLog();
+        replayLogRefreshInterval = setInterval(refreshLog, 10000);
+        button.innerHTML = `<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg> Auto-refresh: On`;
+        button.classList.remove('btn-secondary');
+        button.classList.add('btn-primary');
+    }
+}
+
+function refreshLog() {
+    fetch('/api/logs/Sports Replays')
+        .then(response => response.json())
+        .then(data => {
+            const logContent = document.getElementById('log-content');
+            if (logContent && data.content) {
+                logContent.textContent = data.content;
+                highlightLogs();
+            }
+        });
+}
+</script>
+{% endblock %}

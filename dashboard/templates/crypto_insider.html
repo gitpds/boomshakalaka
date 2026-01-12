@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Insider Detector{% endblock %}
+{% block page_title %}Insider Detector{% endblock %}
+{% block page_subtitle %}Polymarket suspicious trading detection{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div style="margin-bottom: 24px;">
+    <a href="{{ url_for('crypto') }}" style="color: var(--text-muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Back to Crypto
+    </a>
+</div>
+
+<!-- Module Header -->
+<div class="category-header">
+    <div class="category-icon crypto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+        </svg>
+    </div>
+    <div class="category-info">
+        <h2>Insider Detector</h2>
+        <p>Monitors Polymarket for suspicious trading patterns</p>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card crypto">
+        <div class="stat-header">
+            <div class="stat-icon crypto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">15 min</div>
+        <div class="stat-label">Scan Interval</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">50+</div>
+        <div class="stat-label">Alert Threshold</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"/>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">$5K</div>
+        <div class="stat-label">Min Volume</div>
+    </div>
+
+    <div class="stat-card {% if errors > 0 %}warning{% else %}success{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if errors > 0 %}warning{% else %}success{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    {% if errors > 0 %}
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    {% else %}
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                    {% endif %}
+                </svg>
+            </div>
+            <span class="stat-badge {% if errors > 0 %}warning{% else %}success{% endif %}">24h</span>
+        </div>
+        <div class="stat-value">{{ errors }}</div>
+        <div class="stat-label">Errors Today</div>
+    </div>
+</div>
+
+<!-- Detection Criteria -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            Detection Criteria
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            <div class="job-item">
+                <div class="job-status running"></div>
+                <div class="job-info">
+                    <div class="job-name">Volume/Liquidity Ratio</div>
+                    <div class="job-schedule">Unusual volume relative to market liquidity</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-status running"></div>
+                <div class="job-info">
+                    <div class="job-name">Timing Analysis</div>
+                    <div class="job-schedule">Large trades before major announcements</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-status running"></div>
+                <div class="job-info">
+                    <div class="job-name">Price Extremity</div>
+                    <div class="job-schedule">Trades at extreme price levels (>90% or <10%)</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-status running"></div>
+                <div class="job-info">
+                    <div class="job-name">Resolution Proximity</div>
+                    <div class="job-schedule">Activity spike near market resolution</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- How It Works -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            How It Works
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="module-stats" style="margin-bottom: 0;">
+            <div class="module-stat">
+                <div class="module-stat-value">1</div>
+                <div class="module-stat-label">Scan Markets</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value">2</div>
+                <div class="module-stat-label">Score Activity</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value">3</div>
+                <div class="module-stat-label">Alert if >50</div>
+            </div>
+        </div>
+        <p style="margin-top: 20px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+            Every 15 minutes, the detector scans active Polymarket markets. It scores each market 0-100 based on suspicious indicators.
+            Markets scoring 50+ with volume over $5,000 and resolution within 30 days trigger email alerts for further investigation.
+        </p>
+    </div>
+</div>
+
+<!-- Alert Thresholds -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            </svg>
+            Alert Thresholds
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="module-stats">
+            <div class="module-stat">
+                <div class="module-stat-value" style="color: var(--success);">0-30</div>
+                <div class="module-stat-label">Normal</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value" style="color: var(--warning);">30-50</div>
+                <div class="module-stat-label">Watch</div>
+            </div>
+            <div class="module-stat">
+                <div class="module-stat-value" style="color: var(--error);">50+</div>
+                <div class="module-stat-label">Alert</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Schedule
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-item" style="background: var(--bg-tertiary); border-radius: 12px;">
+            <div class="job-status running"></div>
+            <div class="job-info">
+                <div class="job-name">Market Scan</div>
+                <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace;">*/15 6-23 * * *</div>
+            </div>
+            <div class="job-meta">
+                <span class="badge badge-success">Active</span>
+            </div>
+        </div>
+        <p style="margin-top: 16px; color: var(--text-muted); font-size: 12px;">
+            Runs every 15 minutes from 6 AM to 11 PM daily.
+            <br><strong>Last run:</strong> {{ last_run or 'Unknown' }}
+        </p>
+    </div>
+</div>
+
+<!-- Recent Logs -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Recent Logs
+        </span>
+        <button class="btn btn-secondary btn-sm" onclick="toggleAutoRefresh(this)">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Auto-refresh: Off
+        </button>
+    </div>
+    <div class="log-content" id="log-content">{{ log_content }}</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', highlightLogs);
+
+let autoRefreshInterval = null;
+
+function toggleAutoRefresh(button) {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+        button.innerHTML = `<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg> Auto-refresh: Off`;
+        button.classList.remove('btn-primary');
+        button.classList.add('btn-secondary');
+    } else {
+        refreshLog();
+        autoRefreshInterval = setInterval(refreshLog, 10000);
+        button.innerHTML = `<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg> Auto-refresh: On`;
+        button.classList.remove('btn-secondary');
+        button.classList.add('btn-primary');
+    }
+}
+
+function refreshLog() {
+    fetch('/api/logs/Insider')
+        .then(response => response.json())
+        .then(data => {
+            const logContent = document.getElementById('log-content');
+            if (logContent && data.content) {
+                logContent.textContent = data.content;
+                highlightLogs();
+            }
+        });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}API Health{% endblock %}
+{% block page_title %}API Health{% endblock %}
+{% block page_subtitle %}Monitor external API connectivity and status{% endblock %}
+
+{% block content %}
+<!-- Status Overview -->
+<div class="stats-grid">
+    <div class="stat-card" id="overall-status-card">
+        <div class="stat-header">
+            <div class="stat-icon icon-success" id="overall-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <span class="stat-badge badge-success" id="overall-badge">Checking...</span>
+        </div>
+        <div class="stat-value" id="overall-status">...</div>
+        <div class="stat-label">Overall Status</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon icon-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">2</div>
+        <div class="stat-label">APIs Monitored</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon icon-success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">60s</div>
+        <div class="stat-label">Check Interval</div>
+    </div>
+</div>
+
+<!-- API Cards -->
+<div class="grid-2">
+    <!-- The Odds API -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                The Odds API
+            </span>
+            <span class="api-status-badge" id="odds-status-badge">Checking...</span>
+        </div>
+        <div class="card-body api-card">
+            <div class="api-details">
+                <div class="api-detail">
+                    <div class="api-detail-value" id="odds-response-code">...</div>
+                    <div class="api-detail-label">Response Code</div>
+                </div>
+                <div class="api-detail">
+                    <div class="api-detail-value" id="odds-sports-count">...</div>
+                    <div class="api-detail-label">Sports Available</div>
+                </div>
+                <div class="api-detail">
+                    <div class="api-detail-value" id="odds-last-check">...</div>
+                    <div class="api-detail-label">Last Check</div>
+                </div>
+            </div>
+            <div style="margin-top: 20px; padding: 16px; background: var(--bg-tertiary); border-radius: 10px;">
+                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Message</div>
+                <div style="font-size: 14px; color: var(--text-primary);" id="odds-message">Checking API status...</div>
+            </div>
+            <div style="margin-top: 16px;">
+                <div style="font-size: 12px; color: var(--text-muted);">
+                    <strong>Endpoint:</strong> api.the-odds-api.com/v4/sports/
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Polymarket API -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+                Polymarket API
+            </span>
+            <span class="api-status-badge" id="pm-status-badge">Checking...</span>
+        </div>
+        <div class="card-body api-card">
+            <div class="api-details">
+                <div class="api-detail">
+                    <div class="api-detail-value" id="pm-response-code">...</div>
+                    <div class="api-detail-label">Response Code</div>
+                </div>
+                <div class="api-detail">
+                    <div class="api-detail-value">Gamma</div>
+                    <div class="api-detail-label">API Version</div>
+                </div>
+                <div class="api-detail">
+                    <div class="api-detail-value" id="pm-last-check">...</div>
+                    <div class="api-detail-label">Last Check</div>
+                </div>
+            </div>
+            <div style="margin-top: 20px; padding: 16px; background: var(--bg-tertiary); border-radius: 10px;">
+                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Message</div>
+                <div style="font-size: 14px; color: var(--text-primary);" id="pm-message">Checking API status...</div>
+            </div>
+            <div style="margin-top: 16px;">
+                <div style="font-size: 12px; color: var(--text-muted);">
+                    <strong>Endpoint:</strong> gamma-api.polymarket.com/markets
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Check -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Manual Health Check
+        </span>
+    </div>
+    <div class="card-body">
+        <p style="color: var(--text-secondary); margin-bottom: 16px;">
+            Run a manual health check to verify API connectivity. This will make fresh requests to both APIs.
+        </p>
+        <button class="btn btn-primary" onclick="runManualCheck()" id="manual-check-btn">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            Run Health Check
+        </button>
+        <span id="check-status" style="margin-left: 16px; color: var(--text-muted);"></span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function updateHealthDisplay() {
+    const data = await checkApiHealth();
+    if (!data) return;
+
+    const now = new Date().toLocaleTimeString();
+
+    // Update Odds API
+    if (data.odds_api) {
+        document.getElementById('odds-status-badge').textContent =
+            data.odds_api.status === 'healthy' ? 'Healthy' : 'Error';
+        document.getElementById('odds-status-badge').className =
+            `api-status-badge ${data.odds_api.status}`;
+        document.getElementById('odds-response-code').textContent = data.odds_api.code || 'N/A';
+        document.getElementById('odds-message').textContent = data.odds_api.message;
+        document.getElementById('odds-last-check').textContent = now;
+
+        // Extract sports count from message
+        const match = data.odds_api.message.match(/(\d+) sports/);
+        document.getElementById('odds-sports-count').textContent = match ? match[1] : 'N/A';
+    }
+
+    // Update Polymarket API
+    if (data.polymarket_api) {
+        document.getElementById('pm-status-badge').textContent =
+            data.polymarket_api.status === 'healthy' ? 'Healthy' : 'Error';
+        document.getElementById('pm-status-badge').className =
+            `api-status-badge ${data.polymarket_api.status}`;
+        document.getElementById('pm-response-code').textContent = data.polymarket_api.code || 'N/A';
+        document.getElementById('pm-message').textContent = data.polymarket_api.message;
+        document.getElementById('pm-last-check').textContent = now;
+    }
+
+    // Update overall status
+    const allHealthy = data.odds_api?.status === 'healthy' && data.polymarket_api?.status === 'healthy';
+    document.getElementById('overall-status').textContent = allHealthy ? 'All Systems Go' : 'Issues Detected';
+    document.getElementById('overall-badge').textContent = allHealthy ? 'Healthy' : 'Warning';
+    document.getElementById('overall-badge').className = `stat-badge ${allHealthy ? 'badge-success' : 'badge-warning'}`;
+
+    const overallIcon = document.getElementById('overall-icon');
+    overallIcon.className = `stat-icon ${allHealthy ? 'icon-success' : 'icon-warning'}`;
+}
+
+async function runManualCheck() {
+    const btn = document.getElementById('manual-check-btn');
+    const status = document.getElementById('check-status');
+
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 6v6l4 2"/>
+    </svg> Checking...`;
+    status.textContent = 'Running health check...';
+
+    await updateHealthDisplay();
+
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+    </svg> Run Health Check`;
+    status.textContent = 'Check completed at ' + new Date().toLocaleTimeString();
+}
+
+// Initial load
+document.addEventListener('DOMContentLoaded', updateHealthDisplay);
+
+// Auto-refresh every 60 seconds
+setInterval(updateHealthDisplay, 60000);
+</script>
+{% endblock %}

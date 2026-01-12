@@ -1,0 +1,730 @@
+{% extends "base.html" %}
+
+{% block title %}Models - AI Studio{% endblock %}
+{% block page_title %}Model Management{% endblock %}
+{% block page_subtitle %}Manage your AI models and LoRAs{% endblock %}
+
+{% block content %}
+<style>
+    .models-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 600;
+        color: var(--accent);
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+    }
+
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+
+    .model-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .model-table th,
+    .model-table td {
+        padding: 12px 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .model-table th {
+        font-weight: 500;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .model-table th.sortable {
+        cursor: pointer;
+        user-select: none;
+        transition: color var(--transition-fast);
+    }
+
+    .model-table th.sortable:hover {
+        color: var(--accent);
+    }
+
+    .model-table th.sortable::after {
+        content: '';
+        display: inline-block;
+        width: 0;
+        height: 0;
+        margin-left: 6px;
+        vertical-align: middle;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 4px solid currentColor;
+        opacity: 0.3;
+    }
+
+    .model-table th.sortable.asc::after {
+        border-top: none;
+        border-bottom: 4px solid currentColor;
+        opacity: 1;
+    }
+
+    .model-table th.sortable.desc::after {
+        opacity: 1;
+    }
+
+    .model-table tr:hover {
+        background: var(--bg-hover);
+    }
+
+    .model-name {
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .model-type {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .type-sdxl { background: #3b82f6; color: white; }
+    .type-flux { background: #8b5cf6; color: white; }
+    .type-sd3 { background: #ec4899; color: white; }
+    .type-sd15 { background: #10b981; color: white; }
+    .type-unknown { background: var(--bg-tertiary); color: var(--text-muted); }
+
+    .delete-btn {
+        background: transparent;
+        border: 1px solid var(--danger);
+        color: var(--danger);
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all var(--transition-fast);
+    }
+
+    .delete-btn:hover {
+        background: var(--danger);
+        color: white;
+    }
+
+    .download-form {
+        background: var(--bg-tertiary);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+
+    .download-form-row {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+    }
+
+    .download-form-group {
+        flex: 1;
+    }
+
+    .download-form label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+
+    .download-form input,
+    .download-form select {
+        width: 100%;
+        padding: 12px 16px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+    }
+
+    .download-form input:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    .download-progress {
+        margin-top: 16px;
+        display: none;
+    }
+
+    .download-progress.active {
+        display: block;
+    }
+
+    .progress-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+    }
+
+    .progress-track {
+        height: 8px;
+        background: var(--bg-input);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 8px;
+    }
+
+    .tab-btn {
+        padding: 10px 20px;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-radius: 8px 8px 0 0;
+        font-size: 0.95rem;
+        transition: all var(--transition-fast);
+    }
+
+    .tab-btn:hover {
+        background: var(--bg-hover);
+    }
+
+    .tab-btn.active {
+        background: var(--accent);
+        color: white;
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+    }
+
+    .source-hint {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-top: 8px;
+    }
+
+    .source-hint code {
+        background: var(--bg-input);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: var(--font-mono);
+    }
+
+    /* Confirm dialog */
+    .confirm-dialog {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .confirm-dialog.active {
+        display: flex;
+    }
+
+    .confirm-content {
+        background: var(--bg-card);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 400px;
+        text-align: center;
+    }
+
+    .confirm-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 12px;
+    }
+
+    .confirm-message {
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+    }
+
+    .confirm-buttons {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+    }
+
+    .confirm-buttons .btn-cancel {
+        background: #6b7280;
+        color: white;
+        border: none;
+    }
+
+    .confirm-buttons .btn-cancel:hover {
+        background: #4b5563;
+    }
+
+    .confirm-buttons .btn-delete {
+        background: #dc2626;
+        color: white;
+        border: none;
+    }
+
+    .confirm-buttons .btn-delete:hover {
+        background: #b91c1c;
+    }
+</style>
+
+<!-- Stats -->
+<div class="models-stats">
+    <div class="stat-card">
+        <div class="stat-value">{{ models|length }}</div>
+        <div class="stat-label">Checkpoint Models</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ loras|length }}</div>
+        <div class="stat-label">LoRAs</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_model_size }} GB</div>
+        <div class="stat-label">Models Size</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_lora_size }} GB</div>
+        <div class="stat-label">LoRAs Size</div>
+    </div>
+</div>
+
+<!-- Download Form -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download New Model
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="download-form-row">
+            <div class="download-form-group" style="flex: 2;">
+                <label for="download-url">Model URL</label>
+                <input type="text" id="download-url" placeholder="https://huggingface.co/... or https://civitai.com/...">
+            </div>
+            <div class="download-form-group" style="flex: 0 0 150px;">
+                <label for="download-type">Type</label>
+                <select id="download-type">
+                    <option value="checkpoint">Checkpoint</option>
+                    <option value="lora">LoRA</option>
+                </select>
+            </div>
+            <div style="flex: 0 0 auto;">
+                <button class="btn btn-primary" onclick="startDownload()" id="download-btn">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Download
+                </button>
+            </div>
+        </div>
+        <div class="source-hint">
+            Supported sources: <code>HuggingFace</code>, <code>CivitAI</code>, or direct <code>.safetensors</code> links
+        </div>
+        <div class="download-progress" id="download-progress">
+            <div class="progress-info">
+                <span id="download-filename">Downloading...</span>
+                <span id="download-percent">0%</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" id="download-fill" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs" style="margin-top: 32px;">
+    <button class="tab-btn active" onclick="switchTab('models')">Checkpoint Models</button>
+    <button class="tab-btn" onclick="switchTab('loras')">LoRAs</button>
+</div>
+
+<!-- Models Tab -->
+<div class="tab-content active" id="tab-models">
+    <div class="card">
+        <div class="card-body" style="padding: 0;">
+            {% if models %}
+            <table class="model-table" id="models-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="name" onclick="sortTable('models-table', 'name', this)">Name</th>
+                        <th class="sortable" data-sort="type" onclick="sortTable('models-table', 'type', this)">Type</th>
+                        <th class="sortable" data-sort="size" onclick="sortTable('models-table', 'size', this)">Size</th>
+                        <th class="sortable" data-sort="installed" onclick="sortTable('models-table', 'installed', this)">Installed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for model in models %}
+                    <tr id="model-row-{{ model.filename|replace('.', '-') }}"
+                        data-name="{{ model.name|lower }}"
+                        data-type="{{ model.type }}"
+                        data-size="{{ model.size_gb }}"
+                        data-installed="{{ model.installed_timestamp }}">
+                        <td>
+                            <span class="model-name">{{ model.name }}</span>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">{{ model.filename }}</div>
+                        </td>
+                        <td>
+                            <span class="model-type type-{{ model.type|lower|replace(' ', '')|replace('.', '') }}">{{ model.type }}</span>
+                        </td>
+                        <td>{{ model.size_gb }} GB</td>
+                        <td>{{ model.installed }}</td>
+                        <td>
+                            <button class="delete-btn" onclick="confirmDelete('model', '{{ model.filename }}', '{{ model.name }}')">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No checkpoint models found.</p>
+                <p style="font-size: 0.9rem; margin-top: 8px;">Download a model above to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- LoRAs Tab -->
+<div class="tab-content" id="tab-loras">
+    <div class="card">
+        <div class="card-body" style="padding: 0;">
+            {% if loras %}
+            <table class="model-table" id="loras-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="name" onclick="sortTable('loras-table', 'name', this)">Name</th>
+                        <th class="sortable" data-sort="size" onclick="sortTable('loras-table', 'size', this)">Size</th>
+                        <th class="sortable" data-sort="installed" onclick="sortTable('loras-table', 'installed', this)">Installed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lora in loras %}
+                    <tr id="lora-row-{{ lora.filename|replace('.', '-') }}"
+                        data-name="{{ lora.name|lower }}"
+                        data-size="{{ lora.size_mb }}"
+                        data-installed="{{ lora.installed_timestamp }}">
+                        <td>
+                            <span class="model-name">{{ lora.name }}</span>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">{{ lora.filename }}</div>
+                        </td>
+                        <td>{{ lora.size_mb }} MB</td>
+                        <td>{{ lora.installed }}</td>
+                        <td>
+                            <button class="delete-btn" onclick="confirmDelete('lora', '{{ lora.filename }}', '{{ lora.name }}')">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No LoRAs found.</p>
+                <p style="font-size: 0.9rem; margin-top: 8px;">Download a LoRA above (select "LoRA" type).</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="confirm-dialog" id="confirm-dialog">
+    <div class="confirm-content">
+        <div class="confirm-title">Delete Model?</div>
+        <div class="confirm-message" id="confirm-message">
+            Are you sure you want to delete this model? This cannot be undone.
+        </div>
+        <div class="confirm-buttons">
+            <button class="btn btn-cancel" onclick="closeConfirm()">Cancel</button>
+            <button class="btn btn-delete" onclick="executeDelete()" id="confirm-delete-btn">
+                Delete
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentDownloadId = null;
+let downloadPollInterval = null;
+let pendingDelete = null;
+let sortState = {}; // Track sort state per table
+
+function sortTable(tableId, column, headerEl) {
+    const table = document.getElementById(tableId);
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Determine sort direction
+    const currentDir = sortState[tableId + '-' + column] || 'none';
+    const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+    sortState[tableId + '-' + column] = newDir;
+
+    // Update header styling
+    table.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('asc', 'desc');
+    });
+    headerEl.classList.add(newDir);
+
+    // Sort rows
+    rows.sort((a, b) => {
+        let aVal = a.dataset[column];
+        let bVal = b.dataset[column];
+
+        // Handle numeric values (size, installed timestamp)
+        if (column === 'size' || column === 'installed') {
+            aVal = parseFloat(aVal) || 0;
+            bVal = parseFloat(bVal) || 0;
+        }
+
+        if (aVal < bVal) return newDir === 'asc' ? -1 : 1;
+        if (aVal > bVal) return newDir === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    // Re-append sorted rows
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+function switchTab(tab) {
+    // Update buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Update content
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+async function startDownload() {
+    const url = document.getElementById('download-url').value.trim();
+    const type = document.getElementById('download-type').value;
+
+    if (!url) {
+        alert('Please enter a model URL');
+        return;
+    }
+
+    const btn = document.getElementById('download-btn');
+    const progress = document.getElementById('download-progress');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="btn-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Starting...';
+
+    try {
+        const response = await fetch('/api/ai/models/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, type })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            alert('Download failed: ' + data.error);
+            resetDownloadBtn();
+            return;
+        }
+
+        currentDownloadId = data.download_id;
+        progress.classList.add('active');
+        document.getElementById('download-filename').textContent = `Downloading from ${data.source}...`;
+
+        // Start polling for progress
+        downloadPollInterval = setInterval(pollDownloadProgress, 1000);
+
+    } catch (error) {
+        console.error('Download error:', error);
+        alert('Failed to start download');
+        resetDownloadBtn();
+    }
+}
+
+async function pollDownloadProgress() {
+    if (!currentDownloadId) return;
+
+    try {
+        const response = await fetch(`/api/ai/models/download/${currentDownloadId}`);
+        const data = await response.json();
+
+        if (data.error && data.error === 'Download not found') {
+            clearInterval(downloadPollInterval);
+            resetDownloadBtn();
+            return;
+        }
+
+        document.getElementById('download-percent').textContent = `${data.progress}%`;
+        document.getElementById('download-fill').style.width = `${data.progress}%`;
+
+        if (data.filename) {
+            document.getElementById('download-filename').textContent = data.filename;
+        }
+
+        if (data.status === 'complete') {
+            clearInterval(downloadPollInterval);
+            document.getElementById('download-filename').textContent = `Downloaded: ${data.filename}`;
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else if (data.status === 'error') {
+            clearInterval(downloadPollInterval);
+            alert('Download failed: ' + data.error);
+            resetDownloadBtn();
+        }
+
+    } catch (error) {
+        console.error('Poll error:', error);
+    }
+}
+
+function resetDownloadBtn() {
+    const btn = document.getElementById('download-btn');
+    btn.disabled = false;
+    btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download';
+    document.getElementById('download-progress').classList.remove('active');
+}
+
+function confirmDelete(type, filename, name) {
+    pendingDelete = { type, filename };
+    const msgEl = document.getElementById('confirm-message');
+    msgEl.textContent = '';
+    msgEl.appendChild(document.createTextNode('Are you sure you want to permanently delete '));
+    const strong = document.createElement('strong');
+    strong.textContent = name;
+    msgEl.appendChild(strong);
+    msgEl.appendChild(document.createTextNode('?'));
+    msgEl.appendChild(document.createElement('br'));
+    const warning = document.createElement('span');
+    warning.style.color = 'var(--danger)';
+    warning.textContent = 'This will remove the file from your system.';
+    msgEl.appendChild(warning);
+    document.getElementById('confirm-dialog').classList.add('active');
+}
+
+function closeConfirm() {
+    document.getElementById('confirm-dialog').classList.remove('active');
+    pendingDelete = null;
+}
+
+async function executeDelete() {
+    if (!pendingDelete) return;
+
+    const btn = document.getElementById('confirm-delete-btn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+        const endpoint = pendingDelete.type === 'lora' ? '/api/ai/loras/delete' : '/api/ai/models/delete';
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: pendingDelete.filename })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            alert('Delete failed: ' + data.error);
+        } else {
+            // Remove row from table
+            const rowId = `${pendingDelete.type}-row-${pendingDelete.filename.replace(/\./g, '-')}`;
+            const row = document.getElementById(rowId);
+            if (row) {
+                row.style.animation = 'fadeOut 0.3s ease';
+                setTimeout(() => row.remove(), 300);
+            }
+            closeConfirm();
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        alert('Failed to delete');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+}
+
+// Close dialog on outside click
+document.getElementById('confirm-dialog').addEventListener('click', (e) => {
+    if (e.target.id === 'confirm-dialog') {
+        closeConfirm();
+    }
+});
+</script>
+
+<style>
+@keyframes fadeOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(-20px); }
+}
+</style>
+{% endblock %}

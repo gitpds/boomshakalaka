@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Sports{% endblock %}
+{% block page_title %}Sports{% endblock %}
+{% block page_subtitle %}Sports automation overview{% endblock %}
+
+{% block content %}
+<!-- Category Header -->
+<div class="category-header">
+    <div class="category-icon sports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+    </div>
+    <div class="category-info">
+        <h2>Sports Automation</h2>
+        <p>YouTube highlights and sports betting monitoring</p>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="stats-grid">
+    <div class="stat-card sports">
+        <div class="stat-header">
+            <div class="stat-icon sports">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+            </div>
+            <span class="stat-badge {% if replays_errors > 0 %}warning{% else %}success{% endif %}">
+                {% if replays_errors > 0 %}{{ replays_errors }} errors{% else %}Healthy{% endif %}
+            </span>
+        </div>
+        <div class="stat-value">Replays</div>
+        <div class="stat-label">Daily at 4:00 AM</div>
+    </div>
+
+    <div class="stat-card sports">
+        <div class="stat-header">
+            <div class="stat-icon sports">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+            </div>
+            <span class="stat-badge {% if betting_errors > 0 %}warning{% else %}success{% endif %}">
+                {% if betting_errors > 0 %}{{ betting_errors }} errors{% else %}Healthy{% endif %}
+            </span>
+        </div>
+        <div class="stat-value">Betting</div>
+        <div class="stat-label">Every 10 min (games)</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">2</div>
+        <div class="stat-label">Active Modules</div>
+    </div>
+</div>
+
+<!-- Module Cards (Clickable) -->
+<div class="module-grid">
+    <!-- Sports Replays -->
+    <a href="{{ url_for('sports_replays') }}" class="module-card" style="cursor: pointer; text-decoration: none;">
+        <div class="module-header">
+            <div class="module-title">
+                <div class="module-icon" style="background: var(--sports-bg); color: var(--sports-color);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                </div>
+                <span class="module-name">Sports Replays</span>
+            </div>
+            <div class="module-status active">
+                <span class="module-status-dot"></span>
+                Active
+            </div>
+        </div>
+        <div class="module-body">
+            <p class="module-description">
+                Daily YouTube highlights for Liverpool FC, Portland Timbers, Detroit Tigers, and Minnesota Wild.
+            </p>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+                Last run: {{ replays_last_run or 'Unknown' }}
+            </div>
+        </div>
+    </a>
+
+    <!-- Garbage Time Monitor -->
+    <a href="{{ url_for('sports_betting') }}" class="module-card" style="cursor: pointer; text-decoration: none;">
+        <div class="module-header">
+            <div class="module-title">
+                <div class="module-icon" style="background: var(--sports-bg); color: var(--sports-color);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                </div>
+                <span class="module-name">Garbage Time Monitor</span>
+            </div>
+            <div class="module-status active">
+                <span class="module-status-dot"></span>
+                Active
+            </div>
+        </div>
+        <div class="module-body">
+            <p class="module-description">
+                NBA/NFL blowout detection for "garbage time" regression betting opportunities.
+            </p>
+            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+                Last run: {{ betting_last_run or 'Unknown' }}
+            </div>
+        </div>
+    </a>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Recent Activity
+        </span>
+        <a href="{{ url_for('logs') }}" class="btn btn-secondary btn-sm">View All Logs</a>
+    </div>
+    <div class="card-body">
+        <div class="activity-list">
+            <div class="activity-item">
+                <div class="activity-icon {% if replays_errors > 0 %}warning{% else %}success{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">Sports Replays</div>
+                    <div class="activity-description">
+                        {% if replays_errors > 0 %}{{ replays_errors }} error(s) in last 24h{% else %}Running normally{% endif %}
+                    </div>
+                </div>
+                <div class="activity-time">{{ replays_last_run or 'Unknown' }}</div>
+            </div>
+            <div class="activity-item">
+                <div class="activity-icon {% if betting_errors > 0 %}warning{% else %}success{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">Garbage Time Monitor</div>
+                    <div class="activity-description">
+                        {% if betting_errors > 0 %}{{ betting_errors }} error(s) in last 24h{% else %}Running normally{% endif %}
+                    </div>
+                </div>
+                <div class="activity-time">{{ betting_last_run or 'Unknown' }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

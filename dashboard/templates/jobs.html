@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs{% endblock %}
+{% block page_title %}Scheduled Jobs{% endblock %}
+{% block page_subtitle %}All cron jobs and their schedules{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card stat-success">
+        <div class="stat-header">
+            <div class="stat-icon icon-success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <span class="stat-badge badge-success">Running</span>
+        </div>
+        <div class="stat-value">{{ cron_jobs|length }}</div>
+        <div class="stat-label">Active Jobs</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon icon-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">24/7</div>
+        <div class="stat-label">Monitoring Coverage</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon icon-success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">{{ job_categories|length }}</div>
+        <div class="stat-label">Job Categories</div>
+    </div>
+</div>
+
+<!-- Jobs by Category -->
+{% for category, jobs in jobs_by_category.items() %}
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                {% if 'Sports' in category or 'Garbage' in category %}
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+                {% elif 'Insider' in category %}
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+                {% elif 'Polymarket' in category or 'Scanner' in category %}
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                {% else %}
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+                {% endif %}
+            </svg>
+            {{ category }}
+        </span>
+        <span class="badge badge-info">{{ jobs|length }} job(s)</span>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            {% for job in jobs %}
+            <div class="job-item">
+                <div class="job-status running"></div>
+                <div class="job-info">
+                    <div class="job-name">{{ job.name }}</div>
+                    <div class="job-schedule">{{ job.human_schedule }}</div>
+                    <div class="job-command">{{ job.command }}</div>
+                </div>
+                <div class="job-meta">
+                    <div class="job-next-run">
+                        <span class="badge badge-success">Active</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Raw Crontab -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="4 17 10 11 4 5"/>
+                <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            Raw Crontab
+        </span>
+        <button class="btn btn-secondary btn-sm" onclick="copyToClipboard()">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="log-container">
+            <div class="log-content" id="crontab-content">{{ raw_crontab }}</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyToClipboard() {
+    const content = document.getElementById('crontab-content').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        // Show brief feedback
+        const btn = event.target.closest('.btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+        }, 2000);
+    });
+}
+</script>
+{% endblock %}

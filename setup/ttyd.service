@@ -1,0 +1,18 @@
+[Unit]
+Description=ttyd - Terminal in browser
+After=network.target
+
+[Service]
+Type=simple
+User=pds
+WorkingDirectory=/home/pds
+Environment="HOME=/home/pds"
+Environment="TERM=xterm-256color"
+# Each browser tab gets its own independent terminal
+# Firewall restricts access to local network + VPN only
+ExecStart=/usr/bin/ttyd -p 7681 bash --login
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

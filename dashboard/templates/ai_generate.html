@@ -1,0 +1,1953 @@
+{% extends "base.html" %}
+
+{% block title %}Generate - AI Studio{% endblock %}
+{% block page_title %}Generate{% endblock %}
+{% block page_subtitle %}Create images and videos with local AI models{% endblock %}
+
+{% block content %}
+<style>
+    .generate-layout {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 24px;
+    }
+
+    @media (max-width: 1200px) {
+        .generate-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .output-container {
+        aspect-ratio: 1;
+        background: var(--bg-tertiary);
+        border: 2px dashed var(--border-color);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .output-container img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+
+    .output-placeholder {
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .output-placeholder svg {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .form-input, .form-select, .form-textarea {
+        width: 100%;
+        padding: 12px 16px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        transition: border-color var(--transition-fast);
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    .form-textarea {
+        min-height: 120px;
+        resize: vertical;
+        font-family: inherit;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .quick-tweak {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .quick-tweak-btn {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .quick-tweak-btn:hover {
+        background: var(--bg-hover);
+        color: var(--accent);
+        border-color: var(--accent);
+    }
+
+    .quick-tweak-input {
+        flex: 1;
+        text-align: center;
+    }
+
+    .generate-btn {
+        width: 100%;
+        padding: 16px;
+        font-size: 1.1rem;
+        margin-top: 8px;
+    }
+
+    .generating {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+
+    .progress-bar {
+        height: 4px;
+        background: var(--bg-tertiary);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 12px;
+        display: none;
+    }
+
+    .progress-bar.active {
+        display: block;
+    }
+
+    .progress-bar-fill {
+        height: 100%;
+        background: var(--accent);
+        transition: width 0.3s ease;
+    }
+
+    .keyboard-hints {
+        margin-top: 16px;
+        padding: 12px;
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .keyboard-hints kbd {
+        padding: 2px 6px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+    }
+
+    /* Mode Tabs */
+    .mode-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 20px;
+        background: var(--bg-tertiary);
+        padding: 4px;
+        border-radius: 10px;
+    }
+
+    .mode-tab {
+        flex: 1;
+        padding: 10px 16px;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all var(--transition-fast);
+    }
+
+    .mode-tab:hover {
+        color: var(--text-primary);
+    }
+
+    .mode-tab.active {
+        background: var(--accent);
+        color: white;
+    }
+
+    /* Image Upload Area */
+    .upload-area {
+        border: 2px dashed var(--border-color);
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        margin-bottom: 16px;
+        position: relative;
+        min-height: 150px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .upload-area:hover {
+        border-color: var(--accent);
+        background: var(--bg-hover);
+    }
+
+    .upload-area.dragover {
+        border-color: var(--accent);
+        background: rgba(139, 92, 246, 0.1);
+    }
+
+    .upload-area.has-image {
+        padding: 8px;
+    }
+
+    .upload-area svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        color: var(--text-muted);
+    }
+
+    .upload-area p {
+        color: var(--text-muted);
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .upload-area .upload-hint {
+        font-size: 0.8rem;
+        margin-top: 8px;
+    }
+
+    .upload-preview {
+        max-width: 100%;
+        max-height: 200px;
+        border-radius: 8px;
+    }
+
+    .upload-remove {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        background: var(--danger);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .upload-remove:hover {
+        background: #b91c1c;
+    }
+
+    .img2img-controls {
+        display: none;
+    }
+
+    .img2img-controls.active {
+        display: block;
+    }
+
+    .txt2img-controls {
+        display: block;
+    }
+
+    .txt2img-controls.hidden {
+        display: none;
+    }
+
+    /* Model Tips Panel */
+    .model-tips {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        margin-top: 8px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .model-tips-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .model-tips-header:hover {
+        background: var(--bg-hover);
+    }
+
+    .model-tips-header svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.2s ease;
+    }
+
+    .model-tips.expanded .model-tips-header svg {
+        transform: rotate(180deg);
+    }
+
+    .model-tips-content {
+        display: none;
+        padding: 14px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .model-tips.expanded .model-tips-content {
+        display: block;
+    }
+
+    .tip-row {
+        display: flex;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+
+    .tip-label {
+        font-weight: 500;
+        color: var(--text-secondary);
+        width: 100px;
+        flex-shrink: 0;
+    }
+
+    .tip-value {
+        color: var(--text-primary);
+    }
+
+    .tip-list {
+        list-style: disc;
+        margin-left: 16px;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+
+    .tip-list li {
+        margin-bottom: 4px;
+    }
+
+    .trigger-words {
+        background: var(--accent);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-family: var(--font-mono);
+    }
+
+    /* LoRA Section */
+    .lora-section {
+        margin-top: 12px;
+    }
+
+    .lora-item {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
+        padding: 10px;
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+    }
+
+    .lora-select {
+        flex: 1;
+    }
+
+    .lora-strength {
+        width: 80px;
+        text-align: center;
+    }
+
+    .lora-remove {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        border-radius: 4px;
+    }
+
+    .lora-remove:hover {
+        background: var(--danger);
+        color: white;
+    }
+
+    .add-lora-btn {
+        width: 100%;
+        padding: 8px;
+        background: var(--bg-tertiary);
+        border: 1px dashed var(--border-color);
+        border-radius: 8px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .add-lora-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    /* Save to Gallery button */
+    .save-gallery-btn {
+        background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        border: none;
+    }
+
+    .save-gallery-btn:hover {
+        background: linear-gradient(135deg, #8e44ad, #7d3c98);
+    }
+
+    .save-gallery-btn:disabled {
+        background: var(--bg-tertiary);
+        opacity: 0.5;
+    }
+
+    /* Video-specific styles */
+    .img2vid-controls {
+        display: none;
+    }
+
+    .img2vid-controls.active {
+        display: block;
+    }
+
+    .video-model-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-left: 8px;
+    }
+
+    .badge-ltx { background: #7c3aed; color: white; }
+    .badge-wan { background: #059669; color: white; }
+    .badge-hunyuan { background: #dc2626; color: white; }
+
+    .video-output {
+        position: relative;
+        aspect-ratio: 16/9;
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .video-output video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .video-info {
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .video-info span {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .vram-estimate {
+        padding: 8px 12px;
+        background: var(--bg-tertiary);
+        border-radius: 6px;
+        font-size: 0.85rem;
+        margin-top: 12px;
+    }
+
+    .vram-estimate.warning {
+        background: rgba(251, 191, 36, 0.1);
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        color: #fbbf24;
+    }
+
+    .vram-estimate.ok {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #22c55e;
+    }
+</style>
+
+{% if not comfy_status.running %}
+<div class="alert alert-warning" style="margin-bottom: 24px;">
+    <strong>ComfyUI is not running.</strong> Start it to enable image generation:
+    <code style="display: block; margin-top: 8px; padding: 8px; background: var(--bg-input); border-radius: 4px;">
+        cd /home/pds/image_gen/ComfyUI && python main.py --listen
+    </code>
+</div>
+{% endif %}
+
+<div class="generate-layout">
+    <!-- Output Area -->
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">
+                    <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <path d="M20.4 14.5L16 10 4 20"/>
+                    </svg>
+                    Output
+                </span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm save-gallery-btn" onclick="saveToGallery()" id="save-gallery-btn" disabled title="Save to your local gallery">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save to Gallery
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="downloadImage()" id="download-btn" disabled title="Download image file">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="addToCompare()" id="compare-btn" disabled title="Add to comparison">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="output-container" id="output-container">
+                    <div class="output-placeholder" id="output-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <path d="M20.4 14.5L16 10 4 20"/>
+                        </svg>
+                        <p>Your generated image will appear here</p>
+                        <p style="font-size: 0.85rem;">Press <kbd>Enter</kbd> or click Generate</p>
+                    </div>
+                    <img id="output-image" style="display: none;" />
+                </div>
+                <div class="progress-bar" id="progress-bar">
+                    <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent from this session -->
+        <div class="card" style="margin-top: 24px;">
+            <div class="card-header">
+                <span class="card-title">Session History</span>
+                <button class="btn btn-secondary btn-sm" onclick="clearSession()">Clear</button>
+            </div>
+            <div class="card-body">
+                <div id="session-history" style="display: flex; gap: 8px; flex-wrap: wrap; min-height: 80px;">
+                    <div style="color: var(--text-muted); font-size: 0.9rem;">
+                        Generated images from this session will appear here
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div>
+        <form id="generate-form" onsubmit="handleGenerate(event)">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Parameters</span>
+                </div>
+                <div class="card-body">
+                    <!-- Mode Tabs -->
+                    <div class="mode-tabs">
+                        <button type="button" class="mode-tab active" onclick="switchMode('txt2img')">Text to Image</button>
+                        <button type="button" class="mode-tab" onclick="switchMode('img2img')">Image to Image</button>
+                        <button type="button" class="mode-tab" onclick="switchMode('img2vid')">Image to Video</button>
+                    </div>
+
+                    <!-- Image Upload (img2img only) -->
+                    <div class="img2img-controls" id="img2img-controls">
+                        <div class="form-group">
+                            <label class="form-label">Input Image</label>
+                            <div class="upload-area" id="upload-area" onclick="document.getElementById('image-input').click()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <path d="M20.4 14.5L16 10 4 20"/>
+                                </svg>
+                                <p>Click or drag an image here</p>
+                                <p class="upload-hint">PNG, JPG, or WebP</p>
+                            </div>
+                            <input type="file" id="image-input" accept="image/png,image/jpeg,image/webp" style="display: none;" onchange="handleImageUpload(event)">
+                        </div>
+
+                        <!-- Denoise Strength -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                Denoise Strength
+                                <span style="font-weight: normal; color: var(--text-muted);">(0 = no change, 1 = full redraw)</span>
+                            </label>
+                            <div class="quick-tweak">
+                                <input type="range" class="form-input" id="denoise" name="denoise"
+                                    min="0" max="1" step="0.05" value="0.75"
+                                    style="flex: 1;" oninput="document.getElementById('denoise-value').textContent = this.value">
+                                <span id="denoise-value" style="min-width: 40px; text-align: center;">0.75</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image to Video Controls -->
+                    <div class="img2vid-controls" id="img2vid-controls">
+                        <div class="form-group">
+                            <label class="form-label">Input Image</label>
+                            <div class="upload-area" id="video-upload-area" onclick="document.getElementById('video-image-input').click()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                                    <path d="M20.4 14.5L16 10 4 20"/>
+                                </svg>
+                                <p>Click or drag an image here</p>
+                                <p class="upload-hint">PNG, JPG, or WebP - will be animated</p>
+                            </div>
+                            <input type="file" id="video-image-input" accept="image/png,image/jpeg,image/webp" style="display: none;" onchange="handleVideoImageUpload(event)">
+                        </div>
+
+                        <!-- Video Model Selector -->
+                        <div class="form-group">
+                            <label class="form-label">Video Model</label>
+                            <select class="form-select" id="video_model" name="video_model" onchange="updateVideoEstimate()">
+                                {% for model in video_models %}
+                                <option value="{{ model.filename }}"
+                                    data-type="{{ model.type }}"
+                                    data-vram="{{ model.vram_gb }}"
+                                    {% if model.recommended %}selected{% endif %}>
+                                    {{ model.name }} ({{ model.size_gb }}GB)
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="vram-estimate" id="vram-estimate">
+                                Estimated VRAM: <span id="vram-value">~12GB</span>
+                            </div>
+                        </div>
+
+                        <!-- Video Settings -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Frames</label>
+                                <select class="form-select" id="video_frames" name="video_frames" onchange="updateVideoEstimate()">
+                                    <option value="25">25 (~1s)</option>
+                                    <option value="49" selected>49 (~2s)</option>
+                                    <option value="81">81 (~3s)</option>
+                                    <option value="121">121 (~5s)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">FPS</label>
+                                <select class="form-select" id="video_fps" name="video_fps">
+                                    <option value="8">8 fps</option>
+                                    <option value="16">16 fps</option>
+                                    <option value="24" selected>24 fps</option>
+                                    <option value="30">30 fps</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Width</label>
+                                <select class="form-select" id="video_width" name="video_width" onchange="updateVideoEstimate()">
+                                    <option value="512">512</option>
+                                    <option value="640">640</option>
+                                    <option value="768" selected>768</option>
+                                    <option value="960">960</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Height</label>
+                                <select class="form-select" id="video_height" name="video_height" onchange="updateVideoEstimate()">
+                                    <option value="512">512</option>
+                                    <option value="640">640</option>
+                                    <option value="768" selected>768</option>
+                                    <option value="960">960</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Motion Strength -->
+                        <div class="form-group">
+                            <label class="form-label">
+                                Motion Strength: <span id="motion-value">0.7</span>
+                            </label>
+                            <div class="quick-tweak">
+                                <input type="range" class="form-input" id="motion_strength" name="motion_strength"
+                                    min="0" max="1" step="0.1" value="0.7" style="flex: 1;"
+                                    oninput="document.getElementById('motion-value').textContent = this.value">
+                            </div>
+                            <small style="color: var(--text-muted);">Higher = more movement</small>
+                        </div>
+                    </div>
+
+                    <!-- Prompt -->
+                    <div class="form-group">
+                        <label class="form-label">Prompt</label>
+                        <textarea class="form-textarea" id="prompt" name="prompt"
+                            placeholder="Describe what you want to generate..."
+                            required></textarea>
+                    </div>
+
+                    <!-- Negative Prompt -->
+                    <div class="form-group">
+                        <label class="form-label">Negative Prompt</label>
+                        <textarea class="form-textarea" id="negative_prompt" name="negative_prompt"
+                            placeholder="What to avoid (optional)..."
+                            style="min-height: 60px;"></textarea>
+                    </div>
+
+                    <!-- Model -->
+                    <div class="form-group">
+                        <label class="form-label">Model</label>
+                        <select class="form-select" id="model" name="model" required onchange="updateModelTips()">
+                            {% for model in models %}
+                            <option value="{{ model.filename }}"
+                                {% if 'juggernaut' in model.name.lower() %}selected{% endif %}>
+                                {{ model.name }} ({{ model.type }}, {{ model.size_gb }}GB)
+                            </option>
+                            {% endfor %}
+                        </select>
+
+                        <!-- Model Tips Panel -->
+                        <div class="model-tips" id="model-tips-panel">
+                            <div class="model-tips-header" onclick="toggleModelTips()">
+                                <span style="font-size: 0.9rem; color: var(--text-secondary);">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <line x1="12" y1="16" x2="12" y2="12"/>
+                                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                    </svg>
+                                    Model Tips & Best Practices
+                                </span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </div>
+                            <div class="model-tips-content" id="model-tips-content">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LoRAs -->
+                    <div class="form-group">
+                        <label class="form-label">LoRAs <span style="font-weight: normal; color: var(--text-muted);">(optional)</span></label>
+                        <div class="lora-section" id="lora-container">
+                            <!-- LoRA items added dynamically -->
+                        </div>
+                        <button type="button" class="add-lora-btn" onclick="addLoraSlot()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Add LoRA
+                        </button>
+                    </div>
+
+                    <!-- Dimensions (txt2img only) -->
+                    <div class="txt2img-controls" id="txt2img-controls">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Width</label>
+                                <select class="form-select" id="width" name="width">
+                                    <option value="512">512</option>
+                                    <option value="768">768</option>
+                                    <option value="1024" selected>1024</option>
+                                    <option value="1280">1280</option>
+                                    <option value="1536">1536</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Height</label>
+                                <select class="form-select" id="height" name="height">
+                                    <option value="512">512</option>
+                                    <option value="768">768</option>
+                                    <option value="1024" selected>1024</option>
+                                    <option value="1280">1280</option>
+                                    <option value="1536">1536</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seed -->
+                    <div class="form-group">
+                        <label class="form-label">Seed</label>
+                        <div class="quick-tweak">
+                            <button type="button" class="quick-tweak-btn" onclick="decrementSeed()">-</button>
+                            <input type="number" class="form-input quick-tweak-input" id="seed" name="seed"
+                                value="-1" min="-1">
+                            <button type="button" class="quick-tweak-btn" onclick="incrementSeed()">+</button>
+                            <button type="button" class="quick-tweak-btn" onclick="randomSeed()" title="Random">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="1 4 1 10 7 10"/>
+                                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <small style="color: var(--text-muted);">-1 = random</small>
+                    </div>
+
+                    <!-- Steps -->
+                    <div class="form-group">
+                        <label class="form-label">Steps: <span id="steps-value">25</span></label>
+                        <div class="quick-tweak">
+                            <button type="button" class="quick-tweak-btn" onclick="adjustSteps(-5)">-5</button>
+                            <input type="range" class="form-input" id="steps" name="steps"
+                                min="10" max="50" value="25" style="padding: 0;"
+                                oninput="document.getElementById('steps-value').textContent = this.value">
+                            <button type="button" class="quick-tweak-btn" onclick="adjustSteps(5)">+5</button>
+                        </div>
+                    </div>
+
+                    <!-- CFG Scale -->
+                    <div class="form-group">
+                        <label class="form-label">CFG Scale: <span id="cfg-value">7.0</span></label>
+                        <div class="quick-tweak">
+                            <button type="button" class="quick-tweak-btn" onclick="adjustCfg(-0.5)">-</button>
+                            <input type="range" class="form-input" id="cfg_scale" name="cfg_scale"
+                                min="1" max="15" step="0.5" value="7" style="padding: 0;"
+                                oninput="document.getElementById('cfg-value').textContent = this.value">
+                            <button type="button" class="quick-tweak-btn" onclick="adjustCfg(0.5)">+</button>
+                        </div>
+                    </div>
+
+                    <!-- Sampler -->
+                    <div class="form-group">
+                        <label class="form-label">Sampler</label>
+                        <select class="form-select" id="sampler" name="sampler">
+                            <option value="euler" selected>Euler</option>
+                            <option value="euler_ancestral">Euler Ancestral</option>
+                            <option value="dpmpp_2m">DPM++ 2M</option>
+                            <option value="dpmpp_2m_sde">DPM++ 2M SDE</option>
+                            <option value="dpmpp_3m_sde">DPM++ 3M SDE</option>
+                            <option value="ddim">DDIM</option>
+                        </select>
+                    </div>
+
+                    <!-- Generate Button -->
+                    <button type="submit" class="btn btn-primary generate-btn" id="generate-btn"
+                        {% if not comfy_status.running %}disabled{% endif %}>
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                        Generate
+                    </button>
+
+                    <!-- Quick Actions -->
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="regenerate()">
+                            Regenerate
+                        </button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="generateBatch(4)">
+                            x4 Batch
+                        </button>
+                    </div>
+
+                    <div class="keyboard-hints">
+                        <strong>Keyboard Shortcuts:</strong><br>
+                        <kbd>Enter</kbd> Generate &nbsp;
+                        <kbd>R</kbd> Random seed &nbsp;
+                        <kbd>+</kbd>/<kbd>-</kbd> CFG &nbsp;
+                        <kbd>[</kbd>/<kbd>]</kbd> Steps
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let isGenerating = false;
+let lastGeneration = null;
+let sessionHistory = [];
+let loraCount = 0;
+let currentMode = 'txt2img';
+let uploadedImageFilename = null;
+let videoUploadedImageFilename = null;
+
+// Video model info for VRAM estimation
+const videoModelInfo = {
+    'ltxv-13b-0.9.8-distilled-fp8.safetensors': { name: 'LTX-Video 13B', vram_base: 14, type: 'ltx' },
+    'ltx-video-2b-v0.9.safetensors': { name: 'LTX-Video 2B', vram_base: 8, type: 'ltx' },
+    'TI2V/Wan2_2-TI2V-5B_fp8_e4m3fn_scaled_KJ.safetensors': { name: 'Wan2.2 TI2V 5B', vram_base: 10, type: 'wan' },
+    'hunyuanvideo1.5_720p_i2v_cfg_distilled_fp16.safetensors': { name: 'HunyuanVideo 1.5', vram_base: 16, type: 'hunyuan' }
+};
+
+// Model tips data from server
+const modelTips = {{ model_tips | tojson | safe }};
+
+// Available LoRAs from server
+const availableLoras = {{ loras | tojson | safe }};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    updateModelTips();
+    setupDragDrop();
+    setupVideoDragDrop();
+});
+
+// Mode switching
+function switchMode(mode) {
+    currentMode = mode;
+
+    // Update tab buttons
+    document.querySelectorAll('.mode-tab').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+
+    // Show/hide controls
+    const img2imgControls = document.getElementById('img2img-controls');
+    const img2vidControls = document.getElementById('img2vid-controls');
+    const txt2imgControls = document.getElementById('txt2img-controls');
+    const imageModelGroup = document.querySelector('.form-group:has(#model)');
+    const negativePromptGroup = document.querySelector('.form-group:has(#negative_prompt)');
+
+    // Reset all
+    img2imgControls.classList.remove('active');
+    img2vidControls.classList.remove('active');
+    txt2imgControls.classList.remove('hidden');
+
+    // Hide/show image model selector based on mode
+    if (imageModelGroup) imageModelGroup.style.display = (mode === 'img2vid') ? 'none' : 'block';
+    if (negativePromptGroup) negativePromptGroup.style.display = (mode === 'img2vid') ? 'none' : 'block';
+
+    if (mode === 'img2img') {
+        img2imgControls.classList.add('active');
+        txt2imgControls.classList.add('hidden');
+    } else if (mode === 'img2vid') {
+        img2vidControls.classList.add('active');
+        txt2imgControls.classList.add('hidden');
+        updateVideoEstimate();
+    }
+
+    // Update button text
+    const btn = document.getElementById('generate-btn');
+    if (mode === 'img2vid') {
+        btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generate Video';
+    } else {
+        btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate';
+    }
+}
+
+// Drag and drop setup
+function setupDragDrop() {
+    const uploadArea = document.getElementById('upload-area');
+    if (!uploadArea) return;
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
+    });
+
+    uploadArea.addEventListener('drop', async (e) => {
+        // Check for generated image drag (from output or session history)
+        const imageUrl = e.dataTransfer.getData('text/plain');
+        const isGenerated = e.dataTransfer.getData('application/x-generated-image');
+
+        if (isGenerated && imageUrl) {
+            // Fetch the image and convert to file
+            try {
+                const response = await fetch(imageUrl);
+                const blob = await response.blob();
+                const file = new File([blob], 'generated.png', { type: blob.type });
+                handleImageFile(file);
+            } catch (err) {
+                console.error('Failed to fetch dragged image:', err);
+                alert('Failed to load dragged image');
+            }
+            return;
+        }
+
+        // Standard file drop handling
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleImageFile(files[0]);
+        }
+    }, false);
+}
+
+// Setup drag-and-drop for video upload area
+function setupVideoDragDrop() {
+    const uploadArea = document.getElementById('video-upload-area');
+    if (!uploadArea) return;
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
+    });
+
+    uploadArea.addEventListener('drop', async (e) => {
+        // Check for generated image drag
+        const imageUrl = e.dataTransfer.getData('text/plain');
+        const isGenerated = e.dataTransfer.getData('application/x-generated-image');
+
+        if (isGenerated && imageUrl) {
+            try {
+                const response = await fetch(imageUrl);
+                const blob = await response.blob();
+                const file = new File([blob], 'generated.png', { type: blob.type });
+                handleVideoImageFile(file);
+            } catch (err) {
+                console.error('Failed to fetch dragged image:', err);
+                alert('Failed to load dragged image');
+            }
+            return;
+        }
+
+        // Standard file drop
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleVideoImageFile(files[0]);
+        }
+    }, false);
+}
+
+// Handle image upload
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        handleImageFile(file);
+    }
+}
+
+async function handleImageFile(file) {
+    // Validate file type
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        alert('Please upload a PNG, JPG, or WebP image.');
+        return;
+    }
+
+    const uploadArea = document.getElementById('upload-area');
+
+    // Show loading state
+    uploadArea.innerHTML = '<p>Uploading...</p>';
+
+    // Setup timeout with AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch('/api/ai/upload', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            alert('Upload failed: ' + data.error);
+            resetUploadArea();
+            return;
+        }
+
+        uploadedImageFilename = data.filename;
+
+        // Show preview
+        uploadArea.classList.add('has-image');
+        uploadArea.innerHTML = `
+            <img src="${data.url}" class="upload-preview" alt="Uploaded image">
+            <button type="button" class="upload-remove" onclick="event.stopPropagation(); removeUploadedImage()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        `;
+
+    } catch (error) {
+        clearTimeout(timeoutId);
+        console.error('Upload error:', error);
+        if (error.name === 'AbortError') {
+            alert('Upload timed out. Try a smaller image or check your connection.');
+        } else {
+            alert('Upload failed: ' + error.message);
+        }
+        resetUploadArea();
+    }
+}
+
+function removeUploadedImage() {
+    uploadedImageFilename = null;
+    resetUploadArea();
+    document.getElementById('image-input').value = '';
+}
+
+function resetUploadArea() {
+    const uploadArea = document.getElementById('upload-area');
+    uploadArea.classList.remove('has-image');
+    uploadArea.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="M20.4 14.5L16 10 4 20"/>
+        </svg>
+        <p>Click or drag an image here</p>
+        <p class="upload-hint">PNG, JPG, or WebP</p>
+    `;
+}
+
+// Video upload functions
+function handleVideoImageUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        handleVideoImageFile(file);
+    }
+}
+
+async function handleVideoImageFile(file) {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        alert('Please upload a PNG, JPG, or WebP image.');
+        return;
+    }
+
+    const uploadArea = document.getElementById('video-upload-area');
+    uploadArea.innerHTML = '<p>Uploading...</p>';
+
+    // Setup timeout with AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
+    try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch('/api/ai/upload', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+
+        if (data.error) {
+            alert('Upload failed: ' + data.error);
+            resetVideoUploadArea();
+            return;
+        }
+
+        videoUploadedImageFilename = data.filename;
+
+        uploadArea.classList.add('has-image');
+        uploadArea.innerHTML = `
+            <img src="${data.url}" class="upload-preview" alt="Input image for video">
+            <button type="button" class="upload-remove" onclick="event.stopPropagation(); removeVideoUploadedImage()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        `;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        console.error('Upload error:', error);
+        if (error.name === 'AbortError') {
+            alert('Upload timed out. Try a smaller image or check your connection.');
+        } else {
+            alert('Upload failed: ' + error.message);
+        }
+        resetVideoUploadArea();
+    }
+}
+
+function removeVideoUploadedImage() {
+    videoUploadedImageFilename = null;
+    resetVideoUploadArea();
+    document.getElementById('video-image-input').value = '';
+}
+
+function resetVideoUploadArea() {
+    const uploadArea = document.getElementById('video-upload-area');
+    uploadArea.classList.remove('has-image');
+    uploadArea.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <path d="M20.4 14.5L16 10 4 20"/>
+        </svg>
+        <p>Click or drag an image here</p>
+        <p class="upload-hint">PNG, JPG, or WebP - will be animated</p>
+    `;
+}
+
+function updateVideoEstimate() {
+    const modelSelect = document.getElementById('video_model');
+    const framesSelect = document.getElementById('video_frames');
+    const widthSelect = document.getElementById('video_width');
+    const heightSelect = document.getElementById('video_height');
+    const vramValue = document.getElementById('vram-value');
+    const vramEstimate = document.getElementById('vram-estimate');
+
+    if (!modelSelect || !framesSelect || !widthSelect || !heightSelect) return;
+
+    const model = modelSelect.value;
+    const frames = parseInt(framesSelect.value);
+    const width = parseInt(widthSelect.value);
+    const height = parseInt(heightSelect.value);
+
+    // Base VRAM from model
+    const modelInfo = videoModelInfo[model] || { vram_base: 12 };
+    let vram = modelInfo.vram_base;
+
+    // Add more VRAM for higher resolution and frame count
+    const pixels = width * height;
+    const resMultiplier = pixels / (768 * 768); // Normalized to 768x768
+    const frameMultiplier = frames / 49; // Normalized to 49 frames
+
+    vram = vram * (1 + (resMultiplier - 1) * 0.3) * (1 + (frameMultiplier - 1) * 0.2);
+    vram = Math.round(vram * 10) / 10;
+
+    vramValue.textContent = `~${vram}GB`;
+
+    // Update warning state (24GB limit)
+    if (vram > 22) {
+        vramEstimate.className = 'vram-estimate warning';
+        vramValue.textContent += ' (may OOM)';
+    } else {
+        vramEstimate.className = 'vram-estimate ok';
+    }
+}
+
+// Model tips functions
+function toggleModelTips() {
+    const panel = document.getElementById('model-tips-panel');
+    panel.classList.toggle('expanded');
+}
+
+function updateModelTips() {
+    const modelSelect = document.getElementById('model');
+    const modelFilename = modelSelect.value;
+    const tips = modelTips[modelFilename] || {
+        type: 'Unknown',
+        best_cfg: '5-8',
+        best_steps: '20-30',
+        best_size: '1024x1024',
+        sampler: 'Euler',
+        tips: ['No specific tips available'],
+        recommended_negative: '',
+        trigger_words: null
+    };
+
+    const content = document.getElementById('model-tips-content');
+    let html = `
+        <div class="tip-row">
+            <span class="tip-label">Type:</span>
+            <span class="tip-value">${tips.type}</span>
+        </div>
+        <div class="tip-row">
+            <span class="tip-label">Best CFG:</span>
+            <span class="tip-value">${tips.best_cfg}</span>
+        </div>
+        <div class="tip-row">
+            <span class="tip-label">Best Steps:</span>
+            <span class="tip-value">${tips.best_steps}</span>
+        </div>
+        <div class="tip-row">
+            <span class="tip-label">Best Size:</span>
+            <span class="tip-value">${tips.best_size}</span>
+        </div>
+        <div class="tip-row">
+            <span class="tip-label">Sampler:</span>
+            <span class="tip-value">${tips.sampler}</span>
+        </div>
+    `;
+
+    if (tips.trigger_words) {
+        html += `
+            <div class="tip-row">
+                <span class="tip-label">Triggers:</span>
+                <span class="tip-value"><span class="trigger-words">${tips.trigger_words}</span></span>
+            </div>
+        `;
+    }
+
+    if (tips.tips && tips.tips.length > 0) {
+        html += `
+            <div style="margin-top: 12px;">
+                <strong style="font-size: 0.85rem; color: var(--text-secondary);">Tips:</strong>
+                <ul class="tip-list">
+                    ${tips.tips.map(t => `<li>${t}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (tips.prompt_template) {
+        html += `
+            <div style="margin-top: 12px; padding: 10px; background: var(--bg-input); border-radius: 6px;">
+                <strong style="font-size: 0.85rem; color: var(--accent);">Prompt Template:</strong>
+                <p style="font-size: 0.8rem; color: var(--text-primary); margin-top: 6px; font-family: var(--font-mono); word-break: break-word; line-height: 1.5;">
+                    ${tips.prompt_template}
+                </p>
+            </div>
+        `;
+    }
+
+    if (tips.example_prompt) {
+        html += `
+            <div style="margin-top: 10px; padding: 10px; background: var(--bg-input); border-radius: 6px; border-left: 3px solid var(--accent);">
+                <strong style="font-size: 0.85rem; color: var(--text-secondary);">Example Prompt:</strong>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; font-style: italic; line-height: 1.5;">
+                    "${tips.example_prompt}"
+                </p>
+                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 8px;" onclick="useExamplePrompt()">
+                    Use This Prompt
+                </button>
+            </div>
+        `;
+    }
+
+    if (tips.recommended_negative) {
+        html += `
+            <div style="margin-top: 12px;">
+                <strong style="font-size: 0.85rem; color: var(--text-secondary);">Recommended Negative:</strong>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; font-family: var(--font-mono); word-break: break-word;">
+                    ${tips.recommended_negative}
+                </p>
+                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 8px;" onclick="useRecommendedNegative()">
+                    Use This Negative
+                </button>
+            </div>
+        `;
+    }
+
+    content.innerHTML = html;
+}
+
+function useRecommendedNegative() {
+    const modelSelect = document.getElementById('model');
+    const tips = modelTips[modelSelect.value];
+    if (tips && tips.recommended_negative) {
+        document.getElementById('negative_prompt').value = tips.recommended_negative;
+    }
+}
+
+function useExamplePrompt() {
+    const modelSelect = document.getElementById('model');
+    const tips = modelTips[modelSelect.value];
+    if (tips && tips.example_prompt) {
+        document.getElementById('prompt').value = tips.example_prompt;
+    }
+}
+
+// LoRA functions
+function addLoraSlot() {
+    if (availableLoras.length === 0) {
+        alert('No LoRAs found in the models/loras directory.');
+        return;
+    }
+
+    const container = document.getElementById('lora-container');
+    const id = loraCount++;
+
+    const loraOptions = availableLoras.map(l =>
+        `<option value="${l.filename}">${l.name} (${l.size_mb}MB)</option>`
+    ).join('');
+
+    const html = `
+        <div class="lora-item" id="lora-item-${id}">
+            <select class="form-select lora-select" id="lora-select-${id}">
+                <option value="">-- Select LoRA --</option>
+                ${loraOptions}
+            </select>
+            <input type="number" class="form-input lora-strength" id="lora-strength-${id}"
+                value="1.0" min="0" max="2" step="0.1" title="Strength (0-2)">
+            <button type="button" class="lora-remove" onclick="removeLoraSlot(${id})" title="Remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+    `;
+
+    container.insertAdjacentHTML('beforeend', html);
+}
+
+function removeLoraSlot(id) {
+    const item = document.getElementById(`lora-item-${id}`);
+    if (item) item.remove();
+}
+
+function getSelectedLoras() {
+    const loras = [];
+    document.querySelectorAll('.lora-item').forEach(item => {
+        const select = item.querySelector('.lora-select');
+        const strength = item.querySelector('.lora-strength');
+        if (select.value) {
+            loras.push({
+                filename: select.value,
+                strength: parseFloat(strength.value) || 1.0
+            });
+        }
+    });
+    return loras;
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Don't trigger if typing in input
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            handleGenerate(e);
+        }
+        return;
+    }
+
+    switch(e.key.toLowerCase()) {
+        case 'r':
+            randomSeed();
+            break;
+        case '+':
+        case '=':
+            adjustCfg(0.5);
+            break;
+        case '-':
+            adjustCfg(-0.5);
+            break;
+        case '[':
+            adjustSteps(-5);
+            break;
+        case ']':
+            adjustSteps(5);
+            break;
+        case 'enter':
+            handleGenerate(e);
+            break;
+    }
+});
+
+function incrementSeed() {
+    const input = document.getElementById('seed');
+    input.value = parseInt(input.value) + 1;
+}
+
+function decrementSeed() {
+    const input = document.getElementById('seed');
+    const val = parseInt(input.value);
+    input.value = val > 0 ? val - 1 : -1;
+}
+
+function randomSeed() {
+    document.getElementById('seed').value = Math.floor(Math.random() * 2147483647);
+}
+
+function adjustSteps(delta) {
+    const input = document.getElementById('steps');
+    const newVal = Math.max(10, Math.min(50, parseInt(input.value) + delta));
+    input.value = newVal;
+    document.getElementById('steps-value').textContent = newVal;
+}
+
+function adjustCfg(delta) {
+    const input = document.getElementById('cfg_scale');
+    const newVal = Math.max(1, Math.min(15, parseFloat(input.value) + delta));
+    input.value = newVal;
+    document.getElementById('cfg-value').textContent = newVal;
+}
+
+async function handleGenerate(e) {
+    e.preventDefault();
+    if (isGenerating) return;
+
+    // Check mode-specific requirements
+    if (currentMode === 'img2img' && !uploadedImageFilename) {
+        alert('Please upload an image for Image-to-Image generation.');
+        return;
+    }
+    if (currentMode === 'img2vid' && !videoUploadedImageFilename) {
+        alert('Please upload an image for Image-to-Video generation.');
+        return;
+    }
+
+    const form = document.getElementById('generate-form');
+    const formData = new FormData(form);
+    const params = Object.fromEntries(formData.entries());
+
+    // Set generation mode
+    params.mode = currentMode;
+
+    if (currentMode === 'img2vid') {
+        // Video generation parameters
+        params.input_image = videoUploadedImageFilename;
+        params.video_model = document.getElementById('video_model').value;
+        params.frames = parseInt(document.getElementById('video_frames').value);
+        params.fps = parseInt(document.getElementById('video_fps').value);
+        params.width = parseInt(document.getElementById('video_width').value);
+        params.height = parseInt(document.getElementById('video_height').value);
+        params.motion_strength = parseFloat(document.getElementById('motion_strength').value);
+        params.seed = parseInt(params.seed);
+        params.steps = parseInt(params.steps);
+        params.cfg_scale = parseFloat(params.cfg_scale);
+
+        await generateVideo(params);
+    } else {
+        // Image generation parameters
+        params.width = parseInt(params.width);
+        params.height = parseInt(params.height);
+        params.seed = parseInt(params.seed);
+        params.steps = parseInt(params.steps);
+        params.cfg_scale = parseFloat(params.cfg_scale);
+
+        // Add selected LoRAs
+        params.loras = getSelectedLoras();
+
+        // Add img2img parameters if in that mode
+        if (currentMode === 'img2img') {
+            params.input_image = uploadedImageFilename;
+            params.denoise = parseFloat(document.getElementById('denoise').value);
+        }
+
+        await generate(params);
+    }
+}
+
+async function generate(params) {
+    isGenerating = true;
+    const btn = document.getElementById('generate-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const progressFill = document.getElementById('progress-fill');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="btn-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating...';
+    progressBar.classList.add('active');
+    progressFill.style.width = '10%';
+
+    try {
+        const response = await fetch('/api/ai/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+
+        // Simulate progress (actual progress would come from websocket)
+        let progress = 10;
+        const progressInterval = setInterval(() => {
+            progress = Math.min(progress + Math.random() * 15, 90);
+            progressFill.style.width = progress + '%';
+        }, 500);
+
+        const data = await response.json();
+        clearInterval(progressInterval);
+        progressFill.style.width = '100%';
+
+        if (data.error) {
+            alert('Generation failed: ' + data.error);
+        } else if (data.image_url) {
+            displayImage(data.image_url, params);
+            lastGeneration = { ...params, image_url: data.image_url, id: data.id };
+        }
+    } catch (error) {
+        console.error('Generation failed:', error);
+        alert('Generation failed. Is ComfyUI running?');
+    } finally {
+        isGenerating = false;
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate';
+        setTimeout(() => {
+            progressBar.classList.remove('active');
+            progressFill.style.width = '0%';
+        }, 500);
+    }
+}
+
+async function generateVideo(params) {
+    console.log('='.repeat(60));
+    console.log('VIDEO GENERATION REQUEST');
+    console.log('='.repeat(60));
+    console.log('Params:', JSON.stringify(params, null, 2));
+
+    isGenerating = true;
+    const btn = document.getElementById('generate-btn');
+    const progressBar = document.getElementById('progress-bar');
+    const progressFill = document.getElementById('progress-fill');
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="btn-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Generating Video...';
+    progressBar.classList.add('active');
+    progressFill.style.width = '5%';
+
+    try {
+        console.log('Sending request to /api/ai/generate-video...');
+        const response = await fetch('/api/ai/generate-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        // Video generation takes longer, slower progress
+        let progress = 5;
+        const progressInterval = setInterval(() => {
+            progress = Math.min(progress + Math.random() * 3, 85);
+            progressFill.style.width = progress + '%';
+        }, 2000);
+
+        const data = await response.json();
+        clearInterval(progressInterval);
+        progressFill.style.width = '100%';
+
+        console.log('Response data:', data);
+
+        if (data.error) {
+            console.error('Server returned error:', data.error);
+            alert('Video generation failed: ' + data.error);
+        } else if (data.video_url) {
+            console.log('Video URL:', data.video_url);
+            console.log('Generation ID:', data.id);
+            displayVideo(data.video_url, params);
+            lastGeneration = { ...params, video_url: data.video_url, id: data.id, is_video: true };
+        } else {
+            console.warn('No error and no video_url in response:', data);
+        }
+    } catch (error) {
+        console.error('Video generation failed:', error);
+        console.error('Error stack:', error.stack);
+        alert('Video generation failed. Is ComfyUI running?');
+    } finally {
+        isGenerating = false;
+        btn.disabled = false;
+        btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generate Video';
+        setTimeout(() => {
+            progressBar.classList.remove('active');
+            progressFill.style.width = '0%';
+        }, 500);
+    }
+}
+
+function displayVideo(url, params) {
+    console.log('displayVideo called with URL:', url);
+
+    const placeholder = document.getElementById('output-placeholder');
+    const img = document.getElementById('output-image');
+    const container = document.getElementById('output-container');
+
+    placeholder.style.display = 'none';
+    img.style.display = 'none';
+
+    // Remove any existing video
+    const existingVideo = container.querySelector('video');
+    if (existingVideo) existingVideo.remove();
+
+    // Create video element
+    const video = document.createElement('video');
+    video.src = url;
+    video.controls = true;
+    video.autoplay = true;
+    video.loop = true;
+    video.muted = true;
+    video.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain;';
+
+    // Add event handlers for debugging
+    video.onloadstart = () => console.log('Video: loadstart event');
+    video.onloadedmetadata = () => console.log('Video: loadedmetadata - duration:', video.duration, 'dimensions:', video.videoWidth, 'x', video.videoHeight);
+    video.onloadeddata = () => console.log('Video: loadeddata event');
+    video.oncanplay = () => console.log('Video: canplay event');
+    video.oncanplaythrough = () => console.log('Video: canplaythrough event');
+    video.onplay = () => console.log('Video: play event');
+    video.onerror = (e) => {
+        console.error('Video: error event', e);
+        console.error('Video error code:', video.error?.code);
+        console.error('Video error message:', video.error?.message);
+        console.error('Video network state:', video.networkState);
+        console.error('Video ready state:', video.readyState);
+        console.error('Video src:', video.src);
+    };
+    video.onstalled = () => console.warn('Video: stalled event');
+    video.onwaiting = () => console.log('Video: waiting event');
+
+    container.appendChild(video);
+    console.log('Video element appended to container');
+
+    // Enable action buttons
+    document.getElementById('save-gallery-btn').disabled = false;
+    document.getElementById('download-btn').disabled = false;
+    document.getElementById('compare-btn').disabled = true; // Video compare not implemented
+
+    // Add to session history
+    addVideoToSessionHistory(url, params);
+}
+
+function addVideoToSessionHistory(url, params) {
+    const container = document.getElementById('session-history');
+
+    // Clear placeholder text
+    if (sessionHistory.length === 0) {
+        container.innerHTML = '';
+    }
+
+    const thumb = document.createElement('div');
+    thumb.style.cssText = 'width: 80px; height: 80px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s; position: relative; background: var(--bg-tertiary);';
+    thumb.innerHTML = `
+        <video src="${url}" style="width: 100%; height: 100%; object-fit: cover;" muted></video>
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; background: rgba(0,0,0,0.5); padding: 4px; border-radius: 50%;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+    `;
+    thumb.onclick = () => {
+        displayVideo(url, params);
+        lastGeneration = { ...params, video_url: url, is_video: true };
+    };
+    thumb.onmouseover = () => {
+        thumb.style.borderColor = 'var(--accent)';
+        thumb.querySelector('video').play();
+    };
+    thumb.onmouseout = () => {
+        thumb.style.borderColor = 'transparent';
+        thumb.querySelector('video').pause();
+    };
+
+    container.appendChild(thumb);
+    sessionHistory.push({ url, params, is_video: true });
+}
+
+function displayImage(url, params) {
+    const placeholder = document.getElementById('output-placeholder');
+    const img = document.getElementById('output-image');
+
+    placeholder.style.display = 'none';
+    img.src = url;
+    img.style.display = 'block';
+
+    // Make image draggable to img2img/img2vid upload areas
+    img.draggable = true;
+    img.ondragstart = (e) => {
+        e.dataTransfer.setData('text/plain', img.src);
+        e.dataTransfer.setData('application/x-generated-image', 'true');
+    };
+
+    // Enable action buttons
+    document.getElementById('save-gallery-btn').disabled = false;
+    document.getElementById('download-btn').disabled = false;
+    document.getElementById('compare-btn').disabled = false;
+
+    // Add to session history
+    addToSessionHistory(url, params);
+
+    // Update seed if it was random
+    if (params.seed === -1 && lastGeneration) {
+        document.getElementById('seed').value = lastGeneration.actual_seed || params.seed;
+    }
+}
+
+function addToSessionHistory(url, params) {
+    const container = document.getElementById('session-history');
+
+    // Clear placeholder text
+    if (sessionHistory.length === 0) {
+        container.innerHTML = '';
+    }
+
+    const thumb = document.createElement('div');
+    thumb.style.cssText = 'width: 80px; height: 80px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s;';
+    thumb.innerHTML = `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+    thumb.onclick = () => loadFromHistory(sessionHistory.length);
+    thumb.onmouseover = () => thumb.style.borderColor = 'var(--accent)';
+    thumb.onmouseout = () => thumb.style.borderColor = 'transparent';
+
+    // Make thumbnail draggable to img2img/img2vid upload areas
+    thumb.draggable = true;
+    thumb.ondragstart = (e) => {
+        e.dataTransfer.setData('text/plain', url);
+        e.dataTransfer.setData('application/x-generated-image', 'true');
+    };
+
+    container.appendChild(thumb);
+    sessionHistory.push({ url, params });
+}
+
+function loadFromHistory(index) {
+    const item = sessionHistory[index];
+    if (!item) return;
+
+    // Load parameters
+    document.getElementById('prompt').value = item.params.prompt || '';
+    document.getElementById('negative_prompt').value = item.params.negative_prompt || '';
+    document.getElementById('model').value = item.params.model || '';
+    document.getElementById('width').value = item.params.width || 1024;
+    document.getElementById('height').value = item.params.height || 1024;
+    document.getElementById('seed').value = item.params.seed || -1;
+    document.getElementById('steps').value = item.params.steps || 25;
+    document.getElementById('steps-value').textContent = item.params.steps || 25;
+    document.getElementById('cfg_scale').value = item.params.cfg_scale || 7;
+    document.getElementById('cfg-value').textContent = item.params.cfg_scale || 7;
+    document.getElementById('sampler').value = item.params.sampler || 'euler';
+
+    // Display image
+    displayImage(item.url, item.params);
+}
+
+function regenerate() {
+    if (lastGeneration) {
+        // Same params but new seed
+        const params = { ...lastGeneration };
+        delete params.image_url;
+        delete params.id;
+        params.seed = -1;
+        generate(params);
+    } else {
+        handleGenerate(new Event('submit'));
+    }
+}
+
+function generateBatch(count) {
+    // TODO: Implement batch generation
+    alert('Batch generation coming soon! Will generate ' + count + ' variations.');
+}
+
+async function saveToGallery() {
+    if (!lastGeneration || !lastGeneration.id) {
+        alert('No generation to save.');
+        return;
+    }
+
+    const btn = document.getElementById('save-gallery-btn');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="btn-icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...';
+
+    try {
+        const response = await fetch('/api/ai/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: lastGeneration.id,
+                params: lastGeneration
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            alert('Save failed: ' + data.error);
+        } else {
+            btn.innerHTML = '<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Saved!';
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }, 2000);
+            return; // Don't re-enable immediately
+        }
+    } catch (error) {
+        console.error('Save failed:', error);
+        alert('Save failed. Please try again.');
+    }
+
+    btn.innerHTML = originalHTML;
+    btn.disabled = false;
+}
+
+function downloadImage() {
+    if (!lastGeneration || !lastGeneration.image_url) return;
+
+    const link = document.createElement('a');
+    link.href = lastGeneration.image_url;
+    link.download = `generation_${lastGeneration.id || Date.now()}.png`;
+    link.click();
+}
+
+function addToCompare() {
+    if (!lastGeneration) return;
+    // Store in localStorage for compare page
+    const compareList = JSON.parse(localStorage.getItem('compareList') || '[]');
+    compareList.push(lastGeneration);
+    localStorage.setItem('compareList', JSON.stringify(compareList.slice(-8))); // Keep last 8
+    alert('Added to comparison. Go to Compare page to view.');
+}
+
+function clearSession() {
+    sessionHistory = [];
+    document.getElementById('session-history').innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">Generated images from this session will appear here</div>';
+}
+</script>
+{% endblock %}

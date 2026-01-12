@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}System overview and status at a glance{% endblock %}
+
+{% block content %}
+<!-- Category Summary Cards -->
+<div class="stats-grid">
+    <!-- Sports Category -->
+    <div class="stat-card sports">
+        <div class="stat-header">
+            <div class="stat-icon sports">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+            </div>
+            <span class="stat-badge success">Active</span>
+        </div>
+        <div class="stat-value">{{ sports_modules }}</div>
+        <div class="stat-label">Sports Modules</div>
+    </div>
+
+    <!-- Crypto Category -->
+    <div class="stat-card crypto">
+        <div class="stat-header">
+            <div class="stat-icon crypto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+            </div>
+            <span class="stat-badge success">Active</span>
+        </div>
+        <div class="stat-value">{{ crypto_modules }}</div>
+        <div class="stat-label">Crypto Modules</div>
+    </div>
+
+    <!-- Active Jobs -->
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+            <span class="stat-badge accent">Running</span>
+        </div>
+        <div class="stat-value">{{ total_jobs }}</div>
+        <div class="stat-label">Scheduled Jobs</div>
+    </div>
+
+    <!-- Errors Today -->
+    <div class="stat-card {% if total_errors > 10 %}error{% elif total_errors > 0 %}warning{% else %}success{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if total_errors > 10 %}error{% elif total_errors > 0 %}warning{% else %}success{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    {% if total_errors > 0 %}
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    {% else %}
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                    {% endif %}
+                </svg>
+            </div>
+            <span class="stat-badge {% if total_errors > 10 %}error{% elif total_errors > 0 %}warning{% else %}success{% endif %}">24h</span>
+        </div>
+        <div class="stat-value">{{ total_errors }}</div>
+        <div class="stat-label">Errors Today</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Category Quick Links -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+                Categories
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="job-list">
+                <!-- Sports -->
+                <a href="{{ url_for('sports') }}" class="job-item" style="cursor: pointer;">
+                    <div class="job-status running"></div>
+                    <div class="job-info">
+                        <div class="job-name">Sports</div>
+                        <div class="job-schedule">Replays, Betting Monitor</div>
+                    </div>
+                    <div class="job-meta">
+                        <span class="badge badge-success">{{ sports_modules }} modules</span>
+                    </div>
+                </a>
+                <!-- Crypto -->
+                <a href="{{ url_for('crypto') }}" class="job-item" style="cursor: pointer;">
+                    <div class="job-status running"></div>
+                    <div class="job-info">
+                        <div class="job-name">Crypto</div>
+                        <div class="job-schedule">Polymarket, Insider Detection</div>
+                    </div>
+                    <div class="job-meta">
+                        <span class="badge badge-success">{{ crypto_modules }} modules</span>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Health -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                API Health
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="job-list">
+                <div class="job-item">
+                    <div class="job-status" id="odds-api-dot"></div>
+                    <div class="job-info">
+                        <div class="job-name">The Odds API</div>
+                        <div class="job-schedule" id="odds-api-message">Checking...</div>
+                    </div>
+                    <div class="job-meta">
+                        <span class="badge" id="odds-api-status">...</span>
+                    </div>
+                </div>
+                <div class="job-item">
+                    <div class="job-status" id="pm-api-dot"></div>
+                    <div class="job-info">
+                        <div class="job-name">Polymarket API</div>
+                        <div class="job-schedule" id="polymarket-api-message">Checking...</div>
+                    </div>
+                    <div class="job-meta">
+                        <span class="badge" id="polymarket-api-status">...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Recent Activity
+        </span>
+        <a href="{{ url_for('logs') }}" class="btn btn-secondary btn-sm">View All Logs</a>
+    </div>
+    <div class="card-body">
+        <div class="activity-list">
+            {% for name, data in log_data.items() %}
+            {% if data.last_run %}
+            <div class="activity-item">
+                <div class="activity-icon {% if data.errors_24h > 5 %}error{% elif data.errors_24h > 0 %}warning{% else %}success{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        {% if data.errors_24h > 5 %}
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                        {% elif data.errors_24h > 0 %}
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        {% else %}
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                        {% endif %}
+                    </svg>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">{{ name }}</div>
+                    <div class="activity-description">
+                        {% if data.errors_24h > 0 %}
+                        {{ data.errors_24h }} error(s) in last 24 hours
+                        {% else %}
+                        Running normally
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="activity-time">{{ data.last_run }}</div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            Quick Actions
+        </span>
+    </div>
+    <div class="card-body">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <a href="{{ url_for('sports') }}" class="btn btn-secondary">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                </svg>
+                Sports Dashboard
+            </a>
+            <a href="{{ url_for('crypto') }}" class="btn btn-secondary">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+                Crypto Dashboard
+            </a>
+            <a href="{{ url_for('logs') }}" class="btn btn-secondary">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                </svg>
+                View Logs
+            </a>
+            <a href="{{ url_for('settings') }}" class="btn btn-secondary">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Settings
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const data = await checkApiHealth();
+    if (!data) return;
+
+    // Update API status badges
+    const oddsBadge = document.getElementById('odds-api-status');
+    const pmBadge = document.getElementById('polymarket-api-status');
+
+    if (oddsBadge && data.odds_api) {
+        oddsBadge.textContent = data.odds_api.status === 'healthy' ? 'Healthy' : 'Error';
+        oddsBadge.className = `badge ${data.odds_api.status === 'healthy' ? 'badge-success' : 'badge-error'}`;
+    }
+
+    if (pmBadge && data.polymarket_api) {
+        pmBadge.textContent = data.polymarket_api.status === 'healthy' ? 'Healthy' : 'Error';
+        pmBadge.className = `badge ${data.polymarket_api.status === 'healthy' ? 'badge-success' : 'badge-error'}`;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}AI Studio{% endblock %}
+{% block page_title %}AI Studio{% endblock %}
+{% block page_subtitle %}Local image and video generation - 100% private{% endblock %}
+
+{% block content %}
+<!-- Status Cards -->
+<div class="stats-grid">
+    <!-- ComfyUI Status -->
+    <div class="stat-card {% if comfy_status.running %}success{% else %}warning{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if comfy_status.running %}success{% else %}warning{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    {% if comfy_status.running %}
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                    {% else %}
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    {% endif %}
+                </svg>
+            </div>
+            <span class="stat-badge {% if comfy_status.running %}success{% else %}warning{% endif %}">
+                {% if comfy_status.running %}Online{% else %}Offline{% endif %}
+            </span>
+        </div>
+        <div class="stat-value" style="font-size: 1.5rem;">ComfyUI</div>
+        <div class="stat-label">{{ comfy_status.message }}</div>
+    </div>
+
+    <!-- Available Models -->
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+            </div>
+            <span class="stat-badge accent">Ready</span>
+        </div>
+        <div class="stat-value">{{ models|length }}</div>
+        <div class="stat-label">Available Models</div>
+    </div>
+
+    <!-- Generations -->
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon ai">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <path d="M20.4 14.5L16 10 4 20"/>
+                </svg>
+            </div>
+            <span class="stat-badge">Total</span>
+        </div>
+        <div class="stat-value">{{ gen_count }}</div>
+        <div class="stat-label">Generations</div>
+    </div>
+
+    <!-- GPU -->
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    <rect x="9" y="9" width="6" height="6"/>
+                    <line x1="9" y1="1" x2="9" y2="4"/>
+                    <line x1="15" y1="1" x2="15" y2="4"/>
+                    <line x1="9" y1="20" x2="9" y2="23"/>
+                    <line x1="15" y1="20" x2="15" y2="23"/>
+                </svg>
+            </div>
+            <span class="stat-badge success">3090 Ti</span>
+        </div>
+        <div class="stat-value">24 GB</div>
+        <div class="stat-label">VRAM Available</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Quick Actions -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                Quick Actions
+            </span>
+        </div>
+        <div class="card-body">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <a href="{{ url_for('ai_generate') }}" class="btn btn-primary">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <line x1="12" y1="8" x2="12" y2="16"/>
+                        <line x1="8" y1="12" x2="16" y2="12"/>
+                    </svg>
+                    New Generation
+                </a>
+                <a href="{{ url_for('ai_history') }}" class="btn btn-secondary">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    View History
+                </a>
+                <a href="{{ url_for('ai_compare') }}" class="btn btn-secondary">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                    Compare
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ComfyUI Control -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/>
+                </svg>
+                Backend Control
+            </span>
+        </div>
+        <div class="card-body">
+            {% if comfy_status.running %}
+            <div class="alert alert-success" style="margin-bottom: 16px;">
+                <strong>ComfyUI is running</strong><br>
+                Ready to generate images at {{ comfy_status.url }}
+            </div>
+            {% else %}
+            <div class="alert alert-warning" style="margin-bottom: 16px;">
+                <strong>ComfyUI is not running</strong><br>
+                Start it with the command below to enable generation.
+            </div>
+            <div class="log-content" style="font-size: 0.85rem; padding: 12px;">
+cd /home/pds/image_gen/ComfyUI && python main.py --listen
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Available Models -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+            Available Models
+        </span>
+        <span class="badge badge-info">{{ models|length }} models</span>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            {% for model in models %}
+            <div class="job-item">
+                <div class="job-status running"></div>
+                <div class="job-info">
+                    <div class="job-name">{{ model.name }}</div>
+                    <div class="job-schedule">{{ model.filename }}</div>
+                </div>
+                <div class="job-meta">
+                    <span class="badge {% if model.type == 'Flux' %}badge-accent{% elif model.type == 'SDXL' %}badge-success{% elif model.type == 'SD3' %}badge-info{% else %}badge-secondary{% endif %}">
+                        {{ model.type }}
+                    </span>
+                    <span class="badge badge-secondary">{{ model.size_gb }} GB</span>
+                </div>
+            </div>
+            {% else %}
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">No models found</div>
+                    <div class="job-schedule">Check that models symlink points to ComfyUI/models</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Privacy Notice -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            Privacy Guarantee
+        </span>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <div>
+                <strong style="color: var(--success);">100% Local</strong>
+                <p style="color: var(--text-muted); margin: 4px 0 0 0; font-size: 0.9rem;">
+                    All generation happens on your GPU. Nothing leaves this machine.
+                </p>
+            </div>
+            <div>
+                <strong style="color: var(--success);">No Telemetry</strong>
+                <p style="color: var(--text-muted); margin: 4px 0 0 0; font-size: 0.9rem;">
+                    Zero analytics, tracking, or phone-home. Your prompts are yours alone.
+                </p>
+            </div>
+            <div>
+                <strong style="color: var(--success);">Offline Capable</strong>
+                <p style="color: var(--text-muted); margin: 4px 0 0 0; font-size: 0.9rem;">
+                    Works completely offline once models are downloaded.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Configure dashboard preferences and system settings{% endblock %}
+
+{% block content %}
+<!-- Appearance Settings -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"/>
+                <line x1="12" y1="1" x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/>
+            </svg>
+            Appearance
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="settings-section">
+            <div class="settings-item">
+                <div class="settings-item-info">
+                    <h4>Dark Mode</h4>
+                    <p>Use dark theme for the dashboard</p>
+                </div>
+                <div class="toggle active" data-setting="darkMode" onclick="toggleDarkMode(this)"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Information -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            System Information
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">Dashboard Name</div>
+                    <div class="job-schedule" style="color: var(--text-primary);">Boomshakalaka Management</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">Dashboard Port</div>
+                    <div class="job-schedule" style="color: var(--text-primary);">3003</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">Project Directory</div>
+                    <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace; color: var(--text-primary);">/home/pds/money_printing/polymarket</div>
+                </div>
+            </div>
+            <div class="job-item">
+                <div class="job-info">
+                    <div class="job-name">Active Modules</div>
+                    <div class="job-schedule" style="color: var(--text-primary);">{{ total_modules }} modules across {{ total_categories }} categories</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Categories -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+            Categories
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="module-grid">
+            <!-- Sports -->
+            <div class="module-card">
+                <div class="module-header">
+                    <div class="module-title">
+                        <div class="module-icon" style="background: var(--sports-bg); color: var(--sports-color);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                            </svg>
+                        </div>
+                        <span class="module-name">Sports</span>
+                    </div>
+                    <div class="module-status active">
+                        <span class="module-status-dot"></span>
+                        Active
+                    </div>
+                </div>
+                <div class="module-body">
+                    <p class="module-description">
+                        Sports Replays, Garbage Time Monitor
+                    </p>
+                </div>
+            </div>
+
+            <!-- Crypto -->
+            <div class="module-card">
+                <div class="module-header">
+                    <div class="module-title">
+                        <div class="module-icon" style="background: var(--crypto-bg); color: var(--crypto-color);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <span class="module-name">Crypto</span>
+                    </div>
+                    <div class="module-status active">
+                        <span class="module-status-dot"></span>
+                        Active
+                    </div>
+                </div>
+                <div class="module-body">
+                    <p class="module-description">
+                        Insider Detector, Conditional Arb, Political Data
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Future Categories (Placeholder) -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="16"/>
+                <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+            Future Categories
+        </span>
+    </div>
+    <div class="card-body">
+        <p style="color: var(--text-muted); margin-bottom: 16px;">
+            Categories planned for future development:
+        </p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <span class="badge badge-info">Home Automation</span>
+            <span class="badge badge-info">Media / Entertainment</span>
+            <span class="badge badge-info">Finance</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleDarkMode(toggleElement) {
+    toggleElement.classList.toggle('active');
+    const isDark = toggleElement.classList.contains('active');
+    setTheme(isDark ? 'dark' : 'light');
+}
+
+// Initialize dark mode toggle state
+document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.querySelector('[data-setting="darkMode"]');
+    if (toggle) {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+        if (currentTheme === 'dark') {
+            toggle.classList.add('active');
+        } else {
+            toggle.classList.remove('active');
+        }
+    }
+});
+</script>
+{% endblock %}

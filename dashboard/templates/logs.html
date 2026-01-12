@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Logs{% endblock %}
+{% block page_title %}System Logs{% endblock %}
+{% block page_subtitle %}View and monitor log files from all modules{% endblock %}
+
+{% block content %}
+<!-- Log Stats -->
+<div class="stats-grid">
+    {% for name, data in log_data.items() %}
+    <div class="stat-card {% if data.errors_24h > 10 %}error{% elif data.errors_24h > 0 %}warning{% else %}success{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if data.errors_24h > 10 %}error{% elif data.errors_24h > 0 %}warning{% else %}success{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+            </div>
+            {% if data.errors_24h > 10 %}
+            <span class="stat-badge error">{{ data.errors_24h }} errors</span>
+            {% elif data.errors_24h > 0 %}
+            <span class="stat-badge warning">{{ data.errors_24h }} errors</span>
+            {% else %}
+            <span class="stat-badge success">Healthy</span>
+            {% endif %}
+        </div>
+        <div class="stat-value" style="font-size: 18px;">{{ name }}</div>
+        <div class="stat-label">Last: {{ data.last_run or 'Unknown' }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Log Viewer -->
+<div class="card">
+    <div class="log-header">
+        <div class="log-tabs">
+            {% for name, data in log_data.items() %}
+            <button class="log-tab {% if loop.first %}active{% endif %}" onclick="switchLogTab(this, '{{ name }}')">
+                {{ name }}
+                {% if data.errors_24h > 0 %}
+                <span class="badge badge-error" style="margin-left: 6px;">{{ data.errors_24h }}</span>
+                {% endif %}
+            </button>
+            {% endfor %}
+        </div>
+        <div class="log-actions">
+            <button class="btn btn-secondary btn-sm" onclick="toggleAutoRefresh(this)">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                Auto-refresh: Off
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="downloadCurrentLog()">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+            </button>
+        </div>
+    </div>
+    <div class="log-content" id="log-content">{% for name, data in log_data.items() %}{% if loop.first %}{{ data.content }}{% endif %}{% endfor %}</div>
+</div>
+
+<!-- Log File Locations -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            Log File Locations
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            {% for name, data in log_data.items() %}
+            <div class="job-item">
+                <div class="job-status {% if data.errors_24h > 5 %}error{% elif data.errors_24h > 0 %}scheduled{% else %}running{% endif %}"></div>
+                <div class="job-info">
+                    <div class="job-name">{{ name }}</div>
+                    <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace; color: var(--text-muted);">{{ data.path }}</div>
+                </div>
+                <div class="job-meta">
+                    <button class="btn btn-secondary btn-sm" onclick="downloadLog('{{ name }}')">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentLogName = '{% for name in log_data.keys() %}{% if loop.first %}{{ name }}{% endif %}{% endfor %}';
+
+// Override switchLogTab to track current log
+const originalSwitchLogTab = switchLogTab;
+switchLogTab = function(tabElement, logName) {
+    currentLogName = logName;
+    originalSwitchLogTab(tabElement, logName);
+};
+
+// Initialize highlighting
+document.addEventListener('DOMContentLoaded', highlightLogs);
+</script>
+{% endblock %}

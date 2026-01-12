@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Overview{% endblock %}
+{% block page_title %}Overview{% endblock %}
+{% block page_subtitle %}System health and activity at a glance{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card stat-success">
+        <div class="stat-header">
+            <div class="stat-icon icon-success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+            <span class="stat-badge badge-success">Active</span>
+        </div>
+        <div class="stat-value">{{ cron_jobs|length }}</div>
+        <div class="stat-label">Scheduled Jobs</div>
+    </div>
+
+    <div class="stat-card {% if total_errors > 10 %}stat-danger{% elif total_errors > 0 %}stat-warning{% else %}stat-success{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if total_errors > 10 %}icon-danger{% elif total_errors > 0 %}icon-warning{% else %}icon-success{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+            </div>
+            <span class="stat-badge {% if total_errors > 10 %}badge-danger{% elif total_errors > 0 %}badge-warning{% else %}badge-success{% endif %}">24h</span>
+        </div>
+        <div class="stat-value">{{ total_errors }}</div>
+        <div class="stat-label">Errors Today</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon icon-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">{{ log_files|length }}</div>
+        <div class="stat-label">Log Files Monitored</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon icon-success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+            </div>
+            <span class="stat-badge badge-success" id="api-health-badge">Checking...</span>
+        </div>
+        <div class="stat-value">2</div>
+        <div class="stat-label">APIs Monitored</div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Recent Jobs -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Scheduled Jobs
+            </span>
+            <a href="{{ url_for('jobs') }}" class="btn btn-secondary btn-sm">View All</a>
+        </div>
+        <div class="card-body">
+            <div class="job-list">
+                {% for job in cron_jobs[:5] %}
+                <div class="job-item">
+                    <div class="job-status running"></div>
+                    <div class="job-info">
+                        <div class="job-name">{{ job.name }}</div>
+                        <div class="job-schedule">{{ job.human_schedule }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- API Health -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">
+                <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                API Health
+            </span>
+            <a href="{{ url_for('health') }}" class="btn btn-secondary btn-sm">Details</a>
+        </div>
+        <div class="card-body">
+            <div class="job-list">
+                <div class="job-item">
+                    <div class="job-status" id="odds-api-dot"></div>
+                    <div class="job-info">
+                        <div class="job-name">The Odds API</div>
+                        <div class="job-schedule" id="odds-api-message">Checking...</div>
+                    </div>
+                    <div class="job-meta">
+                        <span class="api-status-badge" id="odds-api-status">...</span>
+                    </div>
+                </div>
+                <div class="job-item">
+                    <div class="job-status" id="pm-api-dot"></div>
+                    <div class="job-info">
+                        <div class="job-name">Polymarket API</div>
+                        <div class="job-schedule" id="polymarket-api-message">Checking...</div>
+                    </div>
+                    <div class="job-meta">
+                        <span class="api-status-badge" id="polymarket-api-status">...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Recent Activity
+        </span>
+        <a href="{{ url_for('logs') }}" class="btn btn-secondary btn-sm">View Logs</a>
+    </div>
+    <div class="card-body">
+        <div class="activity-list">
+            {% for name, data in log_data.items() %}
+            {% if data.last_run %}
+            <div class="activity-item">
+                <div class="activity-icon {% if data.errors_24h > 5 %}error{% elif data.errors_24h > 0 %}warning{% else %}success{% endif %}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        {% if data.errors_24h > 5 %}
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                        {% elif data.errors_24h > 0 %}
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        {% else %}
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                        {% endif %}
+                    </svg>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">{{ name }}</div>
+                    <div class="activity-description">
+                        {% if data.errors_24h > 0 %}
+                        {{ data.errors_24h }} error(s) in last 24 hours
+                        {% else %}
+                        Running normally
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="activity-time">{{ data.last_run }}</div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const data = await checkApiHealth();
+    if (!data) return;
+
+    // Update Odds API
+    const oddsDot = document.getElementById('odds-api-dot');
+    const oddsStatus = document.getElementById('odds-api-status');
+    const oddsMessage = document.getElementById('odds-api-message');
+    if (data.odds_api) {
+        oddsDot.className = `job-status ${data.odds_api.status === 'healthy' ? 'running' : 'error'}`;
+        oddsStatus.textContent = data.odds_api.status === 'healthy' ? 'Healthy' : 'Error';
+        oddsStatus.className = `api-status-badge ${data.odds_api.status}`;
+        oddsMessage.textContent = data.odds_api.message;
+    }
+
+    // Update Polymarket API
+    const pmDot = document.getElementById('pm-api-dot');
+    const pmStatus = document.getElementById('polymarket-api-status');
+    const pmMessage = document.getElementById('polymarket-api-message');
+    if (data.polymarket_api) {
+        pmDot.className = `job-status ${data.polymarket_api.status === 'healthy' ? 'running' : 'error'}`;
+        pmStatus.textContent = data.polymarket_api.status === 'healthy' ? 'Healthy' : 'Error';
+        pmStatus.className = `api-status-badge ${data.polymarket_api.status}`;
+        pmMessage.textContent = data.polymarket_api.message;
+    }
+
+    // Update health badge
+    const healthBadge = document.getElementById('api-health-badge');
+    const allHealthy = data.odds_api?.status === 'healthy' && data.polymarket_api?.status === 'healthy';
+    healthBadge.textContent = allHealthy ? 'All Healthy' : 'Issues';
+    healthBadge.className = `stat-badge ${allHealthy ? 'badge-success' : 'badge-warning'}`;
+});
+</script>
+{% endblock %}
