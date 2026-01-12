@@ -63,18 +63,18 @@
     flex-direction: column;
     height: calc(100vh - 120px);
     min-height: 400px;
-    background: #122637;
+    background: var(--bg-primary);
     border-radius: 8px;
     overflow: hidden;
-    border: 1px solid #1e3a4c;
+    border: 1px solid var(--border-color);
 }
 
 /* Tab Bar */
 .terminal-tabs-bar {
     display: flex;
     align-items: center;
-    background: #0a1820;
-    border-bottom: 1px solid #1e3a4c;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
     padding: 0;
     min-height: 40px;
     flex-shrink: 0;
@@ -101,8 +101,8 @@
     padding: 8px 12px;
     background: transparent;
     border: none;
-    border-right: 1px solid #1e3a4c;
-    color: #7a9bb3;
+    border-right: 1px solid var(--border-color);
+    color: var(--text-muted);
     font-size: 13px;
     font-family: 'Inter', sans-serif;
     cursor: pointer;
@@ -114,14 +114,14 @@
 }
 
 .terminal-tab:hover {
-    background: #122637;
-    color: #b8d4e8;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
 }
 
 .terminal-tab.active {
-    background: #122637;
-    color: #ffffff;
-    border-bottom: 2px solid #f0cb09;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--accent);
     margin-bottom: -1px;
 }
 
@@ -133,7 +133,7 @@
 
 .terminal-tab.active .tab-icon {
     opacity: 1;
-    color: #f0cb09;
+    color: var(--accent);
 }
 
 .terminal-tab .tab-name {
@@ -150,7 +150,7 @@
     border-radius: 4px;
     opacity: 0;
     transition: all 0.15s ease;
-    color: #888;
+    color: var(--text-muted);
 }
 
 .terminal-tab:hover .tab-close {
@@ -158,7 +158,7 @@
 }
 
 .terminal-tab .tab-close:hover {
-    background: #ff4444;
+    background: var(--error);
     color: white;
 }
 
@@ -171,18 +171,18 @@
     height: 36px;
     margin: 2px 8px;
     background: transparent;
-    border: 1px solid #1e3a4c;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
-    color: #7a9bb3;
+    color: var(--text-muted);
     cursor: pointer;
     transition: all 0.15s ease;
     flex-shrink: 0;
 }
 
 .tab-new-btn:hover {
-    background: #f0cb09;
-    border-color: #f0cb09;
-    color: #122637;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
 }
 
 .tab-new-btn svg {
@@ -204,7 +204,7 @@
     width: 100%;
     height: 100%;
     display: none;
-    background: #122637;
+    background: var(--bg-primary);
 }
 
 .terminal-instance.active {
@@ -215,14 +215,14 @@
     width: 100%;
     height: 100%;
     border: none;
-    background: #122637;
+    background: var(--bg-primary);
 }
 
 /* Context Menu */
 .tab-context-menu {
     position: fixed;
-    background: #0a1820;
-    border: 1px solid #1e3a4c;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 6px 0;
     min-width: 160px;
@@ -240,14 +240,14 @@
     align-items: center;
     gap: 10px;
     padding: 8px 14px;
-    color: #b8d4e8;
+    color: var(--text-secondary);
     font-size: 13px;
     cursor: pointer;
     transition: background 0.1s ease;
 }
 
 .context-item:hover {
-    background: #122637;
+    background: var(--bg-primary);
 }
 
 .context-item svg {
@@ -257,16 +257,16 @@
 }
 
 .context-item.context-danger {
-    color: #ff6b6b;
+    color: var(--error);
 }
 
 .context-item.context-danger:hover {
-    background: rgba(255, 107, 107, 0.15);
+    background: var(--error-bg);
 }
 
 .context-divider {
     height: 1px;
-    background: #1e3a4c;
+    background: var(--border-color);
     margin: 6px 0;
 }
 
@@ -290,7 +290,7 @@
 
 .rename-dialog {
     background: var(--bg-secondary);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 20px;
     min-width: 300px;
@@ -306,7 +306,7 @@
     width: 100%;
     padding: 10px 12px;
     background: var(--bg-tertiary);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     color: var(--text-primary);
     font-size: 14px;

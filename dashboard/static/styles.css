@@ -1,6 +1,6 @@
 /* ============================================
    Boomshakalaka Dashboard - Styles
-   Blue/Cyan Tech Theme with Light/Dark Mode
+   Teal/Gold Theme with Light/Dark Mode
    ============================================ */
 
 /* ============================================
@@ -9,30 +9,30 @@
 
 :root,
 [data-theme="dark"] {
-    /* Background Colors */
-    --bg-primary: #0a0f1a;
-    --bg-secondary: #111827;
-    --bg-tertiary: #1f2937;
-    --bg-card: #1a2332;
-    --bg-hover: #243044;
-    --bg-input: #0d1321;
+    /* Background Colors - Teal */
+    --bg-primary: #122637;
+    --bg-secondary: #0a1820;
+    --bg-tertiary: #1e3a4c;
+    --bg-card: #0f1d2a;
+    --bg-hover: #1a3040;
+    --bg-input: #0a1520;
 
     /* Border Colors */
-    --border-color: #1e3a5f;
-    --border-light: #2d4a6f;
-    --border-focus: #06b6d4;
+    --border-color: #1e3a4c;
+    --border-light: #2a4a5c;
+    --border-focus: #f0cb09;
 
     /* Text Colors */
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
+    --text-primary: #ffffff;
+    --text-secondary: #b8d4e8;
+    --text-muted: #7a9bb3;
 
-    /* Accent Colors - Cyan */
-    --accent: #06b6d4;
-    --accent-hover: #22d3ee;
-    --accent-muted: #0891b2;
-    --accent-bg: rgba(6, 182, 212, 0.1);
-    --accent-glow: rgba(6, 182, 212, 0.4);
+    /* Accent Colors - Gold */
+    --accent: #f0cb09;
+    --accent-hover: #f5d63d;
+    --accent-muted: #d4b308;
+    --accent-bg: rgba(240, 203, 9, 0.1);
+    --accent-glow: rgba(240, 203, 9, 0.4);
 
     /* Status Colors */
     --success: #10b981;
@@ -53,7 +53,7 @@
     --ai-bg: rgba(139, 92, 246, 0.1);
 
     /* Gradients */
-    --gradient-accent: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+    --gradient-accent: linear-gradient(135deg, #f0cb09 0%, #d4b308 100%);
     --gradient-sports: linear-gradient(135deg, #10b981 0%, #059669 100%);
     --gradient-crypto: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     --gradient-ai: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
