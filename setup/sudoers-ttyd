@@ -1,0 +1,7 @@
+# Allow pds user to manage ttyd service without password
+# Install with: sudo cp /home/pds/boomshakalaka/setup/sudoers-ttyd /etc/sudoers.d/ttyd-service && sudo chmod 440 /etc/sudoers.d/ttyd-service
+
+pds ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ttyd
+pds ALL=(ALL) NOPASSWD: /usr/bin/systemctl start ttyd
+pds ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop ttyd
+pds ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload

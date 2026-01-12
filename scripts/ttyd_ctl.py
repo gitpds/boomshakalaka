@@ -6,9 +6,12 @@ Manages the ttyd web terminal service which provides browser-based
 terminal access backed by tmux for persistent sessions.
 
 Usage:
-    sudo python scripts/ttyd_ctl.py install   # Install/update service file
-    sudo python scripts/ttyd_ctl.py restart   # Restart ttyd service
-    python scripts/ttyd_ctl.py status         # Check status (no sudo needed)
+    python scripts/ttyd_ctl.py restart   # Restart ttyd service
+    python scripts/ttyd_ctl.py status    # Check status
+    python scripts/ttyd_ctl.py install   # Install service file (requires sudo)
+
+Note: restart/start/stop/daemon-reload use passwordless sudo via:
+    /etc/sudoers.d/ttyd-service
 """
 
 import os
@@ -29,9 +32,12 @@ def check_root():
     return os.geteuid() == 0
 
 
-def run_systemctl(*args, check=True):
-    """Run a systemctl command."""
-    cmd = ['systemctl'] + list(args)
+def run_systemctl(*args, check=True, use_sudo=True):
+    """Run a systemctl command, optionally with sudo."""
+    if use_sudo:
+        cmd = ['sudo', 'systemctl'] + list(args)
+    else:
+        cmd = ['systemctl'] + list(args)
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=check)
         return result
@@ -69,10 +75,6 @@ def install_service():
 
 def restart_service():
     """Restart the ttyd service."""
-    if not check_root():
-        print("Error: 'restart' requires root privileges. Run with sudo.")
-        return False
-
     print("Restarting ttyd service...")
     run_systemctl('restart', 'ttyd')
     print("  Service restarted.")
@@ -83,10 +85,6 @@ def restart_service():
 
 def stop_service():
     """Stop the ttyd service."""
-    if not check_root():
-        print("Error: 'stop' requires root privileges. Run with sudo.")
-        return False
-
     print("Stopping ttyd service...")
     run_systemctl('stop', 'ttyd')
     print("  Service stopped.")
@@ -95,10 +93,6 @@ def stop_service():
 
 def start_service():
     """Start the ttyd service."""
-    if not check_root():
-        print("Error: 'start' requires root privileges. Run with sudo.")
-        return False
-
     print("Starting ttyd service...")
     run_systemctl('start', 'ttyd')
     print("  Service started.")
@@ -109,8 +103,8 @@ def status_service():
     """Show ttyd service status."""
     print("=== ttyd Service Status ===")
 
-    # Check if service exists
-    result = run_systemctl('is-active', 'ttyd', check=False)
+    # Check if service exists (no sudo needed for status check)
+    result = run_systemctl('is-active', 'ttyd', check=False, use_sudo=False)
     status = result.stdout.strip()
 
     if status == 'active':
@@ -188,10 +182,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    sudo %(prog)s deploy    Install service file and restart (full setup)
-    sudo %(prog)s install   Install/update service file only
-    sudo %(prog)s restart   Restart the ttyd service
-    %(prog)s status         Show service status (no sudo needed)
+    %(prog)s restart        Restart the ttyd service
+    %(prog)s status         Show service status
+    %(prog)s start          Start the ttyd service
+    %(prog)s stop           Stop the ttyd service
+    sudo %(prog)s deploy    Install service file and restart (rare)
+    sudo %(prog)s install   Install/update service file only (rare)
         """
     )
     parser.add_argument(
