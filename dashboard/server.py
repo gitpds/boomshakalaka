@@ -16,9 +16,10 @@ import sys
 import json
 import uuid
 import logging
+import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file
+from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, Response, stream_with_context
 
 # Theme generator for AI-powered theme customization
 try:
@@ -333,6 +334,278 @@ def get_common_context():
     """Get common context for all pages"""
     return {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+
+
+# --- Garbage Time Analysis Functions ---
+
+GARBAGE_TIME_DB = POLYMARKET_DIR / 'sports_betting' / 'garbage_time.db'
+OPTIMIZATION_RESULTS = POLYMARKET_DIR / 'sports_betting' / 'optimization_results.json'
+
+
+def get_completed_blowout_games():
+    """Get all completed blowout games from garbage_time.db"""
+    if not GARBAGE_TIME_DB.exists():
+        return []
+
+    conn = sqlite3.connect(str(GARBAGE_TIME_DB))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT
+            game_id,
+            sport,
+            home_team,
+            away_team,
+            game_date,
+            halftime_lead,
+            halftime_spread,
+            final_margin,
+            underdog_covered,
+            regression_amount
+        FROM games
+        WHERE status = 'completed'
+        AND is_blowout = 1
+        ORDER BY game_date ASC
+    ''')
+
+    games = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return games
+
+
+def load_optimization_results():
+    """Load historical optimization results from JSON file"""
+    if not OPTIMIZATION_RESULTS.exists():
+        return {}
+
+    with open(OPTIMIZATION_RESULTS, 'r') as f:
+        return json.load(f)
+
+
+def calculate_kelly_results(games, threshold, starting_bankroll=10000):
+    """
+    Calculate Kelly-based P&L for games at a given threshold.
+    Returns dict with games, wins, win_rate, kelly_pct, final_bankroll, roi
+    """
+    if not games:
+        return {
+            'threshold': threshold,
+            'games': 0,
+            'wins': 0,
+            'win_rate': 0,
+            'kelly_pct': 0,
+            'final_bankroll': starting_bankroll,
+            'roi': 0
+        }
+
+    qualifying = [g for g in games if g['halftime_lead'] and g['halftime_lead'] >= threshold]
+
+    if not qualifying:
+        return {
+            'threshold': threshold,
+            'games': 0,
+            'wins': 0,
+            'win_rate': 0,
+            'kelly_pct': 0,
+            'final_bankroll': starting_bankroll,
+            'roi': 0
+        }
+
+    wins = sum(1 for g in qualifying if g['underdog_covered'])
+    win_rate = wins / len(qualifying)
+
+    # Kelly: (bp - q) / b where b=0.909 for -110 odds
+    b = 0.909  # profit multiplier at -110 odds
+    p = win_rate
+    q = 1 - p
+    kelly = max(0, (b * p - q) / b)
+
+    # Simulate betting each game chronologically
+    bankroll = starting_bankroll
+    for game in sorted(qualifying, key=lambda x: x['game_date'] or ''):
+        bet_size = bankroll * kelly
+        if game['underdog_covered']:
+            bankroll += bet_size * 0.909  # Win at -110
+        else:
+            bankroll -= bet_size
+
+    return {
+        'threshold': threshold,
+        'games': len(qualifying),
+        'wins': wins,
+        'win_rate': win_rate,
+        'kelly_pct': kelly * 100,
+        'final_bankroll': round(bankroll, 2),
+        'roi': round((bankroll - starting_bankroll) / starting_bankroll * 100, 1)
+    }
+
+
+def calculate_bankroll_series(games, threshold, starting_bankroll=10000):
+    """Calculate bankroll over time for chart visualization"""
+    qualifying = [g for g in games if g['halftime_lead'] and g['halftime_lead'] >= threshold]
+
+    if not qualifying:
+        return {'labels': [], 'values': []}
+
+    wins = sum(1 for g in qualifying if g['underdog_covered'])
+    win_rate = wins / len(qualifying) if qualifying else 0
+
+    b = 0.909
+    p = win_rate
+    q = 1 - p
+    kelly = max(0, (b * p - q) / b)
+
+    bankroll = starting_bankroll
+    labels = ['Start']
+    values = [starting_bankroll]
+
+    for game in sorted(qualifying, key=lambda x: x['game_date'] or ''):
+        bet_size = bankroll * kelly
+        if game['underdog_covered']:
+            bankroll += bet_size * 0.909
+        else:
+            bankroll -= bet_size
+
+        labels.append(game['game_date'])
+        values.append(round(bankroll, 2))
+
+    return {'labels': labels, 'values': values}
+
+
+def calculate_bucket_results(games, lower_bound, upper_bound):
+    """
+    Calculate results for a specific point bucket (e.g., 15-16pt leads).
+    This gives ROI per dollar wagered for that specific range.
+    """
+    BREAKEVEN = 0.5238  # 52.38% needed at -110 odds
+
+    if not games:
+        return {
+            'bucket': f'{lower_bound}-{upper_bound}pt',
+            'lower': lower_bound,
+            'upper': upper_bound,
+            'games': 0,
+            'wins': 0,
+            'win_rate': 0,
+            'edge': 0,
+            'ev_per_100': 0,
+            'recommendation': 'NO DATA'
+        }
+
+    # Filter games in this specific bucket (inclusive lower, exclusive upper)
+    qualifying = [g for g in games
+                  if g['halftime_lead'] and lower_bound <= g['halftime_lead'] < upper_bound]
+
+    if not qualifying:
+        return {
+            'bucket': f'{lower_bound}-{upper_bound}pt',
+            'lower': lower_bound,
+            'upper': upper_bound,
+            'games': 0,
+            'wins': 0,
+            'win_rate': 0,
+            'edge': 0,
+            'ev_per_100': 0,
+            'recommendation': 'NO DATA'
+        }
+
+    wins = sum(1 for g in qualifying if g['underdog_covered'])
+    win_rate = wins / len(qualifying)
+    edge = (win_rate - BREAKEVEN) * 100
+
+    # EV per $100 wagered: (win_rate * $90.91) - ((1-win_rate) * $100)
+    ev_per_100 = (win_rate * 90.91) - ((1 - win_rate) * 100)
+
+    # Determine recommendation
+    if edge >= 9:
+        recommendation = 'OPTIMAL'
+    elif edge >= 5:
+        recommendation = 'BET'
+    elif edge > 0:
+        recommendation = 'MARGINAL'
+    else:
+        recommendation = 'SKIP'
+
+    return {
+        'bucket': f'{lower_bound}-{upper_bound}pt',
+        'lower': lower_bound,
+        'upper': upper_bound,
+        'games': len(qualifying),
+        'wins': wins,
+        'win_rate': win_rate,
+        'edge': round(edge, 1),
+        'ev_per_100': round(ev_per_100, 2),
+        'recommendation': recommendation
+    }
+
+
+def get_bucket_distribution(games):
+    """
+    Get the full bucket distribution for bell curve visualization.
+    Returns list of bucket results from 12-13pt through 24-25pt.
+    """
+    buckets = []
+    for lower in range(12, 25):
+        bucket = calculate_bucket_results(games, lower, lower + 1)
+        buckets.append(bucket)
+    return buckets
+
+
+def calculate_running_profit(games, lower_bound=15, upper_bound=17, bet_size=100):
+    """
+    Calculate running profit for games in the optimal range.
+    Returns detailed game-by-game P&L for the optimal bucket.
+    """
+    # Filter games in optimal range
+    qualifying = [g for g in games
+                  if g['halftime_lead'] and lower_bound <= g['halftime_lead'] < upper_bound]
+
+    if not qualifying:
+        return {
+            'total_pnl': 0,
+            'total_wagered': 0,
+            'wins': 0,
+            'losses': 0,
+            'roi': 0,
+            'games': []
+        }
+
+    # Sort by date
+    sorted_games = sorted(qualifying, key=lambda x: x['game_date'] or '')
+
+    total_pnl = 0
+    games_with_pnl = []
+
+    for game in sorted_games:
+        if game['underdog_covered']:
+            pnl = bet_size * 0.909  # Win at -110
+            result = 'WIN'
+        else:
+            pnl = -bet_size
+            result = 'LOSS'
+
+        total_pnl += pnl
+
+        games_with_pnl.append({
+            **game,
+            'pnl': round(pnl, 2),
+            'result': result,
+            'running_total': round(total_pnl, 2)
+        })
+
+    wins = sum(1 for g in games_with_pnl if g['result'] == 'WIN')
+    losses = len(games_with_pnl) - wins
+    total_wagered = bet_size * len(games_with_pnl)
+
+    return {
+        'total_pnl': round(total_pnl, 2),
+        'total_wagered': total_wagered,
+        'wins': wins,
+        'losses': losses,
+        'roi': round((total_pnl / total_wagered) * 100, 1) if total_wagered > 0 else 0,
+        'games': list(reversed(games_with_pnl))  # Most recent first
     }
 
 
@@ -1147,6 +1420,105 @@ def sports_betting():
                          last_run=betting_data.get('last_run', None),
                          log_content=betting_data.get('content', ''),
                          **get_common_context())
+
+
+@app.route('/sports/betting/analysis')
+def sports_betting_analysis():
+    """Garbage Time Analysis page with ROI-focused bucket analysis"""
+    games = get_completed_blowout_games()
+    historical = load_optimization_results()
+
+    # === ROI-Focused Bucket Analysis (NEW) ===
+    # Get bucket distribution for bell curve chart
+    bucket_distribution = get_bucket_distribution(games)
+
+    # Calculate running profit for optimal range (15-17pt)
+    running_profit = calculate_running_profit(games, lower_bound=15, upper_bound=17, bet_size=100)
+
+    # Find optimal bucket (highest EV per $100)
+    profitable_buckets = [b for b in bucket_distribution if b['ev_per_100'] > 0]
+    optimal_bucket = max(profitable_buckets, key=lambda x: x['ev_per_100']) if profitable_buckets else None
+
+    # === Legacy Cumulative Threshold Analysis ===
+    thresholds = [14, 15, 16, 17, 18, 19, 20, 22, 25]
+    matrix = [calculate_kelly_results(games, t) for t in thresholds]
+
+    # Add edge calculation (vs 52.38% breakeven at -110)
+    BREAKEVEN = 0.5238
+    for row in matrix:
+        row['edge'] = round((row['win_rate'] - BREAKEVEN) * 100, 1)
+        row['profitable'] = row['win_rate'] > BREAKEVEN
+
+    # Find best threshold by final bankroll
+    best = max(matrix, key=lambda x: x['final_bankroll']) if matrix else None
+
+    # Calculate overall stats
+    total_games = len(games)
+    overall_wins = sum(1 for g in games if g['underdog_covered'])
+    overall_win_rate = overall_wins / total_games if total_games > 0 else 0
+
+    # Get NBA historical data for comparison
+    nba_historical = historical.get('sports', {}).get('NBA', {}).get('results', {})
+
+    # Build comparison data (only for thresholds with historical data)
+    comparison = []
+    for t in [14, 15, 16, 17, 18, 19, 20, 22, 25]:
+        hist_data = nba_historical.get(str(t), {})
+        live_data = next((m for m in matrix if m['threshold'] == t), None)
+        if live_data and hist_data:
+            comparison.append({
+                'threshold': t,
+                'historical_win_rate': hist_data.get('win_rate', 0),
+                'live_win_rate': live_data['win_rate'],
+                'delta': live_data['win_rate'] - hist_data.get('win_rate', 0),
+                'status': 'outperform' if live_data['win_rate'] > hist_data.get('win_rate', 0) else 'underperform'
+            })
+
+    # Get recent games in optimal range (15-17pt) for display
+    recent_optimal = [g for g in running_profit['games']][:10]
+
+    return render_template('sports_betting_analysis.html',
+                         active_page='sports_betting_analysis',
+                         active_category='sports',
+                         # ROI-focused data
+                         bucket_distribution=bucket_distribution,
+                         running_profit=running_profit,
+                         optimal_bucket=optimal_bucket,
+                         recent_optimal=recent_optimal,
+                         # Legacy cumulative data
+                         matrix=matrix,
+                         best_threshold=best['threshold'] if best else 14,
+                         total_pnl=round(best['final_bankroll'] - 10000, 2) if best else 0,
+                         total_games=total_games,
+                         overall_win_rate=overall_win_rate,
+                         comparison=comparison,
+                         **get_common_context())
+
+
+@app.route('/api/betting/analysis/chart')
+def api_betting_chart():
+    """JSON endpoint for bankroll chart data"""
+    threshold = request.args.get('threshold', 14, type=int)
+    games = get_completed_blowout_games()
+    chart_data = calculate_bankroll_series(games, threshold)
+    return jsonify(chart_data)
+
+
+@app.route('/api/betting/analysis/buckets')
+def api_betting_buckets():
+    """JSON endpoint for bucket distribution chart data"""
+    games = get_completed_blowout_games()
+    buckets = get_bucket_distribution(games)
+
+    # Format for Chart.js
+    return jsonify({
+        'labels': [b['bucket'] for b in buckets],
+        'edges': [b['edge'] for b in buckets],
+        'ev_per_100': [b['ev_per_100'] for b in buckets],
+        'games': [b['games'] for b in buckets],
+        'recommendations': [b['recommendation'] for b in buckets],
+        'buckets': buckets
+    })
 
 
 @app.route('/crypto')
@@ -3139,6 +3511,148 @@ def api_themes_ttyd_command():
         'command': command,
         'theme_id': active_id
     })
+
+
+# ============================================================================
+# Terminal Session Management API (tmux-backed persistent terminals)
+# ============================================================================
+
+TERMINAL_SESSIONS_FILE = PROJECT_ROOT / 'data' / 'terminal_sessions.json'
+
+
+def get_terminal_sessions():
+    """Load terminal session metadata from JSON file."""
+    if TERMINAL_SESSIONS_FILE.exists():
+        try:
+            return json.loads(TERMINAL_SESSIONS_FILE.read_text())
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {"windows": {}, "active_window": "0"}
+
+
+def save_terminal_sessions(data):
+    """Save terminal session metadata to JSON file."""
+    TERMINAL_SESSIONS_FILE.write_text(json.dumps(data, indent=2))
+
+
+def get_tmux_windows():
+    """Get list of tmux windows in dashboard session."""
+    try:
+        result = subprocess.run(
+            ['tmux', 'list-windows', '-t', 'dashboard', '-F', '#{window_index}'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            return [w.strip() for w in result.stdout.strip().split('\n') if w.strip()]
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    return []
+
+
+@app.route('/api/terminal/windows')
+def api_terminal_windows():
+    """List all terminal windows."""
+    sessions = get_terminal_sessions()
+    tmux_windows = get_tmux_windows()
+
+    # Sync: build list from actual tmux windows, use saved names if available
+    windows = []
+    for wid in tmux_windows:
+        name = sessions.get('windows', {}).get(wid, {}).get('name', f'Terminal {int(wid)+1}')
+        windows.append({
+            'id': wid,
+            'name': name,
+            'active': wid == sessions.get('active_window', '0')
+        })
+
+    return jsonify({'windows': windows})
+
+
+@app.route('/api/terminal/windows', methods=['POST'])
+def api_terminal_create():
+    """Create new terminal window."""
+    data = request.get_json() or {}
+    name = data.get('name', 'New Terminal')
+
+    # Create new tmux window
+    try:
+        result = subprocess.run(
+            ['tmux', 'new-window', '-t', 'dashboard', '-P', '-F', '#{window_index}'],
+            capture_output=True, text=True, timeout=5
+        )
+
+        if result.returncode == 0:
+            window_id = result.stdout.strip()
+
+            # Save metadata
+            sessions = get_terminal_sessions()
+            sessions.setdefault('windows', {})[window_id] = {'name': name}
+            sessions['active_window'] = window_id
+            save_terminal_sessions(sessions)
+
+            return jsonify({'id': window_id, 'name': name})
+
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        return jsonify({'error': f'tmux error: {str(e)}'}), 500
+
+    return jsonify({'error': 'Failed to create window'}), 500
+
+
+@app.route('/api/terminal/windows/<window_id>', methods=['PUT'])
+def api_terminal_rename(window_id):
+    """Rename terminal window."""
+    data = request.get_json() or {}
+    name = data.get('name', '')
+
+    if name:
+        sessions = get_terminal_sessions()
+        sessions.setdefault('windows', {})[window_id] = {'name': name}
+        save_terminal_sessions(sessions)
+        return jsonify({'success': True})
+
+    return jsonify({'error': 'Name required'}), 400
+
+
+@app.route('/api/terminal/windows/<window_id>', methods=['DELETE'])
+def api_terminal_close(window_id):
+    """Close terminal window."""
+    # Don't allow closing last window
+    tmux_windows = get_tmux_windows()
+    if len(tmux_windows) <= 1:
+        return jsonify({'error': 'Cannot close last window'}), 400
+
+    try:
+        subprocess.run(
+            ['tmux', 'kill-window', '-t', f'dashboard:{window_id}'],
+            capture_output=True, timeout=5
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Remove from metadata
+    sessions = get_terminal_sessions()
+    sessions.get('windows', {}).pop(window_id, None)
+    save_terminal_sessions(sessions)
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/terminal/windows/<window_id>/select', methods=['POST'])
+def api_terminal_select(window_id):
+    """Select/focus terminal window."""
+    try:
+        subprocess.run(
+            ['tmux', 'select-window', '-t', f'dashboard:{window_id}'],
+            capture_output=True, timeout=5
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    sessions = get_terminal_sessions()
+    sessions['active_window'] = window_id
+    save_terminal_sessions(sessions)
+
+    return jsonify({'success': True})
 
 
 def main():

@@ -4,15 +4,17 @@ Personal workstation server with web dashboard, remote terminal access, and secu
 
 ## Features
 
-- **Web Dashboard** - Flask-based dashboard with customizable dark theme UI
+- **Web Dashboard** - Flask-based dashboard with customizable UI
   - Home, Sports, Crypto, AI Studio sections
   - Integrated web terminal with tabbed interface
   - Logs viewer and settings
-  - AI-powered theme customization via Claude API
+  - Customizable color themes
 
-- **Web Terminal** - Browser-based terminal access via ttyd
-  - Multiple tabs in same window
-  - Tab rename, close, reconnect via right-click
+- **Web Terminal** - Browser-based terminal access via ttyd + tmux
+  - Persistent sessions - tabs survive page refresh and browser close
+  - Multiple tabs backed by tmux windows
+  - Shared across devices - same terminals on desktop and mobile
+  - Tab rename, close via right-click context menu
   - Keyboard shortcuts (Ctrl+T new tab, Ctrl+W close)
   - Theme synced with dashboard
 
@@ -56,14 +58,14 @@ Personal workstation server with web dashboard, remote terminal access, and secu
 boomshakalaka/
 ├── dashboard/              # Flask web dashboard
 │   ├── server.py           # Main Flask application
-│   ├── theme_generator.py  # AI theme generation
+│   ├── theme_generator.py  # Theme generation utilities
 │   ├── static/             # CSS and JavaScript
 │   │   ├── styles.css
 │   │   └── app.js
 │   └── templates/          # Jinja2 HTML templates
 │       ├── base.html       # Base template with sidebar nav
 │       ├── terminal.html   # Tabbed terminal interface
-│       ├── settings.html   # Settings with theme customization
+│       ├── settings.html   # Settings page
 │       └── ...
 ├── setup/                  # Server configuration files
 │   ├── install.sh          # Installation script
@@ -71,11 +73,16 @@ boomshakalaka/
 │   ├── ssh-security.conf   # SSH hardening config
 │   └── wireguard-client.conf.example  # VPN client template
 ├── scripts/                # Utility scripts
+│   ├── dashboard_ctl.py    # Dashboard management (start/stop/restart)
 │   ├── start_dashboard.sh
 │   ├── start_comfy.sh
 │   └── generate-wireguard.sh  # Generate VPN configs from .env
 ├── data/                   # Data storage
 │   └── themes.json         # Saved color themes
+├── skills/                 # Reusable skill modules
+│   └── slack_notification/ # Slack alerts to #boomshakalaka-alerts
+├── docs/                   # Documentation
+│   └── garbage-time-strategy.md  # Betting strategy docs
 ├── .env.example            # Environment variables template
 └── .env                    # Your local config (not in git)
 ```
@@ -124,7 +131,7 @@ ssh -L 3003:localhost:3003 -L 7681:localhost:7681 user@your-server-ip
 # Terminal:  http://localhost:7681
 ```
 
-Add to `~/.ssh/config` for convenience:
+Add to `~/.ssh/config` on your **local machine** for convenience:
 ```
 Host boomshakalaka
     HostName your-public-ip
@@ -132,9 +139,12 @@ Host boomshakalaka
     IdentityFile ~/.ssh/id_ed25519
     LocalForward 3003 localhost:3003
     LocalForward 7681 localhost:7681
+    ServerAliveInterval 60
 ```
 
 Then just: `ssh boomshakalaka` and open `http://localhost:3003`
+
+**Important:** Both ports (3003 and 7681) must be forwarded for the web terminal to work. If you only forward 3003, the terminal iframe will fail to connect.
 
 ### Option 2: WireGuard VPN (Recommended for Mobile)
 
@@ -222,30 +232,27 @@ From the same network:
 | SSH | 22 | Internet (key auth only) |
 | WireGuard | 51820/udp | Internet |
 
-## Theme Customization
+## Midnight Command Theme
 
-The dashboard supports AI-generated color themes:
-
-1. Go to **Settings** in the dashboard
-2. Enter a natural language description (e.g., "cyberpunk purple with neon pink accents")
-3. Click **Generate Theme** - Claude AI creates a matching color palette
-4. **Apply Theme** to see it instantly
-5. **Save Theme** to keep it for later
-
-Themes are stored in `data/themes.json` and persist across sessions.
-
-To update the terminal theme to match, copy and run the displayed command.
-
-### Default Color Palette
+The dashboard uses the "Midnight Command" theme with an Indiana Jones inspired aesthetic.
 
 | Purpose | Color | Hex |
 |---------|-------|-----|
-| Background Primary | Dark Teal | `#122637` |
-| Background Secondary | Darker Teal | `#0a1820` |
-| Background Tertiary | Border Teal | `#1e3a4c` |
-| Accent | Gold | `#f0cb09` |
+| Background Primary | Midnight | `#060a14` |
+| Background Secondary | Dark Blue | `#0e1117` |
+| Background Tertiary | Navy | `#151a24` |
+| Accent | Torchlight Orange | `#ff8c00` |
+| Accent Hover | Golden Yellow | `#ffcc00` |
+| Gold | Antique Gold | `#d4af37` |
 | Text Primary | White | `#ffffff` |
-| Text Secondary | Light Blue | `#b8d4e8` |
+| Text Secondary | Light Gray | `#c4c4c4` |
+
+### Theme Features
+- Glass-morphism card effects with gold borders
+- Torchlight glow on logo hover
+- Custom gold scrollbars
+- Subtle dot pattern overlay
+- Crimson Pro display font for headings
 
 ## Security Notes
 
@@ -264,7 +271,42 @@ git diff --cached | grep -E "(KEY|PRIVATE|SECRET|PASSWORD)"
 git ls-files | grep "\.env$"
 ```
 
+## Dashboard Management
+
+Use the dashboard control script to manage the server:
+
+```bash
+# Check status
+python scripts/dashboard_ctl.py status
+
+# Restart (picks up code changes)
+python scripts/dashboard_ctl.py restart
+
+# Stop
+python scripts/dashboard_ctl.py stop
+
+# Start
+python scripts/dashboard_ctl.py start
+```
+
+The script automatically detects if the dashboard is managed by systemd and handles restarts appropriately.
+
 ## Troubleshooting
+
+### Terminal Shows "localhost refused to connect"
+
+**Symptoms:**
+- Terminal iframe shows connection refused error
+- Dashboard works but terminal doesn't
+
+**Cause:** Port 7681 isn't being forwarded through SSH tunnel.
+
+**Fix:** Ensure your SSH config forwards both ports:
+```
+Host boomshakalaka
+    LocalForward 3003 localhost:3003
+    LocalForward 7681 localhost:7681
+```
 
 ### Terminal Shows Blinking Cursor / Won't Connect
 
@@ -277,8 +319,7 @@ git ls-files | grep "\.env$"
 **Fix:**
 ```bash
 # Restart the dashboard
-pkill -f "dashboard.server"
-python -m dashboard.server &
+python scripts/dashboard_ctl.py restart
 
 # Hard refresh browser: Ctrl+Shift+R
 ```
@@ -320,6 +361,25 @@ sudo ufw status | grep 22
 ssh -v user@server
 ```
 
+### SSH Tunnel "Address Already in Use"
+
+**Symptoms:**
+- `bind [127.0.0.1]:3003: Address already in use` when connecting
+
+**Cause:** A previous SSH session didn't close cleanly, or another process is using the port.
+
+**Fix (on your local machine):**
+```bash
+# Find what's using the port
+lsof -i :3003
+
+# Kill the process (replace PID with actual number)
+kill -9 <PID>
+
+# Or kill all SSH sessions to boomshakalaka
+pkill -f "ssh boomshakalaka"
+```
+
 ### Dashboard Not Accessible via VPN
 
 **Ensure firewall allows VPN subnet:**
@@ -345,19 +405,26 @@ grep ExecStart /etc/systemd/system/ttyd.service
 
 ## Manual Installation
 
-### Web Terminal (ttyd)
+### Web Terminal (ttyd + tmux)
+
+The terminal uses ttyd for browser access and tmux for persistent sessions.
 
 ```bash
+# Install tmux (for persistent sessions)
+sudo apt install tmux
+
 # Install ttyd 1.7.7 (supports themes)
 sudo curl -L https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
     -o /usr/local/bin/ttyd
 sudo chmod +x /usr/local/bin/ttyd
 
-# Install service
+# Install service (connects ttyd to tmux session)
 sudo cp setup/ttyd.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now ttyd
 ```
+
+Each browser tab maps to a tmux window. Sessions persist across page refreshes, browser restarts, and are shared across all devices.
 
 ### SSH Security
 
@@ -375,6 +442,40 @@ sudo ufw allow from 192.168.0.0/24 to any port 7681 # Terminal (local)
 sudo ufw allow 51820/udp                            # WireGuard
 sudo ufw enable
 ```
+
+## Skills
+
+### Slack Notification (`skills/slack_notification/`)
+
+Sends notifications to `#boomshakalaka-alerts` channel.
+
+```python
+from skills.slack_notification import send_message, send_alert
+
+# Simple message
+send_message("Hello world")
+
+# Formatted alert
+send_alert("Title", "Message", level="success", fields={"Key": "Value"})
+```
+
+Levels: `info`, `success`, `warning`, `error`, `money`
+
+See `skills/slack_notification/README.md` for full documentation.
+
+## Sports Betting Analysis
+
+The dashboard includes a garbage time betting analysis system at `/sports/betting/analysis`.
+
+**Strategy**: Bet on the trailing team when halftime lead is 15-17 points for optimal ROI (+$17.31 EV per $100).
+
+Features:
+- Bell distribution chart showing edge by point bucket
+- ROI-focused analysis (profit per dollar wagered)
+- Running profit tracker for optimal range
+- Slack alerts when blowouts are detected
+
+See `docs/garbage-time-strategy.md` for full strategy documentation.
 
 ## Contributing
 

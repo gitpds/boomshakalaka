@@ -1,6 +1,6 @@
 /* ============================================
    Boomshakalaka Dashboard - Styles
-   Teal/Gold Theme with Light/Dark Mode
+   Midnight Command Theme with Torchlight Accents
    ============================================ */
 
 /* ============================================
@@ -9,30 +9,41 @@
 
 :root,
 [data-theme="dark"] {
-    /* Background Colors - Teal */
-    --bg-primary: #122637;
-    --bg-secondary: #0a1820;
-    --bg-tertiary: #1e3a4c;
-    --bg-card: #0f1d2a;
-    --bg-hover: #1a3040;
-    --bg-input: #0a1520;
+    /* Backgrounds - Midnight Temple */
+    --bg-primary: #060a14;
+    --bg-secondary: #0e1117;
+    --bg-tertiary: #151a24;
+    --bg-card: #0a0e16;
+    --bg-hover: #1a2030;
+    --bg-input: #080c12;
 
-    /* Border Colors */
-    --border-color: #1e3a4c;
-    --border-light: #2a4a5c;
-    --border-focus: #f0cb09;
+    /* Glass Effects */
+    --glass-bg: rgba(255, 255, 255, 0.02);
+    --glass-border: rgba(212, 175, 55, 0.2);
+
+    /* Borders - Gold */
+    --border-color: rgba(212, 175, 55, 0.2);
+    --border-light: rgba(212, 175, 55, 0.3);
+    --border-focus: #ff8c00;
 
     /* Text Colors */
     --text-primary: #ffffff;
-    --text-secondary: #b8d4e8;
-    --text-muted: #7a9bb3;
+    --text-secondary: #c4c4c4;
+    --text-muted: #8b8b8b;
 
-    /* Accent Colors - Gold */
-    --accent: #f0cb09;
-    --accent-hover: #f5d63d;
-    --accent-muted: #d4b308;
-    --accent-bg: rgba(240, 203, 9, 0.1);
-    --accent-glow: rgba(240, 203, 9, 0.4);
+    /* Accents - Torchlight Orange */
+    --accent: #ff8c00;
+    --accent-hover: #ffcc00;
+    --accent-muted: #d4af37;
+    --accent-bg: rgba(255, 140, 0, 0.1);
+    --accent-glow: rgba(255, 140, 0, 0.4);
+
+    /* Gold */
+    --gold: #d4af37;
+    --gold-glow: rgba(212, 175, 55, 0.4);
+
+    /* Torchlight Glow Filter */
+    --torchlight-glow: drop-shadow(0 0 8px rgba(255, 140, 0, 0.6)) drop-shadow(0 0 20px rgba(255, 140, 0, 0.3));
 
     /* Status Colors */
     --success: #10b981;
@@ -47,15 +58,16 @@
     /* Category Colors */
     --sports-color: #10b981;
     --sports-bg: rgba(16, 185, 129, 0.1);
-    --crypto-color: #f59e0b;
-    --crypto-bg: rgba(245, 158, 11, 0.1);
+    --crypto-color: #ff8c00;
+    --crypto-bg: rgba(255, 140, 0, 0.1);
     --ai-color: #8b5cf6;
     --ai-bg: rgba(139, 92, 246, 0.1);
 
     /* Gradients */
-    --gradient-accent: linear-gradient(135deg, #f0cb09 0%, #d4b308 100%);
+    --gradient-accent: linear-gradient(135deg, #ff8c00 0%, #ffcc00 100%);
+    --gradient-gold: linear-gradient(135deg, #d4af37 0%, #f0cb09 100%);
     --gradient-sports: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --gradient-crypto: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    --gradient-crypto: linear-gradient(135deg, #ff8c00 0%, #ffcc00 100%);
     --gradient-ai: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
 
     /* Shadows */
@@ -63,6 +75,12 @@
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
     --shadow-glow: 0 0 20px var(--accent-glow);
+    --shadow-gold: 0 0 30px rgba(212, 175, 55, 0.2);
+
+    /* Typography */
+    --font-display: 'Crimson Pro', Georgia, serif;
+    --font-sans: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
 
     /* Misc */
     --sidebar-width: 260px;
@@ -76,31 +94,48 @@
    ============================================ */
 
 [data-theme="light"] {
-    --bg-primary: #f8fafc;
+    /* Backgrounds - Parchment/Warm Light */
+    --bg-primary: #faf8f5;
     --bg-secondary: #ffffff;
-    --bg-tertiary: #f1f5f9;
+    --bg-tertiary: #f5f2ed;
     --bg-card: #ffffff;
-    --bg-hover: #e2e8f0;
-    --bg-input: #f8fafc;
+    --bg-hover: #efe9e0;
+    --bg-input: #faf8f5;
 
-    --border-color: #e2e8f0;
-    --border-light: #cbd5e1;
-    --border-focus: #0891b2;
+    /* Glass Effects - Light Mode */
+    --glass-bg: rgba(0, 0, 0, 0.02);
+    --glass-border: rgba(139, 90, 43, 0.2);
 
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #64748b;
+    /* Borders - Warm Brown */
+    --border-color: rgba(139, 90, 43, 0.2);
+    --border-light: rgba(139, 90, 43, 0.3);
+    --border-focus: #c45c00;
 
-    --accent: #0891b2;
-    --accent-hover: #0e7490;
-    --accent-muted: #06b6d4;
-    --accent-bg: rgba(8, 145, 178, 0.1);
-    --accent-glow: rgba(8, 145, 178, 0.3);
+    /* Text */
+    --text-primary: #1a1a1a;
+    --text-secondary: #4a4a4a;
+    --text-muted: #7a7a7a;
 
+    /* Accents - Warm Orange/Brown */
+    --accent: #c45c00;
+    --accent-hover: #e07000;
+    --accent-muted: #8b5a2b;
+    --accent-bg: rgba(196, 92, 0, 0.1);
+    --accent-glow: rgba(196, 92, 0, 0.3);
+
+    /* Gold */
+    --gold: #8b5a2b;
+    --gold-glow: rgba(139, 90, 43, 0.3);
+
+    /* Torchlight Glow Filter - Softer for Light Mode */
+    --torchlight-glow: drop-shadow(0 0 6px rgba(196, 92, 0, 0.4)) drop-shadow(0 0 15px rgba(196, 92, 0, 0.2));
+
+    /* Shadows */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
     --shadow-glow: 0 0 20px var(--accent-glow);
+    --shadow-gold: 0 0 30px rgba(139, 90, 43, 0.15);
 }
 
 /* ============================================
@@ -154,11 +189,43 @@ button {
     transition: background-color var(--transition-normal);
 }
 
+/* Logo Section - Top Center */
+.sidebar-logo-section {
+    padding: 24px 20px;
+    display: flex;
+    justify-content: center;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.sidebar-logo {
+    max-width: 180px;
+    height: auto;
+}
+
+.torchlight-glow {
+    filter: var(--torchlight-glow);
+    transition: filter 0.3s ease;
+}
+
+.torchlight-glow:hover {
+    filter: drop-shadow(0 0 12px rgba(255, 140, 0, 0.8)) drop-shadow(0 0 30px rgba(255, 140, 0, 0.5));
+}
+
+/* Sidebar Header - Active Page Name */
 .sidebar-header {
-    padding: 24px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--border-color);
 }
 
+.active-page-name {
+    font-family: var(--font-display, 'Crimson Pro', Georgia, serif);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--gold, var(--accent-muted));
+    letter-spacing: 0.5px;
+}
+
+/* Legacy Logo Styles (kept for compatibility) */
 .logo {
     display: flex;
     align-items: center;
@@ -213,8 +280,8 @@ button {
 }
 
 .nav-item.active {
-    background: var(--accent-bg);
-    color: var(--accent);
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.15) 0%, transparent 100%);
+    color: var(--gold, var(--accent));
     border-left-color: var(--accent);
 }
 
@@ -307,6 +374,104 @@ button {
 
 .nav-subitem.active .nav-dot,
 .nav-subitem:hover .nav-dot {
+    background: var(--accent);
+}
+
+/* Nested Subcategory (e.g., Sports > Betting > [items]) */
+.nav-subcategory {
+    margin: 2px 8px;
+}
+
+.nav-subcategory-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px 10px 48px;
+    color: var(--text-muted);
+    font-size: 13px;
+    transition: all var(--transition-fast);
+    border-radius: 8px;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+}
+
+.nav-subcategory-header:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.nav-subcategory-header .nav-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background var(--transition-fast);
+}
+
+.nav-subcategory-header:hover .nav-dot {
+    background: var(--accent);
+}
+
+.nav-subcategory.expanded .nav-subcategory-header .nav-dot {
+    background: var(--accent);
+}
+
+.nav-subcategory-header .nav-chevron-small {
+    width: 14px;
+    height: 14px;
+    margin-left: auto;
+    transition: transform var(--transition-fast);
+}
+
+.nav-subcategory.expanded .nav-chevron-small {
+    transform: rotate(180deg);
+}
+
+.nav-subcategory-items {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height var(--transition-normal);
+}
+
+.nav-subcategory.expanded .nav-subcategory-items {
+    max-height: 100px;
+}
+
+.nav-subsubitem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px 8px 72px;
+    color: var(--text-muted);
+    font-size: 12px;
+    transition: all var(--transition-fast);
+    border-radius: 6px;
+    margin: 1px 8px;
+}
+
+.nav-subsubitem:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.nav-subsubitem.active {
+    color: var(--accent);
+}
+
+.nav-subsubitem::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background var(--transition-fast);
+}
+
+.nav-subsubitem:hover::before,
+.nav-subsubitem.active::before {
     background: var(--accent);
 }
 
@@ -1269,4 +1434,82 @@ button {
 .badge-ai {
     background: var(--ai-bg);
     color: var(--ai-color);
+}
+
+/* ============================================
+   Midnight Command Theme Enhancements
+   ============================================ */
+
+/* Custom Scrollbar - Gold */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--gold, var(--accent-muted));
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--gold, var(--accent-muted)) var(--bg-secondary);
+}
+
+/* Dot Pattern Overlay on Main Content */
+.main-content::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    left: var(--sidebar-width);
+    background-image: radial-gradient(rgba(212, 175, 55, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.main-content > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Glass Widget Effect */
+.glass-widget {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+}
+
+/* Enhanced Card Styles with Glass Effect */
+.card {
+    background: var(--glass-bg, var(--bg-card));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-border, var(--border-color));
+    transition: all var(--transition-fast);
+}
+
+.card:hover {
+    border-color: var(--gold, var(--accent-muted));
+    box-shadow: var(--shadow-gold, 0 0 30px rgba(212, 175, 55, 0.2));
+}
+
+/* Gold Text Utility */
+.text-gold {
+    color: var(--gold, var(--accent-muted));
+}
+
+/* Torchlight Text Glow */
+.text-glow {
+    text-shadow: 0 0 10px var(--accent-glow);
 }

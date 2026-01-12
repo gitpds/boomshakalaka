@@ -13,6 +13,20 @@ function getStoredTheme() {
 function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
+
+    // Apply the correct mode from dual-mode theme if available
+    const dualMode = localStorage.getItem('customThemeDualMode');
+    if (dualMode) {
+        try {
+            const themes = JSON.parse(dualMode);
+            if (themes[theme]) {
+                applyCustomThemeColors(themes[theme]);
+                localStorage.setItem('customThemeCSS', JSON.stringify(themes[theme]));
+            }
+        } catch (e) {
+            console.error('Error applying dual-mode theme:', e);
+        }
+    }
 }
 
 function toggleTheme() {
@@ -23,6 +37,22 @@ function toggleTheme() {
 
 // Custom Theme Color Management
 function loadCustomThemeColors() {
+    // Check for dual-mode theme first
+    const dualMode = localStorage.getItem('customThemeDualMode');
+    if (dualMode) {
+        try {
+            const themes = JSON.parse(dualMode);
+            const currentMode = document.documentElement.getAttribute('data-theme') || 'dark';
+            if (themes[currentMode]) {
+                applyCustomThemeColors(themes[currentMode]);
+                return;
+            }
+        } catch (e) {
+            console.error('Error loading dual-mode theme:', e);
+        }
+    }
+
+    // Fall back to single-mode theme
     const storedCSS = localStorage.getItem('customThemeCSS');
     if (storedCSS) {
         try {
@@ -43,6 +73,7 @@ function applyCustomThemeColors(cssVars) {
 
 function clearCustomThemeColors() {
     localStorage.removeItem('customThemeCSS');
+    localStorage.removeItem('customThemeDualMode');
     // Remove inline styles to revert to CSS defaults
     const root = document.documentElement;
     const customVars = [
@@ -62,8 +93,19 @@ async function loadActiveTheme() {
         const data = await response.json();
 
         if (data.theme && data.theme.css) {
-            applyCustomThemeColors(data.theme.css);
-            localStorage.setItem('customThemeCSS', JSON.stringify(data.theme.css));
+            const css = data.theme.css;
+
+            // Check if it's a dual-mode theme (has dark and light keys)
+            if (css.dark && css.light) {
+                localStorage.setItem('customThemeDualMode', JSON.stringify(css));
+                const currentMode = document.documentElement.getAttribute('data-theme') || 'dark';
+                applyCustomThemeColors(css[currentMode]);
+                localStorage.setItem('customThemeCSS', JSON.stringify(css[currentMode]));
+            } else {
+                // Single-mode theme
+                applyCustomThemeColors(css);
+                localStorage.setItem('customThemeCSS', JSON.stringify(css));
+            }
         }
     } catch (error) {
         // Silently fail - use localStorage backup or default theme
@@ -96,6 +138,14 @@ function toggleCategory(button) {
             expandedCategories[categoryName] = category.classList.contains('expanded');
             localStorage.setItem('expandedCategories', JSON.stringify(expandedCategories));
         }
+    }
+}
+
+// Toggle nested subcategories (e.g., Betting -> Monitor/Analysis)
+function toggleSubcategory(button) {
+    const subcategory = button.closest('.nav-subcategory');
+    if (subcategory) {
+        subcategory.classList.toggle('expanded');
     }
 }
 
@@ -384,6 +434,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load settings state
     loadSettingsState();
 
+    // Sync active page name to sidebar
+    syncActivePageName();
+
     // Set up periodic health checks (every 60 seconds)
     setInterval(updateHealthDisplay, 60000);
 });
+
+// ============================================
+// Active Page Name Sync (Midnight Command Theme)
+// ============================================
+
+function syncActivePageName() {
+    const pageTitle = document.querySelector('.page-title');
+    const activePageName = document.getElementById('active-page-name');
+
+    if (pageTitle && activePageName) {
+        activePageName.textContent = pageTitle.textContent;
+    }
+}

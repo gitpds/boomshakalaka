@@ -1,0 +1,591 @@
+{% extends "base.html" %}
+
+{% block title %}Garbage Time Strategy{% endblock %}
+{% block page_title %}Garbage Time Strategy{% endblock %}
+{% block page_subtitle %}ROI-optimized betting on halftime blowouts{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div style="margin-bottom: 24px;">
+    <a href="{{ url_for('sports') }}" style="color: var(--text-muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Back to Sports
+    </a>
+</div>
+
+<!-- Module Header -->
+<div class="category-header">
+    <div class="category-icon sports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="20" x2="12" y2="10"/>
+            <line x1="18" y1="20" x2="18" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="16"/>
+        </svg>
+    </div>
+    <div class="category-info">
+        <h2>Garbage Time Strategy</h2>
+        <p>Optimal range: 15-17pt halftime leads for maximum ROI</p>
+    </div>
+</div>
+
+<!-- Summary Stats (ROI Focused) -->
+<div class="stats-grid">
+    <div class="stat-card {% if running_profit.total_pnl > 0 %}success{% elif running_profit.total_pnl < 0 %}warning{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if running_profit.total_pnl > 0 %}success{% elif running_profit.total_pnl < 0 %}warning{% else %}accent{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"/>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+            </div>
+            <span class="stat-badge {% if running_profit.total_pnl > 0 %}success{% elif running_profit.total_pnl < 0 %}warning{% else %}accent{% endif %}">15-17pt</span>
+        </div>
+        <div class="stat-value">{% if running_profit.total_pnl > 0 %}+{% endif %}${{ "{:,.0f}".format(running_profit.total_pnl) }}</div>
+        <div class="stat-label">Season P&L (Optimal)</div>
+    </div>
+
+    <div class="stat-card {% if running_profit.roi > 0 %}success{% else %}warning{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if running_profit.roi > 0 %}success{% else %}warning{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <span class="stat-badge {% if running_profit.roi > 0 %}success{% else %}warning{% endif %}">ROI</span>
+        </div>
+        <div class="stat-value">{{ running_profit.wins }}-{{ running_profit.losses }}</div>
+        <div class="stat-label">Record ({{ "{:.1f}".format(running_profit.roi) }}% ROI)</div>
+    </div>
+
+    <div class="stat-card sports">
+        <div class="stat-header">
+            <div class="stat-icon sports">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+            </div>
+        </div>
+        <div class="stat-value">15-17pt</div>
+        <div class="stat-label">Optimal Range</div>
+    </div>
+
+    <div class="stat-card {% if optimal_bucket and optimal_bucket.ev_per_100 > 0 %}success{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/>
+                    <path d="M12 18V6"/>
+                </svg>
+            </div>
+            <span class="stat-badge accent">Per $100</span>
+        </div>
+        <div class="stat-value">{% if optimal_bucket %}+${{ "{:.0f}".format(optimal_bucket.ev_per_100) }}{% else %}--{% endif %}</div>
+        <div class="stat-label">Expected Value</div>
+    </div>
+</div>
+
+<!-- Edge Distribution (Bell Curve) -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            Edge Distribution by Bucket
+        </span>
+        <span style="font-size: 12px; color: var(--text-muted);">ROI per $100 wagered at each point range</span>
+    </div>
+    <div class="card-body">
+        <canvas id="edgeChart" style="width: 100%; height: 280px;"></canvas>
+        <div style="display: flex; gap: 20px; justify-content: center; margin-top: 16px; font-size: 12px;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+                <span style="width: 12px; height: 12px; background: #ef4444; border-radius: 2px;"></span>
+                SKIP (negative EV)
+            </span>
+            <span style="display: flex; align-items: center; gap: 6px;">
+                <span style="width: 12px; height: 12px; background: #22c55e; border-radius: 2px;"></span>
+                BET (positive EV)
+            </span>
+            <span style="display: flex; align-items: center; gap: 6px;">
+                <span style="width: 12px; height: 12px; background: #f59e0b; border-radius: 2px;"></span>
+                OPTIMAL (highest ROI)
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- ROI-Focused Bucket Table -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            ROI by Point Bucket
+        </span>
+        <span style="font-size: 12px; color: var(--text-muted);">Per $100 bet at -110 odds</span>
+    </div>
+    <div class="card-body" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 12px 8px; text-align: left; color: var(--text-secondary); font-weight: 500;">Bucket</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Games</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Wins</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Win %</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Edge</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">EV/$100</th>
+                    <th style="padding: 12px 8px; text-align: center; color: var(--text-secondary); font-weight: 500;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bucket in bucket_distribution %}
+                {% if bucket.games > 0 %}
+                <tr style="border-bottom: 1px solid var(--border-color); {% if bucket.recommendation == 'OPTIMAL' %}background: rgba(245, 158, 11, 0.1);{% elif bucket.recommendation == 'SKIP' %}opacity: 0.6;{% endif %}">
+                    <td style="padding: 12px 8px; font-weight: {% if bucket.recommendation == 'OPTIMAL' %}600{% else %}400{% endif %};">
+                        {{ bucket.bucket }}
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right;">{{ bucket.games }}</td>
+                    <td style="padding: 12px 8px; text-align: right;">{{ bucket.wins }}</td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if bucket.win_rate > 0.5238 %}var(--success){% else %}var(--error){% endif %};">
+                        {{ "{:.1f}".format(bucket.win_rate * 100) }}%
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if bucket.edge > 0 %}var(--success){% else %}var(--error){% endif %}; font-weight: 500;">
+                        {% if bucket.edge > 0 %}+{% endif %}{{ bucket.edge }}%
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if bucket.ev_per_100 > 0 %}var(--success){% else %}var(--error){% endif %}; font-weight: 600;">
+                        {% if bucket.ev_per_100 > 0 %}+{% endif %}${{ "{:.2f}".format(bucket.ev_per_100) }}
+                    </td>
+                    <td style="padding: 12px 8px; text-align: center;">
+                        {% if bucket.recommendation == 'OPTIMAL' %}
+                        <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">OPTIMAL</span>
+                        {% elif bucket.recommendation == 'BET' %}
+                        <span class="badge badge-success">BET</span>
+                        {% elif bucket.recommendation == 'MARGINAL' %}
+                        <span class="badge" style="background: rgba(100, 100, 100, 0.2); color: var(--text-secondary);">MARGINAL</span>
+                        {% else %}
+                        <span class="badge badge-warning">SKIP</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+        <p style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+            Edge = Win% - 52.4% (breakeven at -110). EV/$100 = expected profit per $100 wagered.
+        </p>
+    </div>
+</div>
+
+<!-- Running Profit Tracker -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            Running Profit (Optimal Range: 15-17pt)
+        </span>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div style="text-align: center; padding: 16px; background: var(--bg-tertiary); border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 600; color: {% if running_profit.total_pnl > 0 %}var(--success){% elif running_profit.total_pnl < 0 %}var(--error){% else %}var(--text-primary){% endif %};">
+                    {% if running_profit.total_pnl > 0 %}+{% endif %}${{ "{:,.2f}".format(running_profit.total_pnl) }}
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Total P&L</div>
+            </div>
+            <div style="text-align: center; padding: 16px; background: var(--bg-tertiary); border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 600; color: var(--text-primary);">
+                    ${{ "{:,.0f}".format(running_profit.total_wagered) }}
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Total Wagered</div>
+            </div>
+            <div style="text-align: center; padding: 16px; background: var(--bg-tertiary); border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 600; color: {% if running_profit.roi > 0 %}var(--success){% elif running_profit.roi < 0 %}var(--error){% else %}var(--text-primary){% endif %};">
+                    {% if running_profit.roi > 0 %}+{% endif %}{{ running_profit.roi }}%
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">ROI</div>
+            </div>
+            <div style="text-align: center; padding: 16px; background: var(--bg-tertiary); border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: 600; color: var(--success);">
+                    {{ running_profit.wins }}-{{ running_profit.losses }}
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Win-Loss Record</div>
+            </div>
+        </div>
+        <canvas id="profitChart" style="width: 100%; height: 200px;"></canvas>
+    </div>
+</div>
+
+<!-- Recent Optimal Games -->
+{% if recent_optimal %}
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Recent Optimal Range Games (15-17pt)
+        </span>
+    </div>
+    <div class="card-body" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 12px 8px; text-align: left; color: var(--text-secondary); font-weight: 500;">Date</th>
+                    <th style="padding: 12px 8px; text-align: left; color: var(--text-secondary); font-weight: 500;">Matchup</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">HT Lead</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">EV/$100</th>
+                    <th style="padding: 12px 8px; text-align: center; color: var(--text-secondary); font-weight: 500;">Result</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">P&L</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Running</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for game in recent_optimal %}
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 12px 8px; white-space: nowrap;">{{ game.game_date }}</td>
+                    <td style="padding: 12px 8px;">
+                        <span style="font-size: 12px; color: var(--text-muted);">{{ game.away_team[:3].upper() if game.away_team else '???' }}</span>
+                        @
+                        <span style="font-size: 12px; color: var(--text-muted);">{{ game.home_team[:3].upper() if game.home_team else '???' }}</span>
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right;">{{ game.halftime_lead }}</td>
+                    <td style="padding: 12px 8px; text-align: right; color: var(--success);">+$17.31</td>
+                    <td style="padding: 12px 8px; text-align: center;">
+                        {% if game.result == 'WIN' %}
+                        <span class="badge badge-success">WIN</span>
+                        {% else %}
+                        <span class="badge badge-warning">LOSS</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if game.pnl > 0 %}var(--success){% else %}var(--error){% endif %}; font-weight: 500;">
+                        {% if game.pnl > 0 %}+{% endif %}${{ "{:.2f}".format(game.pnl) }}
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if game.running_total > 0 %}var(--success){% elif game.running_total < 0 %}var(--error){% else %}var(--text-secondary){% endif %};">
+                        {% if game.running_total > 0 %}+{% endif %}${{ "{:.2f}".format(game.running_total) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Cumulative Threshold Analysis (Legacy) -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            Cumulative Threshold Analysis
+        </span>
+        <span style="font-size: 12px; color: var(--text-muted);">Kelly P&L from $10,000 starting bankroll</span>
+    </div>
+    <div class="card-body" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 12px 8px; text-align: left; color: var(--text-secondary); font-weight: 500;">Threshold</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Games</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Win %</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Edge</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Kelly %</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Final Bank</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">ROI</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in matrix %}
+                <tr style="border-bottom: 1px solid var(--border-color); {% if row.threshold == best_threshold %}background: var(--bg-tertiary);{% elif not row.profitable %}opacity: 0.6;{% endif %}">
+                    <td style="padding: 12px 8px; font-weight: {% if row.threshold == best_threshold %}600{% else %}400{% endif %};">
+                        {{ row.threshold }}+ pts
+                        {% if row.threshold == best_threshold %}
+                        <span class="badge badge-success" style="margin-left: 8px;">Best</span>
+                        {% elif not row.profitable %}
+                        <span class="badge badge-warning" style="margin-left: 8px;">-EV</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right;">{{ row.games }}</td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if row.profitable %}var(--success){% else %}var(--error){% endif %};">
+                        {{ "{:.1f}".format(row.win_rate * 100) }}%
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if row.edge > 0 %}var(--success){% else %}var(--error){% endif %}; font-weight: 500;">
+                        {% if row.edge > 0 %}+{% endif %}{{ row.edge }}%
+                    </td>
+                    <td style="padding: 12px 8px; text-align: right;">{{ "{:.1f}".format(row.kelly_pct) }}%</td>
+                    <td style="padding: 12px 8px; text-align: right; font-weight: 500;">${{ "{:,.0f}".format(row.final_bankroll) }}</td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if row.roi > 0 %}var(--success){% elif row.roi < 0 %}var(--error){% else %}var(--text-secondary){% endif %};">
+                        {% if row.roi > 0 %}+{% endif %}{{ row.roi }}%
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+            Note: Cumulative thresholds include ALL games at or above that point level. Use bucket analysis above for ROI optimization.
+        </p>
+    </div>
+</div>
+
+<!-- Live vs Historical Comparison -->
+{% if comparison %}
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="18" cy="18" r="3"/>
+                <circle cx="6" cy="6" r="3"/>
+                <path d="M13 6h3a2 2 0 0 1 2 2v7"/>
+                <path d="M11 18H8a2 2 0 0 1-2-2V9"/>
+            </svg>
+            Live vs Historical Performance
+        </span>
+        <span style="font-size: 12px; color: var(--text-muted);">Comparing to 2,885 historical NBA games</span>
+    </div>
+    <div class="card-body" style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <th style="padding: 12px 8px; text-align: left; color: var(--text-secondary); font-weight: 500;">Threshold</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Historical</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Live</th>
+                    <th style="padding: 12px 8px; text-align: right; color: var(--text-secondary); font-weight: 500;">Delta</th>
+                    <th style="padding: 12px 8px; text-align: center; color: var(--text-secondary); font-weight: 500;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in comparison %}
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 12px 8px;">{{ row.threshold }}+ pts</td>
+                    <td style="padding: 12px 8px; text-align: right;">{{ "{:.1f}".format(row.historical_win_rate * 100) }}%</td>
+                    <td style="padding: 12px 8px; text-align: right;">{{ "{:.1f}".format(row.live_win_rate * 100) }}%</td>
+                    <td style="padding: 12px 8px; text-align: right; color: {% if row.delta > 0 %}var(--success){% else %}var(--error){% endif %};">
+                        {% if row.delta > 0 %}+{% endif %}{{ "{:.1f}".format(row.delta * 100) }}%
+                    </td>
+                    <td style="padding: 12px 8px; text-align: center;">
+                        {% if row.status == 'outperform' %}
+                        <span class="badge badge-success">Outperform</span>
+                        {% else %}
+                        <span class="badge badge-warning">Underperform</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Strategy Info -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            Strategy Overview
+        </span>
+    </div>
+    <div class="card-body">
+        <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.7; margin-bottom: 12px;">
+            <strong style="color: var(--text-primary);">Optimal ROI Strategy:</strong> Based on historical analysis of 2,885+ NBA games, betting on the trailing team when
+            the halftime lead is between <strong style="color: #f59e0b;">15-17 points</strong> maximizes return on investment at +$17.31 per $100 wagered.
+        </p>
+        <div style="background: var(--bg-tertiary); padding: 16px; border-radius: 8px; font-size: 13px; margin-bottom: 12px;">
+            <strong style="color: var(--text-primary);">Key Insights:</strong>
+            <ul style="margin: 8px 0 0 20px; color: var(--text-secondary);">
+                <li><span style="color: #ef4444;">SKIP 12-14pt</span> - Win rate near breakeven, negative expected value</li>
+                <li><span style="color: #22c55e;">BET 14-15pt</span> - Profitable, but not optimal</li>
+                <li><span style="color: #f59e0b;">OPTIMAL 15-17pt</span> - Best ROI with +9.1% edge</li>
+                <li><span style="color: #22c55e;">BET 17-20pt</span> - Profitable, but diminishing game frequency</li>
+            </ul>
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px; line-height: 1.7;">
+            This strategy exploits "garbage time regression" where winning teams rest starters and trailing teams play aggressively in the second half.
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let edgeChart = null;
+let profitChart = null;
+
+// Bucket data from server
+const bucketData = {{ bucket_distribution | tojson | safe }};
+const profitData = {{ running_profit | tojson | safe }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    initEdgeChart();
+    initProfitChart();
+});
+
+function initEdgeChart() {
+    const ctx = document.getElementById('edgeChart').getContext('2d');
+
+    // Filter buckets with games and prepare colors
+    const labels = bucketData.filter(b => b.games > 0).map(b => b.bucket);
+    const edges = bucketData.filter(b => b.games > 0).map(b => b.edge);
+    const evs = bucketData.filter(b => b.games > 0).map(b => b.ev_per_100);
+    const recommendations = bucketData.filter(b => b.games > 0).map(b => b.recommendation);
+
+    // Color based on recommendation
+    const colors = recommendations.map(r => {
+        if (r === 'OPTIMAL') return '#f59e0b';
+        if (r === 'BET') return '#22c55e';
+        if (r === 'MARGINAL') return '#6b7280';
+        return '#ef4444';
+    });
+
+    edgeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Edge %',
+                data: edges,
+                backgroundColor: colors,
+                borderColor: colors,
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const idx = context.dataIndex;
+                            const bucket = bucketData.filter(b => b.games > 0)[idx];
+                            return [
+                                `Edge: ${bucket.edge > 0 ? '+' : ''}${bucket.edge}%`,
+                                `EV/$100: ${bucket.ev_per_100 > 0 ? '+' : ''}$${bucket.ev_per_100.toFixed(2)}`,
+                                `Games: ${bucket.games}`,
+                                `Win Rate: ${(bucket.win_rate * 100).toFixed(1)}%`
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(255,255,255,0.05)'
+                    },
+                    ticks: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim()
+                    }
+                },
+                y: {
+                    grid: {
+                        color: 'rgba(255,255,255,0.05)'
+                    },
+                    ticks: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim(),
+                        callback: function(value) {
+                            return (value > 0 ? '+' : '') + value + '%';
+                        }
+                    },
+                    suggestedMin: -5,
+                    suggestedMax: 15
+                }
+            }
+        }
+    });
+}
+
+function initProfitChart() {
+    const ctx = document.getElementById('profitChart').getContext('2d');
+
+    // Get running totals from game data
+    const games = profitData.games || [];
+    const labels = games.map((g, i) => `Game ${games.length - i}`).reverse();
+    const values = games.map(g => g.running_total).reverse();
+
+    profitChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Running P&L',
+                data: values,
+                borderColor: '#22c55e',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.parsed.y;
+                            return (value >= 0 ? '+' : '') + '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    grid: {
+                        color: 'rgba(255,255,255,0.05)'
+                    },
+                    ticks: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim(),
+                        maxTicksLimit: 10
+                    }
+                },
+                y: {
+                    display: true,
+                    grid: {
+                        color: 'rgba(255,255,255,0.05)'
+                    },
+                    ticks: {
+                        color: getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim(),
+                        callback: function(value) {
+                            return (value >= 0 ? '+' : '') + '$' + value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}
