@@ -21,10 +21,63 @@ function toggleTheme() {
     setTheme(newTheme);
 }
 
+// Custom Theme Color Management
+function loadCustomThemeColors() {
+    const storedCSS = localStorage.getItem('customThemeCSS');
+    if (storedCSS) {
+        try {
+            const cssVars = JSON.parse(storedCSS);
+            applyCustomThemeColors(cssVars);
+        } catch (e) {
+            console.error('Error loading custom theme colors:', e);
+        }
+    }
+}
+
+function applyCustomThemeColors(cssVars) {
+    const root = document.documentElement;
+    for (const [varName, value] of Object.entries(cssVars)) {
+        root.style.setProperty(varName, value);
+    }
+}
+
+function clearCustomThemeColors() {
+    localStorage.removeItem('customThemeCSS');
+    // Remove inline styles to revert to CSS defaults
+    const root = document.documentElement;
+    const customVars = [
+        '--bg-primary', '--bg-secondary', '--bg-tertiary', '--bg-card',
+        '--bg-hover', '--bg-input', '--border-color', '--border-light',
+        '--border-focus', '--text-primary', '--text-secondary', '--text-muted',
+        '--accent', '--accent-hover', '--accent-muted', '--accent-bg',
+        '--accent-glow', '--gradient-accent'
+    ];
+    customVars.forEach(varName => root.style.removeProperty(varName));
+}
+
+// Load active theme from server and apply it
+async function loadActiveTheme() {
+    try {
+        const response = await fetch('/api/themes/active');
+        const data = await response.json();
+
+        if (data.theme && data.theme.css) {
+            applyCustomThemeColors(data.theme.css);
+            localStorage.setItem('customThemeCSS', JSON.stringify(data.theme.css));
+        }
+    } catch (error) {
+        // Silently fail - use localStorage backup or default theme
+        console.debug('Could not load active theme from server:', error);
+    }
+}
+
 // Initialize theme on page load
 (function initTheme() {
     const savedTheme = getStoredTheme();
     setTheme(savedTheme);
+
+    // Load custom theme colors from localStorage immediately for fast load
+    loadCustomThemeColors();
 })();
 
 // ============================================

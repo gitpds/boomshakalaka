@@ -10,7 +10,10 @@ Environment="HOME=/home/pds"
 Environment="TERM=xterm-256color"
 # Each browser tab gets its own independent terminal
 # Firewall restricts access to local network + VPN only
-ExecStart=/usr/bin/ttyd -p 7681 bash --login
+# Theme: Teal background (#122637) with gold cursor (#f0cb09)
+ExecStart=/usr/local/bin/ttyd -p 7681 -W \
+    -t 'theme={"background":"#122637","foreground":"#ffffff","cursor":"#f0cb09","cursorAccent":"#122637","selectionBackground":"rgba(240,203,9,0.3)"}' \
+    bash --login
 Restart=always
 RestartSec=5
 

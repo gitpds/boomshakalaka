@@ -1,0 +1,21 @@
+# WireGuard Client Configuration Template
+# Copy this file to wireguard-client.conf and fill in your values
+# Or use the generate-wireguard.sh script to create from environment variables
+
+[Interface]
+# Client's VPN IP address
+Address = ${WG_CLIENT_ADDRESS}
+# Client's private key (keep secret!)
+PrivateKey = ${WG_CLIENT_PRIVATE_KEY}
+# DNS server to use when connected
+DNS = 1.1.1.1
+
+[Peer]
+# Server's public key
+PublicKey = ${WG_SERVER_PUBLIC_KEY}
+# Server's public IP and port
+Endpoint = ${WG_SERVER_PUBLIC_IP}:${WG_SERVER_PORT}
+# Route only VPN traffic through tunnel (split tunnel)
+AllowedIPs = 10.200.200.0/24
+# Keep connection alive behind NAT
+PersistentKeepalive = 25

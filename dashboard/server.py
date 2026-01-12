@@ -20,6 +20,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file
 
+# Theme generator for AI-powered theme customization
+try:
+    from dashboard.theme_generator import (
+        generate_theme_from_prompt, colors_to_css_variables,
+        colors_to_ttyd_theme, generate_ttyd_service_command, DEFAULT_THEME
+    )
+    THEME_GENERATOR_AVAILABLE = True
+except ImportError:
+    THEME_GENERATOR_AVAILABLE = False
+    DEFAULT_THEME = None
+
 # Setup logging for AI Studio debugging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -47,6 +58,7 @@ COMFY_DIR = Path('/home/pds/image_gen/ComfyUI')
 MODELS_DIR = PROJECT_ROOT / 'models'  # Symlink to ComfyUI models
 GENERATIONS_DIR = PROJECT_ROOT / 'data' / 'generations'
 DATABASES_DIR = PROJECT_ROOT / 'data' / 'databases'
+THEMES_FILE = PROJECT_ROOT / 'data' / 'themes.json'
 
 # Module Registry
 MODULES = {
@@ -2912,6 +2924,222 @@ def save_generation(gen_id, prompt, negative_prompt, model, width, height, seed,
 # ============================================
 # Main
 # ============================================
+
+# =============================================================================
+# Theme Customization API
+# =============================================================================
+
+def load_themes():
+    """Load themes from JSON file."""
+    if THEMES_FILE.exists():
+        try:
+            with open(THEMES_FILE) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    # Return default structure
+    return {
+        "active": "teal-gold",
+        "themes": {
+            "teal-gold": DEFAULT_THEME if DEFAULT_THEME else {
+                "name": "Teal Gold",
+                "prompt": "Dark teal background with gold accents",
+                "css": {},
+                "ttyd": {}
+            }
+        }
+    }
+
+
+def save_themes(data):
+    """Save themes to JSON file."""
+    THEMES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(THEMES_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+@app.route('/api/themes')
+def api_themes_list():
+    """Get all saved themes."""
+    themes_data = load_themes()
+    return jsonify({
+        'active': themes_data.get('active'),
+        'themes': {
+            key: {
+                'name': theme.get('name', key),
+                'prompt': theme.get('prompt', '')
+            }
+            for key, theme in themes_data.get('themes', {}).items()
+        }
+    })
+
+
+@app.route('/api/themes/<theme_id>')
+def api_theme_get(theme_id):
+    """Get a specific theme's full data."""
+    themes_data = load_themes()
+    theme = themes_data.get('themes', {}).get(theme_id)
+    if not theme:
+        return jsonify({'error': 'Theme not found'}), 404
+    return jsonify(theme)
+
+
+@app.route('/api/themes/generate', methods=['POST'])
+def api_themes_generate():
+    """Generate a new theme from a natural language prompt."""
+    if not THEME_GENERATOR_AVAILABLE:
+        return jsonify({'error': 'Theme generator not available. Install anthropic package.'}), 500
+
+    data = request.get_json()
+    prompt = data.get('prompt', '').strip()
+
+    if not prompt:
+        return jsonify({'error': 'Prompt is required'}), 400
+
+    try:
+        # Generate colors from Claude API
+        colors = generate_theme_from_prompt(prompt)
+
+        # Convert to CSS variables and ttyd theme
+        css_vars = colors_to_css_variables(colors)
+        ttyd_theme = colors_to_ttyd_theme(colors)
+        ttyd_command = generate_ttyd_service_command(ttyd_theme)
+
+        return jsonify({
+            'success': True,
+            'theme': {
+                'name': colors.get('name', 'Custom Theme'),
+                'prompt': prompt,
+                'css': css_vars,
+                'ttyd': ttyd_theme,
+                'ttyd_command': ttyd_command
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/themes/save', methods=['POST'])
+def api_themes_save():
+    """Save a generated theme."""
+    data = request.get_json()
+    theme = data.get('theme')
+
+    if not theme:
+        return jsonify({'error': 'Theme data is required'}), 400
+
+    # Generate a slug from the theme name
+    name = theme.get('name', 'Custom Theme')
+    theme_id = name.lower().replace(' ', '-')
+    theme_id = re.sub(r'[^a-z0-9-]', '', theme_id)
+
+    # Make unique if needed
+    themes_data = load_themes()
+    base_id = theme_id
+    counter = 1
+    while theme_id in themes_data.get('themes', {}):
+        theme_id = f"{base_id}-{counter}"
+        counter += 1
+
+    # Save the theme
+    if 'themes' not in themes_data:
+        themes_data['themes'] = {}
+    themes_data['themes'][theme_id] = theme
+
+    save_themes(themes_data)
+
+    return jsonify({
+        'success': True,
+        'theme_id': theme_id,
+        'message': f'Theme "{name}" saved successfully'
+    })
+
+
+@app.route('/api/themes/apply', methods=['POST'])
+def api_themes_apply():
+    """Set a theme as active."""
+    data = request.get_json()
+    theme_id = data.get('theme_id')
+
+    if not theme_id:
+        return jsonify({'error': 'Theme ID is required'}), 400
+
+    themes_data = load_themes()
+    if theme_id not in themes_data.get('themes', {}):
+        return jsonify({'error': 'Theme not found'}), 404
+
+    themes_data['active'] = theme_id
+    save_themes(themes_data)
+
+    theme = themes_data['themes'][theme_id]
+    return jsonify({
+        'success': True,
+        'theme': theme,
+        'message': f'Theme "{theme.get("name", theme_id)}" is now active'
+    })
+
+
+@app.route('/api/themes/<theme_id>', methods=['DELETE'])
+def api_themes_delete(theme_id):
+    """Delete a saved theme."""
+    if theme_id == 'teal-gold':
+        return jsonify({'error': 'Cannot delete the default theme'}), 400
+
+    themes_data = load_themes()
+    if theme_id not in themes_data.get('themes', {}):
+        return jsonify({'error': 'Theme not found'}), 404
+
+    del themes_data['themes'][theme_id]
+
+    # If we deleted the active theme, switch to default
+    if themes_data.get('active') == theme_id:
+        themes_data['active'] = 'teal-gold'
+
+    save_themes(themes_data)
+
+    return jsonify({
+        'success': True,
+        'message': 'Theme deleted successfully'
+    })
+
+
+@app.route('/api/themes/active')
+def api_themes_active():
+    """Get the currently active theme's full data."""
+    themes_data = load_themes()
+    active_id = themes_data.get('active', 'teal-gold')
+    theme = themes_data.get('themes', {}).get(active_id)
+
+    if not theme:
+        # Fallback to default
+        theme = DEFAULT_THEME if DEFAULT_THEME else {}
+        active_id = 'teal-gold'
+
+    return jsonify({
+        'theme_id': active_id,
+        'theme': theme
+    })
+
+
+@app.route('/api/themes/ttyd-command')
+def api_themes_ttyd_command():
+    """Get the ttyd service update command for the current theme."""
+    if not THEME_GENERATOR_AVAILABLE:
+        return jsonify({'error': 'Theme generator not available'}), 500
+
+    themes_data = load_themes()
+    active_id = themes_data.get('active', 'teal-gold')
+    theme = themes_data.get('themes', {}).get(active_id)
+
+    if not theme or 'ttyd' not in theme:
+        return jsonify({'error': 'No ttyd theme data available'}), 404
+
+    command = generate_ttyd_service_command(theme['ttyd'])
+    return jsonify({
+        'command': command,
+        'theme_id': active_id
+    })
+
 
 def main():
     """Run the dashboard server"""
