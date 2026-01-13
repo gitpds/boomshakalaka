@@ -11,9 +11,8 @@ Environment="TERM=xterm-256color"
 # Persistent tmux session - all browser tabs share the same session
 # Use tmux windows for multiple terminals
 # Theme: Midnight Command (#060a14 background, #ff8c00 cursor)
-ExecStart=/usr/local/bin/ttyd -p 7681 -W \
-    -t 'theme={"background":"#060a14","foreground":"#ffffff","cursor":"#ff8c00","cursorAccent":"#060a14","selectionBackground":"rgba(255,140,0,0.3)"}' \
-    tmux new-session -A -s dashboard
+# Uses wrapper script to avoid systemd JSON escaping issues
+ExecStart=/home/pds/boomshakalaka/scripts/start_ttyd.sh
 Restart=always
 RestartSec=5
 

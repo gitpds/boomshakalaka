@@ -35,13 +35,11 @@ Features:
 
 ## Slack Alerts
 
-Real-time notifications sent to `#boomshakalaka-alerts` when halftime blowouts are detected.
+Real-time notifications sent to `#boomshakalaka-alerts` **ONLY for OPTIMAL range** (15-17pt leads).
 
-Alerts categorize games by ROI potential:
-- **OPTIMAL** (15-17pt) - Highest ROI, act immediately
-- **BET** (14-15pt, 17-20pt) - Profitable, good edge
-- **CAUTION** (20+pt) - Verify odds first
-- **SKIP** (<14pt) - Negative expected value
+- Alerts only trigger for 15-17pt leads (61.4% win rate, +9.1% edge)
+- No emails - Slack only
+- Duplicate alerts prevented via `alert_sent` tracking in database
 
 ## Files
 
@@ -50,8 +48,20 @@ Alerts categorize games by ROI potential:
 | `dashboard/server.py` | Backend analysis functions |
 | `dashboard/templates/sports_betting_analysis.html` | Analysis dashboard |
 | `skills/slack_notification/` | Slack notification skill |
-| `~/money_printing/polymarket/sports_betting/alert_blowouts.py` | Alert script (cron) |
+| `~/money_printing/polymarket/sports_betting/live_monitor.py` | Data collection (records blowouts to DB) |
+| `~/money_printing/polymarket/sports_betting/alert_blowouts.py` | Slack alerts (OPTIMAL only) |
 | `~/money_printing/polymarket/sports_betting/garbage_time.db` | Game database |
+
+## Configuration
+
+**Thresholds** (in `live_monitor.py`):
+- NBA: 15+ point lead at halftime (records to DB)
+- NFL: 17+ point lead at halftime
+
+**Alert Range** (in `alert_blowouts.py`):
+- OPTIMAL_MIN: 15
+- OPTIMAL_MAX: 17
+- Only 15-16pt leads trigger Slack alerts
 
 ## Cron Schedule
 
@@ -60,3 +70,11 @@ The monitor runs during game hours:
 - **NBA Weekend**: Every 10 min, 12-11 PM (Sat-Sun)
 - **NFL Sunday**: Every 10 min, 12-10 PM
 - **NFL Mon/Thu**: Every 10 min, 7-11 PM
+
+## Changelog
+
+**January 2026**
+- Removed email notifications (Slack only)
+- Raised NBA threshold from 14pt to 15pt
+- Filtered Slack alerts to OPTIMAL range only (15-17pt)
+- Added duplicate alert prevention via `alert_sent` tracking
