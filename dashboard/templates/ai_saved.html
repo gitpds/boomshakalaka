@@ -17,8 +17,8 @@
         border: 1px solid var(--border-color);
         border-radius: 12px;
         overflow: hidden;
-        cursor: pointer;
         transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+        position: relative;
     }
 
     .history-item:hover {
@@ -26,16 +26,64 @@
         box-shadow: var(--shadow-lg);
     }
 
+    .history-item.selected {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent);
+    }
+
     .history-image {
         aspect-ratio: 1;
         overflow: hidden;
         background: var(--bg-tertiary);
+        cursor: pointer;
     }
 
-    .history-image img {
+    .history-image img,
+    .history-image video {
         width: 100%;
         height: 100%;
         object-fit: cover;
+    }
+
+    .history-image.video-item {
+        position: relative;
+    }
+
+    .history-image.video-item::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 60px;
+        height: 60px;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        border: 3px solid white;
+    }
+
+    .history-image.video-item::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-40%, -50%);
+        z-index: 1;
+        border: 12px solid transparent;
+        border-left: 20px solid white;
+    }
+
+    .video-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: var(--accent);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        z-index: 5;
     }
 
     .history-info {
@@ -63,11 +111,43 @@
         font-size: 0.75rem;
     }
 
+    .history-actions {
+        display: flex;
+        gap: 8px;
+        padding: 8px 12px;
+        background: var(--bg-tertiary);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .history-actions button {
+        flex: 1;
+        padding: 6px 10px;
+        font-size: 0.8rem;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .history-checkbox {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 10;
+    }
+
+    .history-checkbox input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        accent-color: var(--accent);
+    }
+
     .filter-bar {
         display: flex;
         gap: 16px;
         margin-bottom: 24px;
         flex-wrap: wrap;
+        align-items: center;
     }
 
     .filter-bar input, .filter-bar select {
@@ -95,6 +175,46 @@
         margin-bottom: 20px;
         opacity: 0.5;
     }
+
+    /* Floating action bar for compare */
+    .floating-action-bar {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px 20px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        box-shadow: var(--shadow-lg);
+        z-index: 100;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--transition-fast);
+    }
+
+    .floating-action-bar.visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .floating-action-bar .selection-count {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .btn-delete {
+        background: var(--danger, #dc3545);
+        color: white;
+        border: none;
+    }
+
+    .btn-delete:hover {
+        background: #c82333;
+    }
 </style>
 
 <!-- Filter Bar -->
@@ -115,9 +235,29 @@
 {% if generations %}
 <div class="history-grid" id="history-grid">
     {% for gen in generations %}
-    <div class="history-item" onclick="viewGeneration('{{ gen.id }}')" data-prompt="{{ gen.prompt|lower }}" data-model="{{ gen.model }}" data-favorite="{{ gen.favorite }}">
-        <div class="history-image">
-            {% if gen.thumbnail_path %}
+    {% set is_video = gen.output_path and (gen.output_path.endswith('.mp4') or gen.output_path.endswith('.webm') or gen.output_path.endswith('.gif')) %}
+    <div class="history-item"
+         data-id="{{ gen.id }}"
+         data-prompt="{{ gen.prompt|lower }}"
+         data-model="{{ gen.model }}"
+         data-favorite="{{ gen.favorite }}"
+         data-seed="{{ gen.seed }}"
+         data-steps="{{ gen.steps }}"
+         data-cfg="{{ gen.cfg_scale }}"
+         data-sampler="{{ gen.sampler }}"
+         data-width="{{ gen.width }}"
+         data-height="{{ gen.height }}"
+         data-is-video="{{ 'true' if is_video else 'false' }}">
+        <div class="history-checkbox">
+            <input type="checkbox" onclick="toggleSelection(event, '{{ gen.id }}')" title="Select for compare">
+        </div>
+        {% if is_video %}
+        <span class="video-badge">VIDEO</span>
+        {% endif %}
+        <div class="history-image{% if is_video %} video-item{% endif %}" onclick="viewGeneration('{{ gen.id }}', {{ 'true' if is_video else 'false' }})">
+            {% if is_video %}
+            <video src="/api/ai/video/{{ gen.id }}" muted preload="metadata"></video>
+            {% elif gen.thumbnail_path %}
             <img src="/api/ai/image/{{ gen.id }}/thumb" alt="Generated image">
             {% else %}
             <div style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">
@@ -135,8 +275,19 @@
                 {% endif %}
             </div>
         </div>
+        <div class="history-actions">
+            <button class="btn btn-secondary btn-sm" onclick="viewGeneration('{{ gen.id }}')">Load</button>
+            <button class="btn btn-delete btn-sm" onclick="deleteGeneration(event, '{{ gen.id }}')">Delete</button>
+        </div>
     </div>
     {% endfor %}
+</div>
+
+<!-- Floating action bar for compare -->
+<div class="floating-action-bar" id="floating-action-bar">
+    <span class="selection-count"><span id="selection-count">0</span> selected</span>
+    <button class="btn btn-secondary btn-sm" onclick="clearSelection()">Clear</button>
+    <button class="btn btn-primary btn-sm" onclick="compareSelected()">Compare Selected</button>
 </div>
 {% else %}
 <div class="empty-state">
@@ -163,6 +314,9 @@
 
 {% block scripts %}
 <script>
+// Track selected items for compare
+let selectedItems = new Set();
+
 function filterHistory() {
     const searchTerm = document.getElementById('search-prompt').value.toLowerCase();
     const modelFilter = document.getElementById('filter-model').value;
@@ -183,9 +337,116 @@ function filterHistory() {
     });
 }
 
-async function viewGeneration(id) {
-    // TODO: Load full generation details in modal
-    window.location.href = `/ai/generate?load=${id}`;
+async function viewGeneration(id, isVideo = false) {
+    if (isVideo) {
+        window.location.href = `/ai/generate?load=${id}&type=video`;
+    } else {
+        window.location.href = `/ai/generate?load=${id}`;
+    }
+}
+
+// Selection functions for compare
+function toggleSelection(event, id) {
+    event.stopPropagation();
+    const item = document.querySelector(`.history-item[data-id="${id}"]`);
+    const checkbox = item.querySelector('input[type="checkbox"]');
+
+    if (checkbox.checked) {
+        selectedItems.add(id);
+        item.classList.add('selected');
+    } else {
+        selectedItems.delete(id);
+        item.classList.remove('selected');
+    }
+
+    updateFloatingBar();
+}
+
+function updateFloatingBar() {
+    const bar = document.getElementById('floating-action-bar');
+    const count = document.getElementById('selection-count');
+
+    count.textContent = selectedItems.size;
+
+    if (selectedItems.size > 0) {
+        bar.classList.add('visible');
+    } else {
+        bar.classList.remove('visible');
+    }
+}
+
+function clearSelection() {
+    selectedItems.clear();
+    document.querySelectorAll('.history-item').forEach(item => {
+        item.classList.remove('selected');
+        item.querySelector('input[type="checkbox"]').checked = false;
+    });
+    updateFloatingBar();
+}
+
+function compareSelected() {
+    if (selectedItems.size < 2) {
+        alert('Please select at least 2 images to compare.');
+        return;
+    }
+
+    // Build compare list with all needed data
+    const compareList = [];
+    selectedItems.forEach(id => {
+        const item = document.querySelector(`.history-item[data-id="${id}"]`);
+        compareList.push({
+            id: id,
+            image_url: `/api/ai/image/${id}`,
+            seed: item.dataset.seed,
+            steps: parseInt(item.dataset.steps) || 25,
+            cfg_scale: parseFloat(item.dataset.cfg) || 7,
+            sampler: item.dataset.sampler,
+            model: item.dataset.model,
+            width: parseInt(item.dataset.width) || 1024,
+            height: parseInt(item.dataset.height) || 1024
+        });
+    });
+
+    // Save to localStorage and navigate to compare page
+    localStorage.setItem('compareList', JSON.stringify(compareList));
+    window.location.href = '/ai/compare';
+}
+
+// Delete function
+async function deleteGeneration(event, id) {
+    event.stopPropagation();
+
+    if (!confirm('Are you sure you want to delete this generation from your saved gallery?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/ai/generation/${id}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.deleted) {
+            // Remove the item from the DOM
+            const item = document.querySelector(`.history-item[data-id="${id}"]`);
+            if (item) {
+                item.style.transition = 'opacity 0.3s, transform 0.3s';
+                item.style.opacity = '0';
+                item.style.transform = 'scale(0.9)';
+                setTimeout(() => item.remove(), 300);
+            }
+
+            // Remove from selection if selected
+            selectedItems.delete(id);
+            updateFloatingBar();
+        } else {
+            alert('Failed to delete: ' + (data.error || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error('Delete error:', err);
+        alert('Failed to delete generation: ' + err.message);
+    }
 }
 
 // Close modal on click outside

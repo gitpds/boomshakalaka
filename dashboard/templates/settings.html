@@ -34,118 +34,21 @@
     </div>
 </div>
 
-<!-- Theme Customization -->
+<!-- Saved Themes -->
 <div class="card" style="margin-top: 24px;">
     <div class="card-header">
         <span class="card-title">
             <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
             </svg>
-            Theme Customization
+            Saved Themes
         </span>
     </div>
     <div class="card-body">
-        <!-- Current Theme Selector -->
-        <div class="settings-section">
-            <div class="settings-item">
-                <div class="settings-item-info">
-                    <h4>Current Theme</h4>
-                    <p>Select a saved theme to apply</p>
-                </div>
-                <select id="theme-selector" class="theme-select" onchange="selectTheme(this.value)">
-                    <option value="">Loading themes...</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Create New Theme -->
-        <div class="theme-creator">
-            <h4>Create New Theme</h4>
-            <p style="color: var(--text-muted); margin-bottom: 12px;">
-                Describe your desired theme using natural language. Claude AI will generate a matching color palette.
-            </p>
-            <div class="theme-prompt-container">
-                <textarea id="theme-prompt" class="theme-prompt-input" rows="2"
-                    placeholder="e.g., A cyberpunk theme with purple background and neon pink accents..."></textarea>
-                <button class="btn btn-primary" onclick="generateTheme()" id="generate-btn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                    </svg>
-                    Generate Theme
-                </button>
-            </div>
-        </div>
-
-        <!-- Theme Preview (hidden until theme is generated) -->
-        <div id="theme-preview" class="theme-preview" style="display: none;">
-            <h4>Preview: <span id="preview-name">Custom Theme</span></h4>
-            <div class="color-swatches">
-                <div class="swatch-group">
-                    <label>Backgrounds</label>
-                    <div class="swatches-row">
-                        <div class="swatch" id="swatch-bg-primary" title="Primary Background"></div>
-                        <div class="swatch" id="swatch-bg-secondary" title="Secondary Background"></div>
-                        <div class="swatch" id="swatch-bg-tertiary" title="Tertiary Background"></div>
-                    </div>
-                </div>
-                <div class="swatch-group">
-                    <label>Text</label>
-                    <div class="swatches-row">
-                        <div class="swatch" id="swatch-text-primary" title="Primary Text"></div>
-                        <div class="swatch" id="swatch-text-secondary" title="Secondary Text"></div>
-                        <div class="swatch" id="swatch-text-muted" title="Muted Text"></div>
-                    </div>
-                </div>
-                <div class="swatch-group">
-                    <label>Accent</label>
-                    <div class="swatches-row">
-                        <div class="swatch" id="swatch-accent" title="Accent Color"></div>
-                        <div class="swatch" id="swatch-accent-hover" title="Accent Hover"></div>
-                        <div class="swatch" id="swatch-accent-muted" title="Accent Muted"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="theme-actions">
-                <button class="btn btn-primary" onclick="applyGeneratedTheme()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
-                        <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    Apply Theme
-                </button>
-                <button class="btn btn-secondary" onclick="saveGeneratedTheme()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                        <polyline points="17 21 17 13 7 13 7 21"/>
-                        <polyline points="7 3 7 8 15 8"/>
-                    </svg>
-                    Save Theme
-                </button>
-                <button class="btn btn-danger" onclick="deleteCurrentTheme()" id="delete-theme-btn" style="display: none;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                    Delete Theme
-                </button>
-            </div>
-        </div>
-
-        <!-- Terminal Update Command -->
-        <div id="ttyd-command-section" class="ttyd-command-section" style="display: none;">
-            <h4>Terminal Theme Update</h4>
-            <p style="color: var(--text-muted); margin-bottom: 12px;">
-                Run this command to update the terminal (ttyd) theme:
-            </p>
-            <div class="code-block">
-                <pre id="ttyd-command"></pre>
-                <button class="btn btn-sm btn-secondary copy-btn" onclick="copyTtydCommand()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 14px; height: 14px;">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg>
-                    Copy
-                </button>
-            </div>
+        <div class="saved-themes-grid" id="saved-themes-grid">
+            <p style="color: var(--text-muted);">Loading themes...</p>
         </div>
     </div>
 </div>
@@ -283,178 +186,61 @@
 
 {% block styles %}
 <style>
-/* Theme Customization Styles */
-.theme-select {
-    padding: 10px 14px;
-    background: var(--bg-input);
+/* Saved Themes Grid */
+.saved-themes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.saved-theme-card {
+    background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
-    color: var(--text-primary);
-    font-size: 14px;
-    min-width: 200px;
-    cursor: pointer;
-}
-
-.theme-select:focus {
-    outline: none;
-    border-color: var(--accent);
-}
-
-.theme-creator {
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border-color);
-}
-
-.theme-creator h4 {
-    margin: 0 0 8px 0;
-    font-size: 15px;
-    color: var(--text-primary);
-}
-
-.theme-prompt-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.theme-prompt-input {
-    width: 100%;
-    padding: 12px 14px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    color: var(--text-primary);
-    font-size: 14px;
-    font-family: 'Inter', sans-serif;
-    resize: vertical;
-    min-height: 60px;
-}
-
-.theme-prompt-input:focus {
-    outline: none;
-    border-color: var(--accent);
-}
-
-.theme-prompt-input::placeholder {
-    color: var(--text-muted);
-}
-
-.theme-preview {
-    margin-top: 24px;
-    padding: 20px;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-}
-
-.theme-preview h4 {
-    margin: 0 0 16px 0;
-    font-size: 15px;
-    color: var(--text-primary);
-}
-
-.color-swatches {
-    display: flex;
-    gap: 24px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-}
-
-.swatch-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.swatch-group label {
-    font-size: 12px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.swatches-row {
-    display: flex;
-    gap: 8px;
-}
-
-.swatch {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    border: 2px solid var(--border-color);
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    position: relative;
-}
-
-.swatch:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.swatch::after {
-    content: attr(title);
-    position: absolute;
-    bottom: -24px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 10px;
-    color: var(--text-muted);
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-
-.swatch:hover::after {
-    opacity: 1;
-}
-
-.theme-actions {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.ttyd-command-section {
-    margin-top: 24px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border-color);
-}
-
-.ttyd-command-section h4 {
-    margin: 0 0 8px 0;
-    font-size: 15px;
-    color: var(--text-primary);
-}
-
-.code-block {
-    position: relative;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 16px;
-    overflow-x: auto;
+    cursor: pointer;
+    transition: all 0.15s ease;
 }
 
-.code-block pre {
-    margin: 0;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--text-secondary);
-    white-space: pre-wrap;
-    word-break: break-all;
+.saved-theme-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
 }
 
-.code-block .copy-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    padding: 6px 10px;
+.saved-theme-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+.theme-card-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.theme-card-swatches {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    gap: 4px;
+}
+
+.theme-card-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+}
+
+.theme-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* Common Styles */
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
 }
 
 .btn-danger {
@@ -466,11 +252,6 @@
 .btn-danger:hover {
     background: #c82333;
     border-color: #c82333;
-}
-
-.btn-sm {
-    padding: 6px 12px;
-    font-size: 12px;
 }
 
 /* Loading state */
@@ -524,25 +305,31 @@
 .toast.error {
     border-left: 4px solid var(--error);
 }
+
 </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Theme Manager State
-let currentGeneratedTheme = null;
-let currentThemeId = null;
+// ============================================================================
+// State
+// ============================================================================
 let allThemes = {};
+let activeThemeId = null;
 
+// ============================================================================
+// Dark Mode Toggle
+// ============================================================================
 function toggleDarkMode(toggleElement) {
     toggleElement.classList.toggle('active');
     const isDark = toggleElement.classList.contains('active');
     setTheme(isDark ? 'dark' : 'light');
 }
 
-// Toast notification
+// ============================================================================
+// Toast Notification
+// ============================================================================
 function showToast(message, type = 'success') {
-    // Remove existing toast
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
 
@@ -558,38 +345,63 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-// Load saved themes into selector
-async function loadThemes() {
+// ============================================================================
+// Theme Functions
+// ============================================================================
+function applyThemeCSS(cssVars) {
+    const root = document.documentElement;
+    for (const [varName, value] of Object.entries(cssVars)) {
+        root.style.setProperty(varName, value);
+    }
+    localStorage.setItem('customThemeCSS', JSON.stringify(cssVars));
+}
+
+// ============================================================================
+// Saved Themes
+// ============================================================================
+async function loadSavedThemes() {
     try {
         const response = await fetch('/api/themes');
         const data = await response.json();
 
         allThemes = data.themes || {};
-        currentThemeId = data.active;
+        activeThemeId = data.active;
 
-        const selector = document.getElementById('theme-selector');
-        selector.innerHTML = '';
+        const grid = document.getElementById('saved-themes-grid');
+        const entries = Object.entries(allThemes);
 
-        for (const [id, theme] of Object.entries(allThemes)) {
-            const option = document.createElement('option');
-            option.value = id;
-            option.textContent = theme.name + (id === data.active ? ' (Active)' : '');
-            option.selected = id === data.active;
-            selector.appendChild(option);
+        if (entries.length === 0) {
+            grid.innerHTML = '<p style="color: var(--text-muted);">No saved themes yet.</p>';
+            return;
         }
 
-        // Load and display the active theme
-        if (currentThemeId) {
-            await loadThemeDetails(currentThemeId);
-        }
+        grid.innerHTML = entries.map(([id, theme]) => {
+            const css = theme.css?.dark || theme.css || {};
+            return `
+                <div class="saved-theme-card ${id === activeThemeId ? 'active' : ''}"
+                     onclick="applySavedTheme('${id}')">
+                    <div class="theme-card-name">${theme.name || id}</div>
+                    <div class="theme-card-swatches">
+                        <div class="theme-card-swatch" style="background: ${css['--bg-primary'] || '#1a1a1a'}"></div>
+                        <div class="theme-card-swatch" style="background: ${css['--bg-secondary'] || '#2a2a2a'}"></div>
+                        <div class="theme-card-swatch" style="background: ${css['--accent'] || '#f0cb09'}"></div>
+                        <div class="theme-card-swatch" style="background: ${css['--text-primary'] || '#ffffff'}"></div>
+                    </div>
+                    ${id !== 'teal-gold' ? `
+                        <div class="theme-card-actions">
+                            <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); deleteSavedTheme('${id}')">Delete</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
     } catch (error) {
-        console.error('Error loading themes:', error);
-        showToast('Failed to load themes', 'error');
+        console.error('Error loading saved themes:', error);
     }
 }
 
-// Load full theme details
-async function loadThemeDetails(themeId) {
+async function applySavedTheme(themeId) {
     try {
         const response = await fetch(`/api/themes/${themeId}`);
         const theme = await response.json();
@@ -599,256 +411,86 @@ async function loadThemeDetails(themeId) {
             return;
         }
 
-        currentGeneratedTheme = theme;
-        currentThemeId = themeId;
-        displayThemePreview(theme);
+        // Apply theme
+        const systemMode = document.documentElement.getAttribute('data-theme') || 'dark';
+        const css = theme.css?.[systemMode] || theme.css || {};
+        applyThemeCSS(css);
 
-        // Show delete button for non-default themes
-        const deleteBtn = document.getElementById('delete-theme-btn');
-        deleteBtn.style.display = themeId === 'teal-gold' ? 'none' : 'inline-flex';
-
-    } catch (error) {
-        console.error('Error loading theme details:', error);
-    }
-}
-
-// Select a theme from dropdown
-async function selectTheme(themeId) {
-    if (!themeId) return;
-    await loadThemeDetails(themeId);
-}
-
-// Generate new theme from prompt
-async function generateTheme() {
-    const prompt = document.getElementById('theme-prompt').value.trim();
-    if (!prompt) {
-        showToast('Please enter a theme description', 'error');
-        return;
-    }
-
-    const btn = document.getElementById('generate-btn');
-    btn.classList.add('loading');
-    btn.disabled = true;
-
-    try {
-        const response = await fetch('/api/themes/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
-        });
-
-        const data = await response.json();
-
-        if (data.error) {
-            showToast(data.error, 'error');
-            return;
+        // Store for mode switching
+        if (theme.css?.dark && theme.css?.light) {
+            localStorage.setItem('customThemeDualMode', JSON.stringify(theme.css));
         }
 
-        currentGeneratedTheme = data.theme;
-        currentThemeId = null; // Not saved yet
-        displayThemePreview(data.theme);
-        showToast('Theme generated! Preview and apply below.');
-
-    } catch (error) {
-        console.error('Error generating theme:', error);
-        showToast('Failed to generate theme', 'error');
-    } finally {
-        btn.classList.remove('loading');
-        btn.disabled = false;
-    }
-}
-
-// Display theme preview
-function displayThemePreview(theme) {
-    const preview = document.getElementById('theme-preview');
-    preview.style.display = 'block';
-
-    document.getElementById('preview-name').textContent = theme.name || 'Custom Theme';
-
-    const css = theme.css || {};
-
-    // Update swatches
-    const swatchMap = {
-        'swatch-bg-primary': '--bg-primary',
-        'swatch-bg-secondary': '--bg-secondary',
-        'swatch-bg-tertiary': '--bg-tertiary',
-        'swatch-text-primary': '--text-primary',
-        'swatch-text-secondary': '--text-secondary',
-        'swatch-text-muted': '--text-muted',
-        'swatch-accent': '--accent',
-        'swatch-accent-hover': '--accent-hover',
-        'swatch-accent-muted': '--accent-muted'
-    };
-
-    for (const [swatchId, cssVar] of Object.entries(swatchMap)) {
-        const swatch = document.getElementById(swatchId);
-        if (swatch && css[cssVar]) {
-            swatch.style.backgroundColor = css[cssVar];
-        }
-    }
-
-    // Show ttyd command if available
-    if (theme.ttyd_command) {
-        const commandSection = document.getElementById('ttyd-command-section');
-        commandSection.style.display = 'block';
-        document.getElementById('ttyd-command').textContent = theme.ttyd_command;
-    }
-}
-
-// Apply generated theme to the dashboard
-function applyGeneratedTheme() {
-    if (!currentGeneratedTheme || !currentGeneratedTheme.css) {
-        showToast('No theme to apply', 'error');
-        return;
-    }
-
-    applyThemeCSS(currentGeneratedTheme.css);
-    showToast('Theme applied to dashboard!');
-
-    // If this is a saved theme, mark it as active
-    if (currentThemeId) {
-        setActiveTheme(currentThemeId);
-    }
-}
-
-// Apply CSS variables to document
-function applyThemeCSS(cssVars) {
-    const root = document.documentElement;
-    for (const [varName, value] of Object.entries(cssVars)) {
-        root.style.setProperty(varName, value);
-    }
-
-    // Store in localStorage for persistence
-    localStorage.setItem('customThemeCSS', JSON.stringify(cssVars));
-}
-
-// Set a theme as active on the server
-async function setActiveTheme(themeId) {
-    try {
-        const response = await fetch('/api/themes/apply', {
+        // Set active on server
+        await fetch('/api/themes/apply', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ theme_id: themeId })
         });
 
-        const data = await response.json();
-        if (data.error) {
-            showToast(data.error, 'error');
-            return;
-        }
-
-        // Reload themes to update selector
-        await loadThemes();
+        activeThemeId = themeId;
+        await loadSavedThemes();
+        showToast('Theme applied!');
 
     } catch (error) {
-        console.error('Error setting active theme:', error);
+        console.error('Error applying theme:', error);
+        showToast('Failed to apply theme', 'error');
     }
 }
 
-// Save generated theme
-async function saveGeneratedTheme() {
-    if (!currentGeneratedTheme) {
-        showToast('No theme to save', 'error');
-        return;
-    }
+async function deleteSavedTheme(themeId) {
+    if (!confirm('Delete this theme?')) return;
 
     try {
-        const response = await fetch('/api/themes/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ theme: currentGeneratedTheme })
-        });
-
+        const response = await fetch(`/api/themes/${themeId}`, { method: 'DELETE' });
         const data = await response.json();
-        if (data.error) {
-            showToast(data.error, 'error');
-            return;
+
+        if (data.success) {
+            showToast('Theme deleted');
+            await loadSavedThemes();
         }
-
-        showToast(data.message);
-        currentThemeId = data.theme_id;
-
-        // Reload themes to show new theme in selector
-        await loadThemes();
-
-    } catch (error) {
-        console.error('Error saving theme:', error);
-        showToast('Failed to save theme', 'error');
-    }
-}
-
-// Delete current theme
-async function deleteCurrentTheme() {
-    if (!currentThemeId || currentThemeId === 'teal-gold') {
-        showToast('Cannot delete the default theme', 'error');
-        return;
-    }
-
-    if (!confirm(`Delete theme "${currentGeneratedTheme?.name || currentThemeId}"?`)) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`/api/themes/${currentThemeId}`, {
-            method: 'DELETE'
-        });
-
-        const data = await response.json();
-        if (data.error) {
-            showToast(data.error, 'error');
-            return;
-        }
-
-        showToast('Theme deleted');
-        await loadThemes();
-
     } catch (error) {
         console.error('Error deleting theme:', error);
         showToast('Failed to delete theme', 'error');
     }
 }
 
-// Copy ttyd command to clipboard
-function copyTtydCommand() {
-    const command = document.getElementById('ttyd-command').textContent;
-    navigator.clipboard.writeText(command).then(() => {
-        showToast('Command copied to clipboard!');
-    }).catch(() => {
-        showToast('Failed to copy command', 'error');
-    });
-}
-
-// Load custom theme CSS from localStorage on page load
+// ============================================================================
+// Initialization
+// ============================================================================
 function loadStoredTheme() {
+    const dualMode = localStorage.getItem('customThemeDualMode');
+    if (dualMode) {
+        try {
+            const themes = JSON.parse(dualMode);
+            const systemMode = document.documentElement.getAttribute('data-theme') || 'dark';
+            const css = themes[systemMode] || themes;
+            applyThemeCSS(css);
+            return;
+        } catch (e) {}
+    }
+
     const storedCSS = localStorage.getItem('customThemeCSS');
     if (storedCSS) {
         try {
-            const cssVars = JSON.parse(storedCSS);
-            applyThemeCSS(cssVars);
-        } catch (e) {
-            console.error('Error loading stored theme:', e);
-        }
+            applyThemeCSS(JSON.parse(storedCSS));
+        } catch (e) {}
     }
 }
 
-// Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    // Dark mode toggle
+    // Dark mode toggle state
     const toggle = document.querySelector('[data-setting="darkMode"]');
     if (toggle) {
         const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-        if (currentTheme === 'dark') {
-            toggle.classList.add('active');
-        } else {
-            toggle.classList.remove('active');
-        }
+        toggle.classList.toggle('active', currentTheme === 'dark');
     }
 
-    // Load stored custom theme
+    // Load stored theme
     loadStoredTheme();
 
     // Load saved themes
-    loadThemes();
+    loadSavedThemes();
 });
 </script>
 {% endblock %}

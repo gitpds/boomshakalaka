@@ -46,3 +46,4 @@ wireguard-qr.txt
 tmp/
 temp/
 *.tmp
+skills/slack_notification/.env

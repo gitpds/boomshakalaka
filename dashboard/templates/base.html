@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Dashboard{% endblock %} - Boomshakalaka</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     {% block head %}{% endblock %}
     {% block styles %}{% endblock %}
@@ -14,11 +15,16 @@
 <body>
     <!-- Sidebar -->
     <aside class="sidebar">
+        <!-- Logo - Top Center -->
+        <div class="sidebar-logo-section">
+            <img src="{{ url_for('static', filename='images/logo.png') }}"
+                 alt="Boomshakalaka"
+                 class="sidebar-logo torchlight-glow">
+        </div>
+
+        <!-- Active Page Name -->
         <div class="sidebar-header">
-            <div class="logo">
-                <span class="logo-icon">B</span>
-                <span class="logo-text">Boomshakalaka</span>
-            </div>
+            <span class="active-page-name" id="active-page-name">{% block sidebar_title %}Dashboard{% endblock %}</span>
         </div>
 
         <nav class="sidebar-nav">
@@ -52,10 +58,24 @@
                         <span class="nav-dot"></span>
                         Replays
                     </a>
-                    <a href="{{ url_for('sports_betting') }}" class="nav-subitem {% if active_page == 'sports_betting' %}active{% endif %}">
-                        <span class="nav-dot"></span>
-                        Betting
-                    </a>
+                    <!-- Betting Subcategory -->
+                    <div class="nav-subcategory {% if active_page in ['sports_betting', 'sports_betting_analysis'] %}expanded{% endif %}">
+                        <button class="nav-subcategory-header" onclick="toggleSubcategory(this)">
+                            <span class="nav-dot"></span>
+                            Betting
+                            <svg class="nav-chevron-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </button>
+                        <div class="nav-subcategory-items">
+                            <a href="{{ url_for('sports_betting') }}" class="nav-subsubitem {% if active_page == 'sports_betting' %}active{% endif %}">
+                                GT Monitor
+                            </a>
+                            <a href="{{ url_for('sports_betting_analysis') }}" class="nav-subsubitem {% if active_page == 'sports_betting_analysis' %}active{% endif %}">
+                                GT Analysis
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -108,6 +128,10 @@
                         <span class="nav-dot"></span>
                         Generate
                     </a>
+                    <a href="{{ url_for('ai_video') }}" class="nav-subitem {% if active_page == 'ai_video' %}active{% endif %}">
+                        <span class="nav-dot"></span>
+                        Video Studio
+                    </a>
                     <a href="{{ url_for('ai_saved') }}" class="nav-subitem {% if active_page == 'ai_saved' %}active{% endif %}">
                         <span class="nav-dot"></span>
                         Saved
@@ -115,10 +139,6 @@
                     <a href="{{ url_for('ai_models') }}" class="nav-subitem {% if active_page == 'ai_models' %}active{% endif %}">
                         <span class="nav-dot"></span>
                         Models
-                    </a>
-                    <a href="{{ url_for('ai_compare') }}" class="nav-subitem {% if active_page == 'ai_compare' %}active{% endif %}">
-                        <span class="nav-dot"></span>
-                        Compare
                     </a>
                 </div>
             </div>

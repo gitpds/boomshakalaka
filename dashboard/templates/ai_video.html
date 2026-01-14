@@ -1,0 +1,1973 @@
+{% extends "base.html" %}
+
+{% block title %}Video Studio - AI Studio{% endblock %}
+{% block page_title %}Video Studio{% endblock %}
+{% block page_subtitle %}Create and stitch video sequences{% endblock %}
+
+{% block content %}
+<style>
+    .video-studio-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr 380px;
+        gap: 20px;
+        height: calc(100vh - 200px);
+        min-height: 600px;
+    }
+
+    @media (max-width: 1400px) {
+        .video-studio-layout {
+            grid-template-columns: 240px 1fr 340px;
+        }
+    }
+
+    @media (max-width: 1100px) {
+        .video-studio-layout {
+            grid-template-columns: 1fr;
+            height: auto;
+        }
+    }
+
+    /* Sequence Panel (Left) */
+    .sequence-panel {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .sequence-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .sequence-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .sequence-timeline {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+    }
+
+    .segment-card {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .segment-card:hover {
+        border-color: var(--accent);
+    }
+
+    .segment-card.active {
+        border-color: var(--accent);
+        background: rgba(var(--accent-rgb), 0.1);
+    }
+
+    .segment-card.generating {
+        border-color: var(--warning);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .segment-thumbnail {
+        width: 100%;
+        aspect-ratio: 16/9;
+        background: var(--bg-input);
+        border-radius: 6px;
+        margin-bottom: 8px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .segment-thumbnail img,
+    .segment-thumbnail video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .segment-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.85rem;
+    }
+
+    .segment-number {
+        color: var(--text-muted);
+    }
+
+    .segment-duration {
+        color: var(--accent);
+        font-weight: 500;
+    }
+
+    .add-segment-btn {
+        width: 100%;
+        padding: 12px;
+        background: transparent;
+        border: 2px dashed var(--border-color);
+        border-radius: 8px;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .add-segment-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .sequence-footer {
+        padding: 16px;
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+    }
+
+    .sequence-stats {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        font-size: 0.85rem;
+    }
+
+    .stitch-btn {
+        width: 100%;
+        padding: 12px;
+    }
+
+    /* Preview Panel (Center) */
+    .preview-panel {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .preview-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .preview-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-tertiary);
+        position: relative;
+        min-height: 400px;
+    }
+
+    .preview-video {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 8px;
+    }
+
+    .preview-placeholder {
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .preview-placeholder svg {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .preview-actions {
+        padding: 16px;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        gap: 12px;
+    }
+
+    /* Controls Panel (Right) */
+    .controls-panel {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .controls-header {
+        padding: 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .controls-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+    }
+
+    .form-label-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .form-hint {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-weight: 400;
+    }
+
+    .form-input, .form-select, .form-textarea {
+        width: 100%;
+        padding: 10px 14px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        transition: border-color var(--transition-fast);
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    .form-textarea {
+        min-height: 100px;
+        resize: vertical;
+        font-family: inherit;
+    }
+
+    .form-range {
+        width: 100%;
+        height: 6px;
+        background: var(--bg-secondary);
+        border-radius: 3px;
+        outline: none;
+        -webkit-appearance: none;
+        appearance: none;
+        cursor: pointer;
+    }
+
+    .form-range::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        background: var(--accent);
+        border-radius: 50%;
+        cursor: pointer;
+        transition: transform 0.1s;
+    }
+
+    .form-range::-webkit-slider-thumb:hover {
+        transform: scale(1.1);
+    }
+
+    .form-range::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: var(--accent);
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+    }
+
+    .crf-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .form-row-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+    }
+
+    /* Input Frame Section */
+    .input-frame-section {
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+
+    .input-frame-preview {
+        width: 100%;
+        aspect-ratio: 16/9;
+        background: var(--bg-input);
+        border-radius: 6px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12px;
+        border: 2px dashed var(--border-color);
+        position: relative;
+    }
+
+    .input-frame-preview img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+
+    .input-frame-preview.has-image {
+        border-style: solid;
+    }
+
+    .input-frame-buttons {
+        display: flex;
+        gap: 8px;
+    }
+
+    .input-frame-buttons .btn {
+        flex: 1;
+        padding: 10px;
+        font-size: 0.85rem;
+    }
+
+    /* Model Params Section */
+    .model-params-section {
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+
+    .model-params-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .model-params-header h4 {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .toggle-advanced {
+        font-size: 0.8rem;
+        color: var(--accent);
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 0;
+    }
+
+    .toggle-advanced:hover {
+        text-decoration: underline;
+    }
+
+    .param-slider {
+        margin-bottom: 16px;
+    }
+
+    .param-slider-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 0.85rem;
+    }
+
+    .param-slider-label {
+        color: var(--text-primary);
+    }
+
+    .param-slider-value {
+        color: var(--accent);
+        font-weight: 500;
+    }
+
+    .param-slider input[type="range"] {
+        width: 100%;
+        height: 6px;
+        -webkit-appearance: none;
+        background: var(--bg-input);
+        border-radius: 3px;
+        outline: none;
+    }
+
+    .param-slider input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        background: var(--accent);
+        border-radius: 50%;
+        cursor: pointer;
+    }
+
+    .advanced-params {
+        display: none;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .advanced-params.show {
+        display: block;
+    }
+
+    /* Controls Footer */
+    .controls-footer {
+        padding: 16px;
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-tertiary);
+    }
+
+    .generate-btn {
+        width: 100%;
+        padding: 14px;
+        font-size: 1rem;
+        margin-bottom: 10px;
+    }
+
+    .continue-btn {
+        width: 100%;
+        padding: 12px;
+        background: transparent;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+    }
+
+    .continue-btn:hover {
+        background: rgba(var(--accent-rgb), 0.1);
+    }
+
+    .continue-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Status Messages */
+    .status-message {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 0.9rem;
+    }
+
+    .status-message.info {
+        background: rgba(var(--accent-rgb), 0.1);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+    }
+
+    .status-message.error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid #ef4444;
+        color: #ef4444;
+    }
+
+    .status-message.success {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid #22c55e;
+        color: #22c55e;
+    }
+
+    /* Seed controls */
+    .seed-controls {
+        display: flex;
+        gap: 8px;
+    }
+
+    .seed-controls .form-input {
+        flex: 1;
+    }
+
+    .seed-btn {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .seed-btn:hover {
+        background: var(--bg-hover);
+        color: var(--accent);
+        border-color: var(--accent);
+    }
+
+    /* Animations */
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+
+    .generating-indicator {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        color: var(--warning);
+        font-size: 0.9rem;
+    }
+
+    .generating-indicator.active {
+        display: flex;
+    }
+
+    .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--warning);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* VRAM Warning */
+    .vram-warning {
+        display: none;
+        padding: 10px 12px;
+        background: rgba(251, 191, 36, 0.1);
+        border: 1px solid var(--warning);
+        border-radius: 6px;
+        color: var(--warning);
+        font-size: 0.85rem;
+        margin-bottom: 16px;
+    }
+
+    .vram-warning.show {
+        display: block;
+    }
+
+    /* Frame presets */
+    .frame-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    .frame-preset {
+        padding: 4px 10px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+
+    .frame-preset:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .frame-preset.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
+    /* Empty state */
+    .empty-timeline {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-muted);
+    }
+
+    .empty-timeline svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+
+    /* Model Tips Panel */
+    .model-tips {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        margin-top: 8px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .model-tips-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .model-tips-header:hover {
+        background: var(--bg-hover);
+    }
+
+    .model-tips-header svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.2s ease;
+    }
+
+    .model-tips.expanded .model-tips-header svg {
+        transform: rotate(180deg);
+    }
+
+    .model-tips-content {
+        display: none;
+        padding: 14px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .model-tips.expanded .model-tips-content {
+        display: block;
+    }
+
+    .tip-row {
+        display: flex;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+
+    .tip-label {
+        font-weight: 500;
+        color: var(--text-secondary);
+        width: 110px;
+        flex-shrink: 0;
+    }
+
+    .tip-value {
+        color: var(--text-primary);
+    }
+
+    .tip-list {
+        list-style: disc;
+        margin-left: 16px;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+
+    .tip-list li {
+        margin-bottom: 4px;
+    }
+
+    .tip-buttons {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+    }
+
+    .tip-btn {
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: var(--text-secondary);
+        transition: all 0.2s;
+    }
+
+    .tip-btn:hover:not(:disabled) {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
+    .tip-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .badge-muted {
+        background: var(--bg-tertiary);
+        color: var(--text-muted);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        margin-left: 6px;
+        font-weight: normal;
+    }
+
+    .negative-unsupported {
+        opacity: 0.5;
+    }
+
+    .negative-unsupported textarea {
+        background: var(--bg-tertiary);
+    }
+
+    /* Help Button */
+    .help-btn {
+        background: transparent;
+        border: 1px solid var(--border-color);
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        transition: all 0.2s;
+        flex-shrink: 0;
+    }
+
+    .help-btn:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+
+    .continue-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .continue-row .continue-btn {
+        flex: 1;
+    }
+
+    /* Modal */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .modal-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .modal-content {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 85vh;
+        overflow: hidden;
+        transform: translateY(20px);
+        transition: transform 0.3s ease;
+    }
+
+    .modal-overlay.active .modal-content {
+        transform: translateY(0);
+    }
+
+    .modal-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    .modal-close {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 8px;
+        color: var(--text-secondary);
+        transition: color 0.2s;
+    }
+
+    .modal-close:hover {
+        color: var(--text-primary);
+    }
+
+    .modal-body {
+        padding: 24px;
+        overflow-y: auto;
+        max-height: calc(85vh - 140px);
+    }
+
+    .modal-section {
+        margin-bottom: 24px;
+    }
+
+    .modal-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .modal-section h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: var(--accent);
+    }
+
+    .modal-section p {
+        color: var(--text-secondary);
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    .modal-diagram {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 16px;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        line-height: 1.4;
+        overflow-x: auto;
+        white-space: pre;
+        color: var(--text-secondary);
+    }
+
+    .modal-list {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--text-secondary);
+        line-height: 1.8;
+    }
+
+    .modal-list li {
+        margin-bottom: 8px;
+    }
+
+    .modal-list strong {
+        color: var(--text-primary);
+    }
+
+    .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: flex-end;
+    }
+</style>
+
+<div class="video-studio-layout">
+    <!-- Sequence Panel (Left) -->
+    <div class="sequence-panel">
+        <div class="sequence-header">
+            <h3>Timeline</h3>
+            <button class="btn btn-sm" onclick="newSequence()" title="New Sequence">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="sequence-timeline" id="sequence-timeline">
+            <div class="empty-timeline" id="empty-timeline">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                    <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                </svg>
+                <p>No segments yet</p>
+                <p style="font-size: 0.8rem;">Generate your first video to start</p>
+            </div>
+            <!-- Segments will be inserted here -->
+        </div>
+
+        <div class="sequence-footer">
+            <div class="sequence-stats">
+                <span>Segments: <strong id="segment-count">0</strong></span>
+                <span>Total: <strong id="total-duration">0.0s</strong></span>
+            </div>
+            <button class="btn stitch-btn" id="stitch-btn" onclick="stitchSequence()" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Stitch All Segments
+            </button>
+        </div>
+    </div>
+
+    <!-- Preview Panel (Center) -->
+    <div class="preview-panel">
+        <div class="preview-header">
+            <h3>Preview</h3>
+            <div class="generating-indicator" id="generating-indicator">
+                <div class="spinner"></div>
+                <span>Generating...</span>
+            </div>
+        </div>
+
+        <div class="preview-container" id="preview-container">
+            <div class="preview-placeholder" id="preview-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <p>Generate a video to preview</p>
+            </div>
+            <video id="preview-video" class="preview-video" style="display: none;" controls autoplay loop muted></video>
+        </div>
+
+        <div class="preview-actions">
+            <button class="btn" onclick="downloadCurrentVideo()" id="download-btn" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+            </button>
+            <button class="btn" onclick="saveToGallery()" id="save-btn" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save to Gallery
+            </button>
+        </div>
+    </div>
+
+    <!-- Controls Panel (Right) -->
+    <div class="controls-panel">
+        <div class="controls-header">
+            <h3>Generation Controls</h3>
+        </div>
+
+        <div class="controls-body">
+            <!-- Status Message -->
+            <div class="status-message info" id="status-message" style="display: none;"></div>
+
+            <!-- Input Frame Section -->
+            <div class="input-frame-section">
+                <label class="form-label">Input Frame</label>
+                <div class="input-frame-preview" id="input-frame-preview">
+                    <span style="color: var(--text-muted); font-size: 0.85rem;">Drop image or click to upload</span>
+                </div>
+                <input type="file" id="frame-upload" accept="image/*" style="display: none;" onchange="handleFrameUpload(event)">
+                <div class="input-frame-buttons">
+                    <button class="btn" onclick="document.getElementById('frame-upload').click()">
+                        Upload Image
+                    </button>
+                    <button class="btn" onclick="useLastFrame()" id="use-last-frame-btn" disabled>
+                        Use Last Frame
+                    </button>
+                </div>
+            </div>
+
+            <!-- Prompt -->
+            <div class="form-group">
+                <label class="form-label">Prompt</label>
+                <textarea class="form-textarea" id="prompt" placeholder="Describe the motion and action you want..."></textarea>
+            </div>
+
+            <!-- Negative Prompt (collapsible) -->
+            <div class="form-group">
+                <label class="form-label">
+                    <span>Negative Prompt</span>
+                    <span class="form-hint">(optional)</span>
+                </label>
+                <textarea class="form-textarea" id="negative-prompt" style="min-height: 60px;" placeholder="What to avoid..."></textarea>
+            </div>
+
+            <!-- Model Selection -->
+            <div class="form-group">
+                <label class="form-label">Video Model</label>
+                <select class="form-select" id="video-model" onchange="updateModelParams(); updateVideoModelTips(); updateNegativePromptState();">
+                    {% for model in video_models %}
+                    <option value="{{ model.filename }}" data-type="{{ model.type }}">
+                        {{ model.display_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <!-- Model Tips Panel -->
+                <div class="model-tips" id="video-model-tips-panel">
+                    <div class="model-tips-header" onclick="toggleVideoModelTips()">
+                        <span style="font-size: 0.9rem; color: var(--text-secondary);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                            </svg>
+                            Model Tips & Best Practices
+                        </span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </div>
+                    <div class="model-tips-content" id="video-model-tips-content">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model-Specific Parameters -->
+            <div class="model-params-section" id="model-params-section">
+                <div class="model-params-header">
+                    <h4>Model Parameters</h4>
+                    <button class="toggle-advanced" onclick="toggleAdvanced()">Show Advanced</button>
+                </div>
+
+                <div id="basic-params">
+                    <!-- Populated by JavaScript based on model -->
+                </div>
+
+                <div class="advanced-params" id="advanced-params">
+                    <!-- Populated by JavaScript based on model -->
+                </div>
+            </div>
+
+            <!-- Size, Frames, FPS -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Width</label>
+                    <select class="form-select" id="width">
+                        <option value="512">512</option>
+                        <option value="640">640</option>
+                        <option value="704">704</option>
+                        <option value="768" selected>768</option>
+                        <option value="832">832</option>
+                        <option value="896">896</option>
+                        <option value="960">960</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Height</label>
+                    <select class="form-select" id="height">
+                        <option value="512">512</option>
+                        <option value="640">640</option>
+                        <option value="704">704</option>
+                        <option value="768" selected>768</option>
+                        <option value="832">832</option>
+                        <option value="896">896</option>
+                        <option value="960">960</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="form-label-row">
+                    <label class="form-label" style="margin-bottom: 0;">Frames</label>
+                    <span class="form-hint" id="frame-duration">~2.0s @ 24fps</span>
+                </div>
+                <input type="number" class="form-input" id="frames" value="49" min="17" max="257" step="4" onchange="updateFrameDuration()">
+                <div class="frame-presets" id="frame-presets">
+                    <span class="frame-preset" data-frames="25">25 (~1s)</span>
+                    <span class="frame-preset active" data-frames="49">49 (~2s)</span>
+                    <span class="frame-preset" data-frames="81">81 (~3s)</span>
+                    <span class="frame-preset" data-frames="121">121 (~5s)</span>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">FPS</label>
+                    <select class="form-select" id="fps" onchange="updateFrameDuration()">
+                        <option value="8">8</option>
+                        <option value="16">16</option>
+                        <option value="24" selected>24</option>
+                        <option value="30">30</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Steps</label>
+                    <input type="number" class="form-input" id="steps" value="25" min="10" max="50">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">CFG Scale</label>
+                    <input type="number" class="form-input" id="cfg-scale" value="7.0" min="1" max="15" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Seed</label>
+                    <div class="seed-controls">
+                        <input type="number" class="form-input" id="seed" value="-1" min="-1">
+                        <button class="seed-btn" onclick="randomSeed()" title="Random">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video Quality -->
+            <div class="form-group">
+                <div class="form-label-row">
+                    <label class="form-label" style="margin-bottom: 0;">Video Quality (CRF)</label>
+                    <span class="form-hint" id="crf-hint">High Quality</span>
+                </div>
+                <input type="range" class="form-range" id="crf" value="19" min="10" max="35" step="1" oninput="updateCrfHint()">
+                <div class="crf-labels">
+                    <span>Best (10)</span>
+                    <span>Balanced</span>
+                    <span>Smallest (35)</span>
+                </div>
+            </div>
+
+            <!-- VRAM Warning -->
+            <div class="vram-warning" id="vram-warning">
+                High VRAM usage estimated. Consider reducing resolution or frame count.
+            </div>
+        </div>
+
+        <div class="controls-footer">
+            <button class="btn btn-primary generate-btn" id="generate-btn" onclick="generateVideo()">
+                Generate Video
+            </button>
+            <div class="continue-row">
+                <button class="btn continue-btn" id="continue-btn" onclick="continueFromLast()" disabled>
+                    Continue From Last Frame
+                </button>
+                <button class="help-btn" onclick="showContinuationGuide()" title="Learn how to create longer videos">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Continuation Guide Modal -->
+<div class="modal-overlay" id="continuation-modal" onclick="closeContinuationGuide(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h2>How to Create Longer Videos</h2>
+            <button class="modal-close" onclick="closeContinuationGuide()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-section">
+                <h3>What is Continuation?</h3>
+                <p>The "Continue From Last Frame" technique extracts the final frame of your video and uses it as the starting point for a new generation. This creates seamless multi-segment videos that can be stitched together.</p>
+            </div>
+
+            <div class="modal-section">
+                <h3>How It Works</h3>
+                <div class="modal-diagram">┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Segment 1  │────▶│  Segment 2  │────▶│  Segment 3  │
+│   (2 sec)   │     │   (2 sec)   │     │   (2 sec)   │
+│             │     │             │     │             │
+│  Last Frame─┼─┐   │  Last Frame─┼─┐   │             │
+└─────────────┘ │   └─────────────┘ │   └─────────────┘
+                │                   │
+                ▼                   ▼
+           Input for           Input for
+           Segment 2           Segment 3
+
+Final: Click "Stitch All" → 6 second seamless video</div>
+            </div>
+
+            <div class="modal-section">
+                <h3>Best Practices</h3>
+                <ol class="modal-list">
+                    <li><strong>Keep prompts consistent</strong> – Use similar wording across segments for visual coherence</li>
+                    <li><strong>Seed strategy:</strong>
+                        <ul style="margin-top: 4px; margin-left: 16px;">
+                            <li>Same seed = most consistent style</li>
+                            <li>Increment seed (+1) = subtle variation (auto-suggested)</li>
+                            <li>Random seed = more variety between segments</li>
+                        </ul>
+                    </li>
+                    <li><strong>Adjust motion gradually</strong> – Don't jump from "slow pan" to "fast zoom"</li>
+                    <li><strong>Plan your narrative</strong> – Think of each segment as a scene in sequence</li>
+                    <li><strong>Use the timeline</strong> – Review all segments before stitching</li>
+                </ol>
+            </div>
+
+            <div class="modal-section">
+                <h3>Workflow Steps</h3>
+                <ol class="modal-list">
+                    <li>Generate your first video segment</li>
+                    <li>Click "Continue From Last Frame"</li>
+                    <li>Adjust prompt if needed (e.g., "camera continues panning right")</li>
+                    <li>Generate next segment</li>
+                    <li>Repeat until desired length</li>
+                    <li>Click "Stitch All" in the Timeline panel</li>
+                </ol>
+            </div>
+
+            <div class="modal-section">
+                <h3>Pro Tips</h3>
+                <ul class="modal-list">
+                    <li>For smooth transitions, keep camera movement consistent</li>
+                    <li>Use 2-3 second segments (49-81 frames) for easier control</li>
+                    <li>Preview each segment before continuing</li>
+                    <li>The timeline shows total duration of all segments</li>
+                </ul>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="closeContinuationGuide()">Got it</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Video Studio JavaScript
+const VIDEO_MODEL_PARAMS = {{ video_model_params | tojson | safe }};
+const VIDEO_MODEL_TIPS = {{ video_model_tips | tojson | safe }};
+
+// State
+let currentSequenceId = null;
+let segments = [];
+let currentVideoId = null;
+let currentVideoUrl = null;
+let inputImageFilename = null;
+let isGenerating = false;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    updateModelParams();
+    updateVideoModelTips();
+    updateNegativePromptState();
+    setupFramePresets();
+    setupDragAndDrop();
+    checkForIncomingImage();
+});
+
+// Check if an image was sent from Generate page
+function checkForIncomingImage() {
+    const stored = sessionStorage.getItem('videoStudioImage');
+    if (stored) {
+        try {
+            const data = JSON.parse(stored);
+            // Only use if less than 5 minutes old
+            if (Date.now() - data.timestamp < 5 * 60 * 1000) {
+                inputImageFilename = data.filename;
+                showInputFrame(`/api/ai/upload/${data.filename}`);
+                if (data.prompt) {
+                    document.getElementById('prompt').value = data.prompt;
+                }
+                showStatus('Image loaded from Generate page. Ready to create video!', 'success');
+            }
+        } catch (e) {
+            console.warn('Error loading incoming image:', e);
+        }
+        // Clear it so it doesn't reload on refresh
+        sessionStorage.removeItem('videoStudioImage');
+    }
+}
+
+// Model Parameters
+function updateModelParams() {
+    const select = document.getElementById('video-model');
+    const modelType = select.options[select.selectedIndex]?.dataset.type || 'ltx';
+    const params = VIDEO_MODEL_PARAMS[modelType]?.params || {};
+
+    const basicContainer = document.getElementById('basic-params');
+    const advancedContainer = document.getElementById('advanced-params');
+
+    basicContainer.innerHTML = '';
+    advancedContainer.innerHTML = '';
+
+    for (const [key, config] of Object.entries(params)) {
+        const html = createParamControl(key, config);
+        if (config.advanced) {
+            advancedContainer.innerHTML += html;
+        } else {
+            basicContainer.innerHTML += html;
+        }
+    }
+
+    // Update frame presets based on model
+    updateFramePresets(modelType);
+}
+
+function createParamControl(key, config) {
+    if (config.type === 'slider') {
+        return `
+            <div class="param-slider">
+                <div class="param-slider-header">
+                    <span class="param-slider-label">${config.label}</span>
+                    <span class="param-slider-value" id="${key}-value">${config.default}</span>
+                </div>
+                <input type="range"
+                    id="${key}"
+                    min="${config.min}"
+                    max="${config.max}"
+                    step="${config.step}"
+                    value="${config.default}"
+                    oninput="document.getElementById('${key}-value').textContent = this.value">
+                <div class="form-hint">${config.help || ''}</div>
+            </div>
+        `;
+    } else if (config.type === 'select') {
+        const options = config.options.map(opt =>
+            `<option value="${opt}" ${opt === config.default ? 'selected' : ''}>${opt}</option>`
+        ).join('');
+        return `
+            <div class="form-group">
+                <label class="form-label">${config.label}</label>
+                <select class="form-select" id="${key}">${options}</select>
+                <div class="form-hint">${config.help || ''}</div>
+            </div>
+        `;
+    }
+    return '';
+}
+
+function toggleAdvanced() {
+    const container = document.getElementById('advanced-params');
+    const btn = document.querySelector('.toggle-advanced');
+    container.classList.toggle('show');
+    btn.textContent = container.classList.contains('show') ? 'Hide Advanced' : 'Show Advanced';
+}
+
+// Frame Presets
+function setupFramePresets() {
+    document.querySelectorAll('.frame-preset').forEach(preset => {
+        preset.addEventListener('click', () => {
+            document.querySelectorAll('.frame-preset').forEach(p => p.classList.remove('active'));
+            preset.classList.add('active');
+            document.getElementById('frames').value = preset.dataset.frames;
+            updateFrameDuration();
+        });
+    });
+}
+
+function updateFramePresets(modelType) {
+    const config = VIDEO_MODEL_PARAMS[modelType];
+    if (!config?.frame_limits?.presets) return;
+
+    const container = document.getElementById('frame-presets');
+    const fps = parseInt(document.getElementById('fps').value);
+
+    container.innerHTML = config.frame_limits.presets.map(f => {
+        const duration = (f / fps).toFixed(1);
+        const active = f === parseInt(document.getElementById('frames').value) ? 'active' : '';
+        return `<span class="frame-preset ${active}" data-frames="${f}">${f} (~${duration}s)</span>`;
+    }).join('');
+
+    setupFramePresets();
+}
+
+function updateFrameDuration() {
+    const frames = parseInt(document.getElementById('frames').value);
+    const fps = parseInt(document.getElementById('fps').value);
+    const duration = (frames / fps).toFixed(1);
+    document.getElementById('frame-duration').textContent = `~${duration}s @ ${fps}fps`;
+
+    // Update preset active state
+    document.querySelectorAll('.frame-preset').forEach(p => {
+        p.classList.toggle('active', parseInt(p.dataset.frames) === frames);
+    });
+}
+
+// Drag and Drop
+function setupDragAndDrop() {
+    const preview = document.getElementById('input-frame-preview');
+
+    preview.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        preview.style.borderColor = 'var(--accent)';
+    });
+
+    preview.addEventListener('dragleave', () => {
+        preview.style.borderColor = '';
+    });
+
+    preview.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        preview.style.borderColor = '';
+
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            await uploadImage(file);
+        }
+    });
+
+    preview.addEventListener('click', () => {
+        document.getElementById('frame-upload').click();
+    });
+}
+
+async function handleFrameUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        await uploadImage(file);
+    }
+}
+
+async function uploadImage(file) {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+        const response = await fetch('/api/ai/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (data.filename) {
+            inputImageFilename = data.filename;
+            showInputFrame(`/api/ai/upload/${data.filename}`);
+            showStatus('Image uploaded successfully', 'success');
+        } else {
+            showStatus('Failed to upload image', 'error');
+        }
+    } catch (e) {
+        showStatus('Upload error: ' + e.message, 'error');
+    }
+}
+
+function showInputFrame(url) {
+    const preview = document.getElementById('input-frame-preview');
+    preview.innerHTML = `<img src="${url}" alt="Input frame">`;
+    preview.classList.add('has-image');
+}
+
+// Generate Video
+async function generateVideo() {
+    if (isGenerating) return;
+    if (!inputImageFilename) {
+        showStatus('Please upload an input image first', 'error');
+        return;
+    }
+
+    const prompt = document.getElementById('prompt').value.trim();
+    if (!prompt) {
+        showStatus('Please enter a prompt', 'error');
+        return;
+    }
+
+    isGenerating = true;
+    setGeneratingState(true);
+
+    const params = {
+        prompt: prompt,
+        negative_prompt: document.getElementById('negative-prompt').value.trim() || undefined,
+        input_image: inputImageFilename,
+        video_model: document.getElementById('video-model').value,
+        width: parseInt(document.getElementById('width').value),
+        height: parseInt(document.getElementById('height').value),
+        frames: parseInt(document.getElementById('frames').value),
+        fps: parseInt(document.getElementById('fps').value),
+        steps: parseInt(document.getElementById('steps').value),
+        cfg_scale: parseFloat(document.getElementById('cfg-scale').value),
+        seed: parseInt(document.getElementById('seed').value),
+        crf: parseInt(document.getElementById('crf').value),
+    };
+
+    // Add model-specific params
+    const select = document.getElementById('video-model');
+    const modelType = select.options[select.selectedIndex]?.dataset.type || 'ltx';
+    const modelParams = VIDEO_MODEL_PARAMS[modelType]?.params || {};
+
+    for (const key of Object.keys(modelParams)) {
+        const el = document.getElementById(key);
+        if (el) {
+            params[key] = modelParams[key].type === 'select' ? el.value : parseFloat(el.value);
+        }
+    }
+
+    try {
+        showStatus('Generating video... This may take several minutes.', 'info');
+
+        const response = await fetch('/api/ai/generate-video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(params)
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            showStatus('Error: ' + data.error, 'error');
+        } else {
+            currentVideoId = data.id;
+            currentVideoUrl = data.video_url;
+
+            // Show video in preview
+            showVideo(data.video_url);
+
+            // Add to timeline
+            addSegmentToTimeline({
+                id: data.id,
+                prompt: params.prompt,
+                duration: params.frames / params.fps,
+                seed: data.seed,
+                video_url: data.video_url
+            });
+
+            // Update seed display if it was random
+            if (params.seed === -1) {
+                document.getElementById('seed').value = data.seed;
+            }
+
+            showStatus('Video generated successfully!', 'success');
+
+            // Enable continue button
+            document.getElementById('continue-btn').disabled = false;
+            document.getElementById('use-last-frame-btn').disabled = false;
+        }
+    } catch (e) {
+        showStatus('Error: ' + e.message, 'error');
+    } finally {
+        isGenerating = false;
+        setGeneratingState(false);
+    }
+}
+
+function setGeneratingState(generating) {
+    document.getElementById('generate-btn').disabled = generating;
+    document.getElementById('generate-btn').textContent = generating ? 'Generating...' : 'Generate Video';
+    document.getElementById('generating-indicator').classList.toggle('active', generating);
+}
+
+function showVideo(url) {
+    const placeholder = document.getElementById('preview-placeholder');
+    const video = document.getElementById('preview-video');
+
+    placeholder.style.display = 'none';
+    video.style.display = 'block';
+    video.src = url;
+
+    document.getElementById('download-btn').disabled = false;
+    document.getElementById('save-btn').disabled = false;
+}
+
+// Timeline Management
+function addSegmentToTimeline(segment) {
+    segments.push(segment);
+
+    const timeline = document.getElementById('sequence-timeline');
+    const emptyState = document.getElementById('empty-timeline');
+    emptyState.style.display = 'none';
+
+    const segmentEl = document.createElement('div');
+    segmentEl.className = 'segment-card';
+    segmentEl.dataset.id = segment.id;
+    segmentEl.onclick = () => selectSegment(segment.id);
+
+    segmentEl.innerHTML = `
+        <div class="segment-thumbnail">
+            <video src="${segment.video_url}" muted></video>
+        </div>
+        <div class="segment-info">
+            <span class="segment-number">#${segments.length}</span>
+            <span class="segment-duration">${segment.duration.toFixed(1)}s</span>
+        </div>
+    `;
+
+    timeline.appendChild(segmentEl);
+
+    updateSequenceStats();
+    updateStitchButton();
+}
+
+function selectSegment(id) {
+    document.querySelectorAll('.segment-card').forEach(el => {
+        el.classList.toggle('active', el.dataset.id === id);
+    });
+
+    const segment = segments.find(s => s.id === id);
+    if (segment) {
+        showVideo(segment.video_url);
+        currentVideoId = segment.id;
+        currentVideoUrl = segment.video_url;
+    }
+}
+
+function updateSequenceStats() {
+    const totalDuration = segments.reduce((sum, s) => sum + s.duration, 0);
+    document.getElementById('segment-count').textContent = segments.length;
+    document.getElementById('total-duration').textContent = totalDuration.toFixed(1) + 's';
+}
+
+function updateStitchButton() {
+    document.getElementById('stitch-btn').disabled = segments.length < 2;
+}
+
+// Continue From Last Frame
+async function continueFromLast() {
+    if (!currentVideoId) {
+        showStatus('No video to continue from', 'error');
+        return;
+    }
+
+    try {
+        showStatus('Extracting last frame...', 'info');
+
+        const response = await fetch('/api/ai/video/extract-frame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                video_id: currentVideoId,
+                position: 'last'
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            showStatus('Error: ' + data.error, 'error');
+        } else {
+            inputImageFilename = data.frame_filename;
+            showInputFrame(`/api/ai/upload/${data.frame_filename}`);
+            showStatus('Last frame extracted. Modify prompt and generate to continue.', 'success');
+
+            // Optionally increment seed for variety
+            const currentSeed = parseInt(document.getElementById('seed').value);
+            if (currentSeed > 0) {
+                document.getElementById('seed').value = currentSeed + 1;
+            }
+        }
+    } catch (e) {
+        showStatus('Error: ' + e.message, 'error');
+    }
+}
+
+async function useLastFrame() {
+    await continueFromLast();
+}
+
+// Stitch Videos
+async function stitchSequence() {
+    if (segments.length < 2) {
+        showStatus('Need at least 2 segments to stitch', 'error');
+        return;
+    }
+
+    try {
+        showStatus('Stitching videos...', 'info');
+        document.getElementById('stitch-btn').disabled = true;
+
+        const response = await fetch('/api/ai/video/stitch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                video_ids: segments.map(s => s.id),
+                crossfade_frames: 0
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            showStatus('Error: ' + data.error, 'error');
+        } else {
+            showVideo(data.video_url);
+            currentVideoUrl = data.video_url;
+            showStatus(`Stitched ${data.segment_count} segments (${data.duration.toFixed(1)}s total)`, 'success');
+        }
+    } catch (e) {
+        showStatus('Error: ' + e.message, 'error');
+    } finally {
+        document.getElementById('stitch-btn').disabled = false;
+    }
+}
+
+// Utility Functions
+function showStatus(message, type = 'info') {
+    const el = document.getElementById('status-message');
+    el.textContent = message;
+    el.className = `status-message ${type}`;
+    el.style.display = 'block';
+
+    if (type === 'success') {
+        setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+}
+
+function randomSeed() {
+    document.getElementById('seed').value = Math.floor(Math.random() * 2147483647);
+}
+
+function updateCrfHint() {
+    const crf = parseInt(document.getElementById('crf').value);
+    const hint = document.getElementById('crf-hint');
+    if (crf <= 15) {
+        hint.textContent = 'Best Quality (large file)';
+    } else if (crf <= 19) {
+        hint.textContent = 'High Quality';
+    } else if (crf <= 25) {
+        hint.textContent = 'Balanced';
+    } else if (crf <= 30) {
+        hint.textContent = 'Lower Quality';
+    } else {
+        hint.textContent = 'Smallest File';
+    }
+}
+
+function newSequence() {
+    if (segments.length > 0 && !confirm('Start a new sequence? Current timeline will be cleared.')) {
+        return;
+    }
+
+    segments = [];
+    currentSequenceId = null;
+    currentVideoId = null;
+    currentVideoUrl = null;
+
+    document.getElementById('sequence-timeline').innerHTML = `
+        <div class="empty-timeline" id="empty-timeline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+            </svg>
+            <p>No segments yet</p>
+            <p style="font-size: 0.8rem;">Generate your first video to start</p>
+        </div>
+    `;
+
+    document.getElementById('preview-placeholder').style.display = 'block';
+    document.getElementById('preview-video').style.display = 'none';
+
+    updateSequenceStats();
+    updateStitchButton();
+
+    document.getElementById('continue-btn').disabled = true;
+    document.getElementById('use-last-frame-btn').disabled = true;
+    document.getElementById('download-btn').disabled = true;
+    document.getElementById('save-btn').disabled = true;
+}
+
+async function downloadCurrentVideo() {
+    if (!currentVideoUrl) return;
+
+    const a = document.createElement('a');
+    a.href = currentVideoUrl;
+    a.download = `video_${currentVideoId || 'download'}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+async function saveToGallery() {
+    if (!currentVideoId) return;
+
+    try {
+        const response = await fetch('/api/ai/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: currentVideoId,
+                is_video: true,
+                params: {
+                    prompt: document.getElementById('prompt').value,
+                    model: document.getElementById('video-model').value,
+                    seed: parseInt(document.getElementById('seed').value),
+                    steps: parseInt(document.getElementById('steps').value),
+                    cfg_scale: parseFloat(document.getElementById('cfg-scale').value),
+                    width: parseInt(document.getElementById('width').value),
+                    height: parseInt(document.getElementById('height').value)
+                }
+            })
+        });
+
+        const data = await response.json();
+        if (data.saved) {
+            showStatus('Video saved to gallery!', 'success');
+        } else {
+            showStatus('Error saving video', 'error');
+        }
+    } catch (e) {
+        showStatus('Error: ' + e.message, 'error');
+    }
+}
+
+// ============ Model Tips Functions ============
+
+function toggleVideoModelTips() {
+    const panel = document.getElementById('video-model-tips-panel');
+    panel.classList.toggle('expanded');
+}
+
+function updateVideoModelTips() {
+    const modelSelect = document.getElementById('video-model');
+    const modelType = modelSelect.options[modelSelect.selectedIndex]?.dataset.type || 'ltx';
+    const tips = VIDEO_MODEL_TIPS[modelType];
+
+    if (!tips) {
+        document.getElementById('video-model-tips-content').innerHTML = '<p style="color: var(--text-muted);">No tips available for this model.</p>';
+        return;
+    }
+
+    let html = '';
+
+    // Type
+    html += `<div class="tip-row"><span class="tip-label">Type:</span><span class="tip-value">${tips.type}</span></div>`;
+
+    // Optimal settings
+    html += `<div class="tip-row"><span class="tip-label">Optimal CFG:</span><span class="tip-value">${tips.optimal_cfg}</span></div>`;
+    html += `<div class="tip-row"><span class="tip-label">Steps:</span><span class="tip-value">${tips.optimal_steps}</span></div>`;
+    html += `<div class="tip-row"><span class="tip-label">Resolution:</span><span class="tip-value">${tips.optimal_resolution}</span></div>`;
+    html += `<div class="tip-row"><span class="tip-label">Frames:</span><span class="tip-value">${tips.frame_formula}</span></div>`;
+
+    // Negative prompt support
+    const negSupport = tips.negative_supported
+        ? '<span style="color: #22c55e;">Supported</span>'
+        : '<span style="color: var(--text-muted);">Not supported by this model</span>';
+    html += `<div class="tip-row"><span class="tip-label">Neg Prompt:</span><span class="tip-value">${negSupport}</span></div>`;
+
+    // Tips list
+    if (tips.tips && tips.tips.length > 0) {
+        html += '<div style="margin-top: 12px;"><strong style="font-size: 0.85rem;">Tips:</strong><ul class="tip-list">';
+        tips.tips.forEach(tip => {
+            html += `<li>${tip}</li>`;
+        });
+        html += '</ul></div>';
+    }
+
+    // Buttons
+    html += '<div class="tip-buttons">';
+
+    // Example prompt button
+    if (tips.example_prompt) {
+        html += `<button class="tip-btn" onclick="useExamplePrompt()">Use Example Prompt</button>`;
+    }
+
+    // Recommended negative button
+    if (tips.negative_supported && tips.recommended_negative) {
+        html += `<button class="tip-btn" onclick="useRecommendedNegative()">Use Recommended Negative</button>`;
+    } else if (!tips.negative_supported) {
+        html += `<button class="tip-btn" disabled title="This model doesn't support negative prompts">Negative Not Supported</button>`;
+    }
+
+    html += '</div>';
+
+    document.getElementById('video-model-tips-content').innerHTML = html;
+}
+
+function useExamplePrompt() {
+    const modelSelect = document.getElementById('video-model');
+    const modelType = modelSelect.options[modelSelect.selectedIndex]?.dataset.type || 'ltx';
+    const tips = VIDEO_MODEL_TIPS[modelType];
+
+    if (tips && tips.example_prompt) {
+        document.getElementById('prompt').value = tips.example_prompt;
+        showStatus('Example prompt loaded!', 'success');
+    }
+}
+
+function useRecommendedNegative() {
+    const modelSelect = document.getElementById('video-model');
+    const modelType = modelSelect.options[modelSelect.selectedIndex]?.dataset.type || 'ltx';
+    const tips = VIDEO_MODEL_TIPS[modelType];
+
+    if (tips && tips.recommended_negative) {
+        document.getElementById('negative-prompt').value = tips.recommended_negative;
+        showStatus('Recommended negative prompt loaded!', 'success');
+    }
+}
+
+function updateNegativePromptState() {
+    const modelSelect = document.getElementById('video-model');
+    const modelType = modelSelect.options[modelSelect.selectedIndex]?.dataset.type || 'ltx';
+    const tips = VIDEO_MODEL_TIPS[modelType];
+    const negGroup = document.getElementById('negative-prompt').closest('.form-group');
+    const negField = document.getElementById('negative-prompt');
+    const negLabel = negGroup.querySelector('.form-label');
+
+    if (tips && !tips.negative_supported) {
+        negGroup.classList.add('negative-unsupported');
+        negField.disabled = true;
+        negLabel.innerHTML = `
+            <span>Negative Prompt</span>
+            <span class="badge-muted">Not supported</span>
+        `;
+    } else {
+        negGroup.classList.remove('negative-unsupported');
+        negField.disabled = false;
+        negLabel.innerHTML = `
+            <span>Negative Prompt</span>
+            <span class="form-hint">(optional)</span>
+        `;
+    }
+}
+
+// ============ Continuation Guide Modal ============
+
+function showContinuationGuide() {
+    document.getElementById('continuation-modal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeContinuationGuide(event) {
+    // If event is passed and it's the overlay click, close
+    // If no event (button click), always close
+    if (!event || event.target.id === 'continuation-modal') {
+        document.getElementById('continuation-modal').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+// Close modal on escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeContinuationGuide();
+    }
+});
+</script>
+{% endblock %}
