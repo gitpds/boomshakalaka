@@ -192,17 +192,19 @@
 }
 
 /* Terminal Content - Single iframe */
+/* Terminal always uses dark theme (#060a14) for best readability */
 .terminal-content {
     flex: 1;
     position: relative;
     overflow: hidden;
+    background: #060a14;
 }
 
 .terminal-content iframe {
     width: 100%;
     height: 100%;
     border: none;
-    background: var(--bg-primary);
+    background: #060a14;
 }
 
 /* Context Menu */
@@ -337,103 +339,22 @@ const TerminalManager = {
     activeWindowId: null,
     contextWindowId: null,
 
-    getTtydUrl() {
+    getTerminalUrl() {
+        // Direct connection to ttyd
         const host = window.location.hostname;
         return `http://${host}:7681`;
-    },
-
-    // Theme colors for terminal - must match dashboard CSS variables
-    themes: {
-        dark: {
-            background: '#060a14',
-            foreground: '#ffffff',
-            cursor: '#ff8c00',
-            selection: 'rgba(255,140,0,0.3)'
-        },
-        light: {
-            background: '#faf8f5',
-            foreground: '#1a1a1a',
-            cursor: '#d97706',
-            selection: 'rgba(217,119,6,0.3)'
-        }
     },
 
     async init() {
         // Load existing windows from backend
         await this.loadWindows();
 
-        // If no windows exist, the first one will be created by tmux/ttyd automatically
-        // Just need to load the iframe
+        // Load ttyd directly
         const iframe = document.getElementById('terminal-iframe');
-        iframe.src = this.getTtydUrl();
-
-        // Inject theme when iframe loads
-        iframe.addEventListener('load', () => this.applyThemeToTerminal());
-
-        // Listen for theme changes
-        this.observeThemeChanges();
+        iframe.src = this.getTerminalUrl();
 
         this.setupKeyboardShortcuts();
         this.setupContextMenu();
-    },
-
-    getCurrentTheme() {
-        return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-    },
-
-    applyThemeToTerminal() {
-        const iframe = document.getElementById('terminal-iframe');
-        if (!iframe || !iframe.contentDocument) return;
-
-        try {
-            const theme = this.themes[this.getCurrentTheme()];
-            const doc = iframe.contentDocument;
-
-            // Find or create style element
-            let style = doc.getElementById('dashboard-theme');
-            if (!style) {
-                style = doc.createElement('style');
-                style.id = 'dashboard-theme';
-                doc.head.appendChild(style);
-            }
-
-            // Override xterm.js terminal colors
-            style.textContent = `
-                .xterm-viewport, .xterm-screen {
-                    background-color: ${theme.background} !important;
-                }
-                .xterm {
-                    background-color: ${theme.background} !important;
-                }
-                body {
-                    background-color: ${theme.background} !important;
-                }
-            `;
-
-            // Also try to access xterm instance if available
-            if (iframe.contentWindow && iframe.contentWindow.term) {
-                iframe.contentWindow.term.options.theme = {
-                    background: theme.background,
-                    foreground: theme.foreground,
-                    cursor: theme.cursor,
-                    selectionBackground: theme.selection
-                };
-            }
-        } catch (e) {
-            console.log('Could not inject theme into terminal:', e.message);
-        }
-    },
-
-    observeThemeChanges() {
-        // Watch for changes to data-theme attribute
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.attributeName === 'data-theme') {
-                    this.applyThemeToTerminal();
-                }
-            });
-        });
-        observer.observe(document.documentElement, { attributes: true });
     },
 
     async loadWindows() {
