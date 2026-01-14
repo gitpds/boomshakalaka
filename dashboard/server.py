@@ -32,6 +32,34 @@ except ImportError:
     THEME_GENERATOR_AVAILABLE = False
     DEFAULT_THEME = None
 
+# Video model parameters for AI Studio Video generation
+try:
+    from dashboard.video_model_params import (
+        VIDEO_MODEL_PARAMS, get_model_type, get_model_params,
+        get_default_negative_prompt, get_param_defaults, validate_frames,
+        get_all_model_params_json
+    )
+    VIDEO_PARAMS_AVAILABLE = True
+except ImportError:
+    try:
+        # Fallback for when running directly from dashboard directory
+        from video_model_params import (
+            VIDEO_MODEL_PARAMS, get_model_type, get_model_params,
+            get_default_negative_prompt, get_param_defaults, validate_frames,
+            get_all_model_params_json
+        )
+        VIDEO_PARAMS_AVAILABLE = True
+    except ImportError:
+        VIDEO_PARAMS_AVAILABLE = False
+        VIDEO_MODEL_PARAMS = {}
+
+# Video utilities for FFmpeg operations (frame extraction, stitching)
+try:
+    from dashboard.video_utils import get_video_utils, VideoUtils
+    VIDEO_UTILS_AVAILABLE = True
+except ImportError:
+    VIDEO_UTILS_AVAILABLE = False
+
 # Setup logging for AI Studio debugging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -1221,6 +1249,60 @@ MODEL_TIPS = {
 }
 
 
+# Video model tips for Video Studio
+VIDEO_MODEL_TIPS = {
+    'ltx': {
+        'type': 'Image-to-Video (Fast)',
+        'optimal_cfg': '3.0-4.5',
+        'optimal_steps': '20-30',
+        'optimal_resolution': '768x768, 512x768',
+        'frame_formula': '8n+1 (25, 49, 81, 121)',
+        'negative_supported': True,
+        'tips': [
+            'Higher strength (0.9) = faithful to input, less motion',
+            'Lower strength (0.6) = more creative motion',
+            'Best for quick iterations and general use',
+            'Sampler: euler is fastest, dpmpp variants may produce smoother motion',
+            'Video Quality (CRF): 15-19 for high quality, higher for smaller files',
+        ],
+        'recommended_negative': 'worst quality, inconsistent motion, blurry, jittery, distorted, watermarks, text',
+        'example_prompt': 'Gentle camera pan across scene, soft ambient motion, cinematic lighting',
+    },
+    'wan': {
+        'type': 'Image-to-Video (Motion Control)',
+        'optimal_cfg': '4.0-6.0',
+        'optimal_steps': '25-35',
+        'optimal_resolution': '768x768, 832x480',
+        'frame_formula': '4n+1 (17, 25, 49, 81, 121)',
+        'negative_supported': False,
+        'tips': [
+            'motion_strength is the key parameter - directly controls movement',
+            'Shift: higher values = more dramatic motion (default 5.0)',
+            'Scheduler: unipc is fastest, euler most stable, ddim for different look',
+            'Video Quality (CRF): 15-19 for high quality, higher for smaller files',
+        ],
+        'recommended_negative': None,
+        'example_prompt': 'Woman turns head slowly, hair flowing gently, soft smile emerging',
+    },
+    'hunyuan': {
+        'type': 'Image-to-Video (High Quality)',
+        'optimal_cfg': '6.0-8.0',
+        'optimal_steps': '30-40',
+        'optimal_resolution': '720x720, 720x480',
+        'frame_formula': '4n+1 (17, 25, 49, 81, 121)',
+        'negative_supported': False,
+        'tips': [
+            'embedded_cfg_scale balances quality vs creativity',
+            'Higher values = sharper but potentially less natural',
+            'Requires more VRAM than other models',
+            'Video Quality (CRF): 15-19 for high quality, higher for smaller files',
+        ],
+        'recommended_negative': None,
+        'example_prompt': 'Cinematic slow zoom into portrait, dramatic lighting shifts subtly',
+    },
+}
+
+
 def get_model_tips(model_filename: str) -> dict:
     """Get tips for a specific model based on filename matching."""
     model_lower = model_filename.lower()
@@ -1325,6 +1407,79 @@ def init_generations_db():
     conn.execute('CREATE INDEX IF NOT EXISTS idx_created_at ON generations(created_at)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_model ON generations(model)')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_favorite ON generations(favorite)')
+
+    # Video sequences table - for managing multi-segment video projects
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS video_sequences (
+            id TEXT PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            -- Sequence metadata
+            name TEXT DEFAULT 'Untitled Sequence',
+            description TEXT DEFAULT '',
+
+            -- Base generation parameters (inherited by segments)
+            base_prompt TEXT,
+            base_negative_prompt TEXT,
+            base_seed INTEGER,
+            video_model TEXT,
+            width INTEGER DEFAULT 768,
+            height INTEGER DEFAULT 768,
+            fps INTEGER DEFAULT 24,
+
+            -- Output
+            stitched_video_path TEXT,
+            total_duration REAL,
+            total_frames INTEGER,
+
+            -- Status
+            status TEXT DEFAULT 'draft'
+        )
+    ''')
+
+    # Video segments table - individual video clips within a sequence
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS video_segments (
+            id TEXT PRIMARY KEY,
+            sequence_id TEXT,
+            segment_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+            -- Generation parameters
+            prompt TEXT NOT NULL,
+            negative_prompt TEXT DEFAULT '',
+            seed INTEGER,
+            steps INTEGER DEFAULT 25,
+            cfg_scale REAL DEFAULT 7.0,
+            frames INTEGER DEFAULT 49,
+
+            -- Model-specific parameters (JSON)
+            model_params TEXT,
+
+            -- Continuation tracking
+            source_segment_id TEXT,
+            input_image_path TEXT,
+
+            -- Output files
+            video_path TEXT,
+            first_frame_path TEXT,
+            last_frame_path TEXT,
+            thumbnail_path TEXT,
+            duration REAL,
+
+            -- Status
+            status TEXT DEFAULT 'pending',
+            error_message TEXT,
+
+            FOREIGN KEY (sequence_id) REFERENCES video_sequences(id),
+            FOREIGN KEY (source_segment_id) REFERENCES video_segments(id)
+        )
+    ''')
+
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_segment_sequence ON video_segments(sequence_id, segment_order)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_segment_status ON video_segments(status)')
+
     conn.commit()
     conn.close()
 
@@ -1608,6 +1763,29 @@ def ai_generate():
                          **get_common_context())
 
 
+@app.route('/ai/video')
+def ai_video():
+    """Video Studio - dedicated video generation and stitching interface"""
+    comfy_status = check_comfy_status()
+    video_models = get_available_video_models()
+
+    # Add display names and types for the UI
+    for model in video_models:
+        model_type = get_model_type(model['filename']) if VIDEO_PARAMS_AVAILABLE else 'ltx'
+        model['type'] = model_type
+        model_params = VIDEO_MODEL_PARAMS.get(model_type, {}) if VIDEO_PARAMS_AVAILABLE else {}
+        model['display_name'] = model_params.get('display_name', model['filename'])
+
+    return render_template('ai_video.html',
+                         active_page='ai_video',
+                         active_category='ai',
+                         comfy_status=comfy_status,
+                         video_models=video_models,
+                         video_model_params=VIDEO_MODEL_PARAMS if VIDEO_PARAMS_AVAILABLE else {},
+                         video_model_tips=VIDEO_MODEL_TIPS,
+                         **get_common_context())
+
+
 @app.route('/ai/saved')
 def ai_saved():
     """AI Saved generations browser"""
@@ -1809,6 +1987,7 @@ def api_ai_generate():
         cfg_scale = float(params.get('cfg_scale', 7.0))
         sampler = params.get('sampler', 'euler')
         loras = params.get('loras', [])  # List of {filename, strength} dicts
+        batch_size = max(1, min(20, int(params.get('batch_size', 1))))  # Clamp to 1-20
 
         # img2img parameters
         input_image = params.get('input_image')  # Filename of uploaded image
@@ -1827,7 +2006,7 @@ def api_ai_generate():
 
         # Build ComfyUI workflow based on mode
         if input_image:
-            # img2img mode
+            # img2img mode - batch_size not applicable (single input image)
             workflow = build_img2img_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -1840,8 +2019,9 @@ def api_ai_generate():
                 sampler=sampler,
                 loras=loras,
             )
+            actual_batch_size = 1  # img2img is single image
         else:
-            # txt2img mode
+            # txt2img mode - supports batch generation
             workflow = build_txt2img_workflow(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -1853,10 +2033,12 @@ def api_ai_generate():
                 cfg_scale=cfg_scale,
                 sampler=sampler,
                 loras=loras,
+                batch_size=batch_size,
             )
+            actual_batch_size = batch_size
 
         # Send to ComfyUI
-        result = send_to_comfyui(workflow, gen_id)
+        result = send_to_comfyui(workflow, gen_id, actual_batch_size)
 
         if result.get('error'):
             return jsonify({'error': result['error']}), 500
@@ -1864,12 +2046,15 @@ def api_ai_generate():
         # NOTE: We do NOT auto-save to database. User must explicitly click "Save to Gallery".
         # This keeps generation history opt-in only, per user privacy preference.
 
+        # Return images array (for batch support) along with params
+        images = result.get('images', [])
         return jsonify({
-            'id': gen_id,
-            'image_url': f'/api/ai/image/{gen_id}',
+            'images': images,
             'seed': seed,
+            'batch_size': actual_batch_size,
             'params': {
                 'prompt': prompt,
+                'negative_prompt': negative_prompt,
                 'model': model,
                 'width': width,
                 'height': height,
@@ -1954,22 +2139,64 @@ def api_ai_save():
     """
     Explicitly save a generation to the gallery.
     Only called when user clicks 'Save to Gallery'.
+    Supports both images and videos.
     """
     try:
         data = request.get_json()
         gen_id = data.get('id')
         params = data.get('params', {})
+        is_video = data.get('is_video', False)
 
         if not gen_id:
             return jsonify({'error': 'Generation ID required'}), 400
 
-        # Check if image file exists
-        image_path = GENERATIONS_DIR / f'{gen_id}.png'
-        if not image_path.exists():
-            return jsonify({'error': 'Image file not found'}), 404
+        output_path_str = None
+        thumbnail_path_str = None
 
-        # Save to database with thumbnail_path set
-        output_path_str = str(image_path)
+        if is_video:
+            # Check for video file in ComfyUI output directory
+            output_dir = COMFY_DIR / 'output'
+            video_path = None
+            for ext in ['.mp4', '.webm', '.gif']:
+                pattern = f'boomshakalaka_video_{gen_id}*{ext}'
+                matches = list(output_dir.glob(pattern))
+                if matches:
+                    video_path = matches[0]
+                    break
+
+            if not video_path:
+                # Try most recent video as fallback
+                for ext in ['.mp4', '.webm']:
+                    recent = list(output_dir.glob(f'*{ext}'))
+                    if recent:
+                        recent.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                        video_path = recent[0]
+                        break
+
+            if not video_path:
+                return jsonify({'error': 'Video file not found'}), 404
+
+            output_path_str = str(video_path)
+            # For videos, we don't have a thumbnail - use the video path
+            # The gallery will need to handle video previews differently
+            thumbnail_path_str = output_path_str
+        else:
+            # Check if image file exists
+            image_path = GENERATIONS_DIR / f'{gen_id}.png'
+            if not image_path.exists():
+                # Also check for batch images (gen_id_0, gen_id_1, etc.)
+                for ext in ['.png', '.jpg', '.jpeg']:
+                    test_path = GENERATIONS_DIR / f'{gen_id}{ext}'
+                    if test_path.exists():
+                        image_path = test_path
+                        break
+                else:
+                    return jsonify({'error': 'Image file not found'}), 404
+
+            output_path_str = str(image_path)
+            thumbnail_path_str = output_path_str
+
+        # Save to database
         save_generation(
             gen_id=gen_id,
             prompt=params.get('prompt', ''),
@@ -1982,11 +2209,11 @@ def api_ai_save():
             cfg_scale=params.get('cfg_scale', 7.0),
             sampler=params.get('sampler', 'euler'),
             output_path=output_path_str,
-            thumbnail_path=output_path_str,  # Set thumbnail_path for gallery preview
+            thumbnail_path=thumbnail_path_str,
             workflow_json=json.dumps(params.get('workflow', {})),
         )
 
-        return jsonify({'saved': True, 'id': gen_id})
+        return jsonify({'saved': True, 'id': gen_id, 'is_video': is_video})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2007,6 +2234,46 @@ def api_ai_generation(gen_id):
         if row:
             return jsonify(dict(row))
         return jsonify({'error': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/generation/<gen_id>', methods=['DELETE'])
+def api_ai_delete_generation(gen_id):
+    """Delete a saved generation from the database and optionally its files."""
+    import sqlite3
+
+    db_path = DATABASES_DIR / 'generations.db'
+    try:
+        # Get the generation info first
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute('SELECT output_path, thumbnail_path FROM generations WHERE id = ?', (gen_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Generation not found'}), 404
+
+        # Delete from database
+        conn.execute('DELETE FROM generations WHERE id = ?', (gen_id,))
+        conn.commit()
+        conn.close()
+
+        # Optionally delete the image files
+        delete_files = request.args.get('delete_files', 'false').lower() == 'true'
+        if delete_files:
+            if row['output_path']:
+                output_path = Path(row['output_path'])
+                if output_path.exists():
+                    output_path.unlink()
+            if row['thumbnail_path'] and row['thumbnail_path'] != row['output_path']:
+                thumb_path = Path(row['thumbnail_path'])
+                if thumb_path.exists():
+                    thumb_path.unlink()
+
+        return jsonify({'deleted': True, 'id': gen_id})
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -2066,6 +2333,34 @@ def api_ai_generate_video():
         cfg_scale = float(params.get('cfg_scale', 7.0))
         motion_strength = float(params.get('motion_strength', 0.7))
 
+        # Model-specific optional parameters
+        negative_prompt = params.get('negative_prompt')  # Common to all models
+        # LTX-specific
+        strength = params.get('strength')
+        if strength is not None:
+            strength = float(strength)
+        max_shift = params.get('max_shift')
+        if max_shift is not None:
+            max_shift = float(max_shift)
+        base_shift = params.get('base_shift')
+        if base_shift is not None:
+            base_shift = float(base_shift)
+        # Wan-specific
+        shift = params.get('shift')
+        if shift is not None:
+            shift = float(shift)
+        scheduler = params.get('scheduler')  # unipc, euler, ddim
+        # Hunyuan-specific
+        embedded_cfg_scale = params.get('embedded_cfg_scale')
+        if embedded_cfg_scale is not None:
+            embedded_cfg_scale = float(embedded_cfg_scale)
+        # LTX sampler selection
+        sampler = params.get('sampler')  # euler, dpmpp_2m, etc.
+        # Common encoding params
+        crf = params.get('crf')
+        if crf is not None:
+            crf = int(crf)
+
         # If seed is -1, generate a random one
         if seed == -1:
             import random
@@ -2073,7 +2368,7 @@ def api_ai_generate_video():
 
         logger.info(f"Video model: {video_model}")
         logger.info(f"Dimensions: {width}x{height}, frames: {frames}, fps: {fps}")
-        logger.info(f"Seed: {seed}, steps: {steps}, cfg: {cfg_scale}")
+        logger.info(f"Seed: {seed}, steps: {steps}, cfg: {cfg_scale}, motion: {motion_strength}")
 
         # Determine model type
         if 'ltx' in video_model.lower():
@@ -2102,13 +2397,24 @@ def api_ai_generate_video():
             cfg_scale=cfg_scale,
             motion_strength=motion_strength,
             gen_id=gen_id,
+            # Model-specific params
+            negative_prompt=negative_prompt,
+            fps=fps,
+            strength=strength,              # LTX
+            max_shift=max_shift,            # LTX
+            base_shift=base_shift,          # LTX
+            sampler=sampler,                # LTX
+            shift=shift,                    # Wan
+            scheduler=scheduler,            # Wan
+            embedded_cfg_scale=embedded_cfg_scale,  # Hunyuan
+            crf=crf,                        # All (encoding quality)
         )
         logger.info(f"Workflow built with {len(workflow)} nodes")
         logger.debug(f"Workflow nodes: {list(workflow.keys())}")
 
-        # Send to ComfyUI
-        logger.info("Sending workflow to ComfyUI...")
-        result = send_to_comfyui(workflow, gen_id)
+        # Send to ComfyUI with extended timeout for video (30 minutes)
+        logger.info("Sending workflow to ComfyUI (30 min timeout for video)...")
+        result = send_to_comfyui(workflow, gen_id, batch_size=1, max_wait=1800)
         logger.info(f"ComfyUI result: {result}")
 
         if result.get('error'):
@@ -2177,9 +2483,28 @@ def api_ai_generate_video():
 @app.route('/api/ai/video/<gen_id>')
 def api_ai_video(gen_id):
     """Serve a generated video file."""
+    # First, check database for saved video with output_path
+    db_path = DATABASES_DIR / 'generations.db'
+    if db_path.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('SELECT output_path FROM generations WHERE id = ?', (gen_id,))
+            row = cursor.fetchone()
+            conn.close()
+            if row and row['output_path']:
+                video_path = Path(row['output_path'])
+                if video_path.exists():
+                    ext = video_path.suffix.lower()
+                    mimetype = 'video/mp4' if ext == '.mp4' else 'video/webm' if ext == '.webm' else 'image/gif'
+                    return send_file(str(video_path), mimetype=mimetype)
+        except Exception as e:
+            logger.error(f"Error checking database for video: {e}")
+
     output_dir = COMFY_DIR / 'output'
 
-    # Find the video file
+    # Find the video file by pattern
     for ext in ['.mp4', '.webm', '.gif']:
         pattern = f'boomshakalaka_video_{gen_id}*{ext}'
         matches = list(output_dir.glob(pattern))
@@ -2194,6 +2519,376 @@ def api_ai_video(gen_id):
             return send_file(recent[0], mimetype=f'video/{ext[1:]}')
 
     return jsonify({'error': 'Video not found'}), 404
+
+
+# ============================================================================
+# VIDEO STUDIO API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/ai/video/model-params')
+def api_ai_video_model_params():
+    """Get all video model parameters for frontend rendering."""
+    return jsonify({
+        'available': VIDEO_PARAMS_AVAILABLE,
+        'models': get_all_model_params_json() if VIDEO_PARAMS_AVAILABLE else {}
+    })
+
+
+@app.route('/api/ai/video/extract-frame', methods=['POST'])
+def api_ai_video_extract_frame():
+    """Extract first or last frame from a video file.
+
+    Used for video continuation - extract last frame to use as input for next segment.
+
+    Request JSON:
+        video_path: Path to video file (relative to ComfyUI output or absolute)
+        video_id: Alternatively, video generation ID to look up
+        position: 'first' or 'last' (default: 'last')
+        output_name: Optional output filename (default: auto-generated)
+    """
+    if not VIDEO_UTILS_AVAILABLE:
+        return jsonify({'error': 'Video utils not available. FFmpeg may not be installed.'}), 503
+
+    try:
+        params = request.get_json()
+        video_path = params.get('video_path')
+        video_id = params.get('video_id')
+        position = params.get('position', 'last')
+        output_name = params.get('output_name')
+
+        # Find video file
+        if video_path:
+            video_file = Path(video_path)
+            if not video_file.is_absolute():
+                video_file = COMFY_DIR / 'output' / video_path
+        elif video_id:
+            # Look up video by generation ID
+            output_dir = COMFY_DIR / 'output'
+            video_file = None
+            for ext in ['.mp4', '.webm', '.gif']:
+                matches = list(output_dir.glob(f'*{video_id}*{ext}'))
+                if matches:
+                    video_file = matches[0]
+                    break
+            if not video_file:
+                return jsonify({'error': f'Video not found for ID: {video_id}'}), 404
+        else:
+            return jsonify({'error': 'Either video_path or video_id is required'}), 400
+
+        if not video_file.exists():
+            return jsonify({'error': f'Video file not found: {video_file}'}), 404
+
+        # Generate output filename
+        if not output_name:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_name = f'frame_{position}_{timestamp}.png'
+
+        # Output to ComfyUI input directory for immediate use
+        output_path = COMFY_DIR / 'input' / output_name
+
+        # Extract frame
+        video_utils = get_video_utils()
+        if position == 'first':
+            result_path = video_utils.extract_first_frame(video_file, output_path)
+        else:
+            result_path = video_utils.extract_last_frame(video_file, output_path)
+
+        logger.info(f"Extracted {position} frame from {video_file} to {result_path}")
+
+        return jsonify({
+            'success': True,
+            'frame_path': str(result_path),
+            'frame_filename': result_path.name,
+            'source_video': str(video_file),
+            'position': position
+        })
+
+    except Exception as e:
+        logger.error(f"Error extracting frame: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/video/info', methods=['POST'])
+def api_ai_video_info():
+    """Get video metadata (duration, dimensions, fps, frame count)."""
+    if not VIDEO_UTILS_AVAILABLE:
+        return jsonify({'error': 'Video utils not available'}), 503
+
+    try:
+        params = request.get_json()
+        video_path = params.get('video_path')
+        video_id = params.get('video_id')
+
+        # Find video file
+        if video_path:
+            video_file = Path(video_path)
+            if not video_file.is_absolute():
+                video_file = COMFY_DIR / 'output' / video_path
+        elif video_id:
+            output_dir = COMFY_DIR / 'output'
+            video_file = None
+            for ext in ['.mp4', '.webm']:
+                matches = list(output_dir.glob(f'*{video_id}*{ext}'))
+                if matches:
+                    video_file = matches[0]
+                    break
+            if not video_file:
+                return jsonify({'error': f'Video not found for ID: {video_id}'}), 404
+        else:
+            return jsonify({'error': 'Either video_path or video_id is required'}), 400
+
+        if not video_file.exists():
+            return jsonify({'error': f'Video file not found: {video_file}'}), 404
+
+        video_utils = get_video_utils()
+        info = video_utils.get_video_info(video_file)
+        info['video_path'] = str(video_file)
+
+        return jsonify(info)
+
+    except Exception as e:
+        logger.error(f"Error getting video info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/video/stitch', methods=['POST'])
+def api_ai_video_stitch():
+    """Concatenate multiple video segments into a single video.
+
+    Request JSON:
+        video_paths: List of video paths (relative to ComfyUI output or absolute)
+        video_ids: Alternatively, list of generation IDs
+        output_name: Optional output filename
+        crossfade_frames: Number of frames for crossfade transition (0 = hard cut)
+    """
+    if not VIDEO_UTILS_AVAILABLE:
+        return jsonify({'error': 'Video utils not available'}), 503
+
+    try:
+        params = request.get_json()
+        video_paths = params.get('video_paths', [])
+        video_ids = params.get('video_ids', [])
+        output_name = params.get('output_name')
+        crossfade_frames = int(params.get('crossfade_frames', 0))
+
+        # Resolve video files
+        video_files = []
+        output_dir = COMFY_DIR / 'output'
+
+        if video_paths:
+            for vp in video_paths:
+                video_file = Path(vp)
+                if not video_file.is_absolute():
+                    video_file = output_dir / vp
+                if not video_file.exists():
+                    return jsonify({'error': f'Video not found: {vp}'}), 404
+                video_files.append(video_file)
+        elif video_ids:
+            for vid in video_ids:
+                found = False
+                for ext in ['.mp4', '.webm']:
+                    matches = list(output_dir.glob(f'*{vid}*{ext}'))
+                    if matches:
+                        video_files.append(matches[0])
+                        found = True
+                        break
+                if not found:
+                    return jsonify({'error': f'Video not found for ID: {vid}'}), 404
+        else:
+            return jsonify({'error': 'Either video_paths or video_ids is required'}), 400
+
+        if len(video_files) < 2:
+            return jsonify({'error': 'At least 2 videos required for stitching'}), 400
+
+        # Generate output filename
+        if not output_name:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_name = f'stitched_{timestamp}.mp4'
+
+        output_path = output_dir / output_name
+
+        # Stitch videos
+        video_utils = get_video_utils()
+        result_path = video_utils.concatenate_videos(
+            video_files, output_path, crossfade_frames=crossfade_frames
+        )
+
+        # Get info about result
+        result_info = video_utils.get_video_info(result_path)
+
+        logger.info(f"Stitched {len(video_files)} videos into {result_path}")
+
+        return jsonify({
+            'success': True,
+            'output_path': str(result_path),
+            'output_filename': result_path.name,
+            'segment_count': len(video_files),
+            'crossfade_frames': crossfade_frames,
+            'duration': result_info['duration'],
+            'video_url': f'/api/ai/video/{result_path.stem}'
+        })
+
+    except Exception as e:
+        logger.error(f"Error stitching videos: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/video/sequence', methods=['POST'])
+def api_ai_video_sequence_create():
+    """Create a new video sequence for multi-segment video generation."""
+    try:
+        params = request.get_json()
+
+        sequence_id = str(uuid.uuid4())[:12]
+        name = params.get('name', 'Untitled Sequence')
+        base_prompt = params.get('base_prompt', '')
+        video_model = params.get('video_model', 'ltxv-13b-0.9.8-distilled-fp8.safetensors')
+        width = int(params.get('width', 768))
+        height = int(params.get('height', 768))
+        fps = int(params.get('fps', 24))
+
+        db_path = DATABASES_DIR / 'generations.db'
+        conn = sqlite3.connect(str(db_path))
+        conn.execute('''
+            INSERT INTO video_sequences (id, name, base_prompt, video_model, width, height, fps, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'draft')
+        ''', (sequence_id, name, base_prompt, video_model, width, height, fps))
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Created video sequence: {sequence_id}")
+
+        return jsonify({
+            'success': True,
+            'id': sequence_id,
+            'name': name,
+            'video_model': video_model,
+            'width': width,
+            'height': height,
+            'fps': fps
+        })
+
+    except Exception as e:
+        logger.error(f"Error creating sequence: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/video/sequence/<sequence_id>', methods=['GET'])
+def api_ai_video_sequence_get(sequence_id):
+    """Get a video sequence and its segments."""
+    try:
+        db_path = DATABASES_DIR / 'generations.db'
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+
+        # Get sequence
+        cursor = conn.execute('SELECT * FROM video_sequences WHERE id = ?', (sequence_id,))
+        sequence = cursor.fetchone()
+        if not sequence:
+            conn.close()
+            return jsonify({'error': 'Sequence not found'}), 404
+
+        # Get segments
+        cursor = conn.execute('''
+            SELECT * FROM video_segments
+            WHERE sequence_id = ?
+            ORDER BY segment_order
+        ''', (sequence_id,))
+        segments = [dict(row) for row in cursor.fetchall()]
+
+        conn.close()
+
+        return jsonify({
+            'sequence': dict(sequence),
+            'segments': segments
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting sequence: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/video/sequence/<sequence_id>/segment', methods=['POST'])
+def api_ai_video_sequence_add_segment(sequence_id):
+    """Add a segment to a video sequence.
+
+    This records the segment metadata. The actual video generation
+    should be done via /api/ai/generate-video with sequence_id parameter.
+    """
+    try:
+        params = request.get_json()
+
+        segment_id = str(uuid.uuid4())[:12]
+        prompt = params.get('prompt', '')
+        seed = params.get('seed')
+        video_path = params.get('video_path')
+        last_frame_path = params.get('last_frame_path')
+        duration = params.get('duration')
+
+        db_path = DATABASES_DIR / 'generations.db'
+        conn = sqlite3.connect(str(db_path))
+
+        # Get next segment order
+        cursor = conn.execute('''
+            SELECT COALESCE(MAX(segment_order), -1) + 1 as next_order
+            FROM video_segments WHERE sequence_id = ?
+        ''', (sequence_id,))
+        next_order = cursor.fetchone()[0]
+
+        # Insert segment
+        conn.execute('''
+            INSERT INTO video_segments (id, sequence_id, segment_order, prompt, seed, video_path, last_frame_path, duration, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed')
+        ''', (segment_id, sequence_id, next_order, prompt, seed, video_path, last_frame_path, duration))
+
+        # Update sequence total duration
+        cursor = conn.execute('''
+            SELECT COALESCE(SUM(duration), 0) as total FROM video_segments WHERE sequence_id = ?
+        ''', (sequence_id,))
+        total_duration = cursor.fetchone()[0]
+        conn.execute('UPDATE video_sequences SET total_duration = ? WHERE id = ?', (total_duration, sequence_id))
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Added segment {segment_id} to sequence {sequence_id}")
+
+        return jsonify({
+            'success': True,
+            'segment_id': segment_id,
+            'segment_order': next_order,
+            'total_duration': total_duration
+        })
+
+    except Exception as e:
+        logger.error(f"Error adding segment: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/video/sequences', methods=['GET'])
+def api_ai_video_sequences_list():
+    """List all video sequences."""
+    try:
+        db_path = DATABASES_DIR / 'generations.db'
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+
+        cursor = conn.execute('''
+            SELECT vs.*, COUNT(seg.id) as segment_count
+            FROM video_sequences vs
+            LEFT JOIN video_segments seg ON vs.id = seg.sequence_id
+            GROUP BY vs.id
+            ORDER BY vs.created_at DESC
+        ''')
+        sequences = [dict(row) for row in cursor.fetchall()]
+
+        conn.close()
+
+        return jsonify({'sequences': sequences})
+
+    except Exception as e:
+        logger.error(f"Error listing sequences: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/ai/debug/outputs')
@@ -2241,6 +2936,10 @@ def api_ai_debug_workflow():
         steps = int(params.get('steps', 25))
         cfg_scale = float(params.get('cfg_scale', 7.0))
         motion_strength = float(params.get('motion_strength', 0.7))
+        sampler = params.get('sampler')
+        crf = params.get('crf')
+        if crf is not None:
+            crf = int(crf)
 
         # Determine model type
         if 'ltx' in video_model.lower():
@@ -2265,6 +2964,8 @@ def api_ai_debug_workflow():
             cfg_scale=cfg_scale,
             motion_strength=motion_strength,
             gen_id=gen_id,
+            sampler=sampler,
+            crf=crf,
         )
 
         return jsonify({
@@ -2539,13 +3240,15 @@ def api_ai_download_status(download_id):
     return jsonify(active_downloads[download_id])
 
 
-def build_txt2img_workflow(prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, loras=None):
+def build_txt2img_workflow(prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, loras=None, batch_size=1):
     """Build a ComfyUI workflow for text-to-image generation.
 
     Args:
         loras: List of dicts with 'filename' and 'strength' (0.0-2.0)
+        batch_size: Number of images to generate in one batch (1-20)
     """
     loras = loras or []
+    batch_size = max(1, min(20, batch_size))  # Clamp to 1-20
 
     # ComfyUI uses node-based workflows defined as JSON
     # Base nodes that are always present
@@ -2561,7 +3264,7 @@ def build_txt2img_workflow(prompt, negative_prompt, model, width, height, seed, 
             "inputs": {
                 "width": width,
                 "height": height,
-                "batch_size": 1
+                "batch_size": batch_size
             }
         },
         "8": {
@@ -2755,10 +3458,37 @@ def build_img2img_workflow(prompt, negative_prompt, model, image_filename, denoi
     return workflow
 
 
-def build_video_workflow(prompt, input_image, video_model, model_type, width, height, frames, seed, steps, cfg_scale, motion_strength, gen_id):
+def build_video_workflow(prompt, input_image, video_model, model_type, width, height, frames, seed, steps, cfg_scale, motion_strength, gen_id,
+                         negative_prompt=None, fps=24,
+                         # LTX-specific params
+                         strength=None, max_shift=None, base_shift=None, sampler=None,
+                         # Wan-specific params
+                         shift=None, scheduler=None,
+                         # Hunyuan-specific params
+                         embedded_cfg_scale=None,
+                         # Common encoding params
+                         crf=None):
     """Build a ComfyUI workflow for image-to-video generation.
 
     Supports LTX-Video, Wan2.1/2.2, and HunyuanVideo models.
+
+    Common params:
+        negative_prompt: Things to avoid in the video
+        fps: Output video frame rate
+        crf: Video quality (10-35, lower=better quality)
+
+    LTX-specific params:
+        strength: Image fidelity (0.5-1.0)
+        max_shift, base_shift: Noise schedule parameters
+        sampler: Sampling algorithm (euler, dpmpp_2m, etc.)
+
+    Wan-specific params:
+        motion_strength: Amount of motion (0-1)
+        shift: Sampling shift parameter
+        scheduler: Sampling scheduler (unipc/euler/ddim)
+
+    Hunyuan-specific params:
+        embedded_cfg_scale: Secondary guidance scale
     """
     if model_type == 'ltx':
         return build_ltx_video_workflow(
@@ -2772,6 +3502,14 @@ def build_video_workflow(prompt, input_image, video_model, model_type, width, he
             steps=steps,
             cfg_scale=cfg_scale,
             gen_id=gen_id,
+            negative_prompt=negative_prompt,
+            strength=strength,
+            max_shift=max_shift,
+            base_shift=base_shift,
+            fps=fps,
+            motion_strength=motion_strength,
+            sampler=sampler,
+            crf=crf,
         )
     elif model_type == 'wan':
         return build_wan_video_workflow(
@@ -2786,6 +3524,10 @@ def build_video_workflow(prompt, input_image, video_model, model_type, width, he
             cfg_scale=cfg_scale,
             motion_strength=motion_strength,
             gen_id=gen_id,
+            shift=shift,
+            scheduler=scheduler,
+            fps=fps,
+            crf=crf,
         )
     elif model_type == 'hunyuan':
         return build_hunyuan_video_workflow(
@@ -2799,6 +3541,10 @@ def build_video_workflow(prompt, input_image, video_model, model_type, width, he
             steps=steps,
             cfg_scale=cfg_scale,
             gen_id=gen_id,
+            negative_prompt=negative_prompt,
+            embedded_cfg_scale=embedded_cfg_scale,
+            fps=fps,
+            crf=crf,
         )
     else:
         # Default to LTX
@@ -2813,20 +3559,53 @@ def build_video_workflow(prompt, input_image, video_model, model_type, width, he
             steps=steps,
             cfg_scale=cfg_scale,
             gen_id=gen_id,
+            negative_prompt=negative_prompt,
+            fps=fps,
+            sampler=sampler,
+            crf=crf,
         )
 
 
-def build_ltx_video_workflow(prompt, input_image, video_model, width, height, frames, seed, steps, cfg_scale, gen_id):
+def build_ltx_video_workflow(prompt, input_image, video_model, width, height, frames, seed, steps, cfg_scale, gen_id,
+                             negative_prompt=None, strength=None, max_shift=None, base_shift=None, fps=25, motion_strength=0.7,
+                             sampler=None, crf=None):
     """Build workflow for LTX-Video image-to-video generation.
 
     Uses native ComfyUI LTX Video nodes (built-in support).
+
+    Args:
+        negative_prompt: Custom negative prompt (default uses standard quality prompt)
+        strength: Image fidelity 0.5-1.0 (higher = more faithful to input, less motion)
+        max_shift: Noise schedule max shift (default 2.05)
+        base_shift: Noise schedule base shift (default 0.95)
+        fps: Output frame rate (default 25)
+        motion_strength: 0.0-1.0, used to modulate strength parameter
+        sampler: Sampling algorithm (default 'euler')
+        crf: Video quality (lower = better, default 19)
     """
+    # Apply defaults
+    if negative_prompt is None:
+        negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted, watermarks, text"
+    if strength is None:
+        # Motion strength inversely affects image fidelity
+        # Higher motion = lower strength = more divergence from input
+        strength = 1.0 - (motion_strength * 0.4)  # Range: 0.6-1.0
+    if max_shift is None:
+        max_shift = 2.05
+    if base_shift is None:
+        base_shift = 0.95
+    if sampler is None:
+        sampler = 'euler'
+    if crf is None:
+        crf = 19
+
     logger.info(f"Building LTX video workflow (native nodes):")
     logger.info(f"  prompt: {prompt[:100]}...")
     logger.info(f"  input_image: {input_image}")
     logger.info(f"  video_model: {video_model}")
     logger.info(f"  dimensions: {width}x{height}")
     logger.info(f"  frames: {frames}, seed: {seed}, steps: {steps}, cfg: {cfg_scale}")
+    logger.info(f"  strength: {strength}, max_shift: {max_shift}, base_shift: {base_shift}")
     logger.info(f"  gen_id: {gen_id}")
 
     workflow = {
@@ -2860,11 +3639,11 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
                 "clip": ["2", 0]
             }
         },
-        # 5. Encode negative prompt
+        # 5. Encode negative prompt - NOW CONFIGURABLE
         "5": {
             "class_type": "CLIPTextEncode",
             "inputs": {
-                "text": "worst quality, inconsistent motion, blurry, jittery, distorted, watermarks",
+                "text": negative_prompt,
                 "clip": ["2", 0]
             }
         },
@@ -2874,7 +3653,7 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
             "inputs": {
                 "positive": ["4", 0],
                 "negative": ["5", 0],
-                "frame_rate": 25.0
+                "frame_rate": float(fps)
             }
         },
         # 7. LTX Img to Video - outputs [positive, negative, latent]
@@ -2889,7 +3668,7 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
                 "height": height,
                 "length": frames,
                 "batch_size": 1,
-                "strength": 0.8
+                "strength": strength  # NOW CONFIGURABLE
             }
         },
         # 8. LTX Scheduler - creates sigmas for sampling
@@ -2897,8 +3676,8 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
             "class_type": "LTXVScheduler",
             "inputs": {
                 "steps": steps,
-                "max_shift": 2.05,
-                "base_shift": 0.95,
+                "max_shift": max_shift,  # NOW CONFIGURABLE
+                "base_shift": base_shift,  # NOW CONFIGURABLE
                 "stretch": True,
                 "terminal": 0.1,
                 "latent": ["7", 2]
@@ -2915,7 +3694,7 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
         "10": {
             "class_type": "KSamplerSelect",
             "inputs": {
-                "sampler_name": "euler"
+                "sampler_name": sampler  # NOW CONFIGURABLE
             }
         },
         # 11. Model sampling LTX (patches model for LTX-specific sampling)
@@ -2923,8 +3702,8 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
             "class_type": "ModelSamplingLTXV",
             "inputs": {
                 "model": ["1", 0],
-                "max_shift": 2.05,
-                "base_shift": 0.95
+                "max_shift": max_shift,  # NOW CONFIGURABLE
+                "base_shift": base_shift  # NOW CONFIGURABLE
             }
         },
         # 12. CFG Guider
@@ -2961,12 +3740,12 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
             "class_type": "VHS_VideoCombine",
             "inputs": {
                 "images": ["14", 0],
-                "frame_rate": 25,
+                "frame_rate": fps,  # NOW CONFIGURABLE
                 "loop_count": 0,
                 "filename_prefix": f"boomshakalaka_video_{gen_id}",
                 "format": "video/h264-mp4",
                 "pix_fmt": "yuv420p",
-                "crf": 19,
+                "crf": crf,  # NOW CONFIGURABLE
                 "save_metadata": True,
                 "pingpong": False,
                 "save_output": True
@@ -2978,8 +3757,28 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
     return workflow
 
 
-def build_wan_video_workflow(prompt, input_image, video_model, width, height, frames, seed, steps, cfg_scale, motion_strength, gen_id):
-    """Build workflow for Wan2.x image-to-video generation using ComfyUI-WanVideoWrapper."""
+def build_wan_video_workflow(prompt, input_image, video_model, width, height, frames, seed, steps, cfg_scale, motion_strength, gen_id, shift=None, scheduler=None, fps=24, crf=None):
+    """Build workflow for Wan2.x image-to-video generation using ComfyUI-WanVideoWrapper.
+
+    Args:
+        motion_strength: 0.0-1.0, controls amount of motion (higher = more movement)
+        shift: Sampling shift parameter (default 5.0)
+        scheduler: Sampling scheduler - 'unipc', 'euler', or 'ddim'
+        fps: Output video frame rate
+        crf: Video quality (lower = better, default 19)
+    """
+    # Apply defaults for optional params
+    if shift is None:
+        shift = 5.0
+    if scheduler is None:
+        scheduler = "unipc"
+    if crf is None:
+        crf = 19
+
+    # Motion strength affects the shift parameter - higher motion = higher shift
+    # Also affects cfg - lower cfg with higher motion for more dynamic results
+    effective_shift = shift * (0.8 + motion_strength * 0.4)  # Range: 0.8x to 1.2x of base shift
+    effective_cfg = cfg_scale * (1.0 - motion_strength * 0.2)  # Slightly reduce cfg for more motion
 
     workflow = {
         # Load text encoder
@@ -3038,7 +3837,7 @@ def build_wan_video_workflow(prompt, input_image, video_model, width, height, fr
                 "image": ["5", 0],
             }
         },
-        # Sample video
+        # Sample video - motion_strength now affects shift and cfg
         "8": {
             "class_type": "WanSampler",
             "inputs": {
@@ -3050,9 +3849,9 @@ def build_wan_video_workflow(prompt, input_image, video_model, width, height, fr
                 "num_frames": frames,
                 "seed": seed,
                 "steps": steps,
-                "cfg": cfg_scale,
-                "shift": 5.0,
-                "scheduler": "unipc",
+                "cfg": effective_cfg,
+                "shift": effective_shift,
+                "scheduler": scheduler,
             }
         },
         # Decode with VAE
@@ -3068,21 +3867,39 @@ def build_wan_video_workflow(prompt, input_image, video_model, width, height, fr
             "class_type": "VHS_VideoCombine",
             "inputs": {
                 "images": ["9", 0],
-                "frame_rate": 24,
+                "frame_rate": fps,
                 "loop_count": 0,
                 "filename_prefix": f"boomshakalaka_video_{gen_id}",
                 "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": crf,  # NOW CONFIGURABLE
                 "pingpong": False,
                 "save_output": True,
             }
         }
     }
 
+    logger.info(f"Wan workflow built: motion_strength={motion_strength}, effective_shift={effective_shift:.2f}, effective_cfg={effective_cfg:.2f}, crf={crf}")
     return workflow
 
 
-def build_hunyuan_video_workflow(prompt, input_image, video_model, width, height, frames, seed, steps, cfg_scale, gen_id):
-    """Build workflow for HunyuanVideo image-to-video generation."""
+def build_hunyuan_video_workflow(prompt, input_image, video_model, width, height, frames, seed, steps, cfg_scale, gen_id,
+                                  negative_prompt=None, embedded_cfg_scale=None, fps=24, crf=None):
+    """Build workflow for HunyuanVideo image-to-video generation.
+
+    Args:
+        embedded_cfg_scale: Secondary guidance scale for quality/creativity balance (default 6.0)
+        negative_prompt: Things to avoid in the video (currently not used by HunyuanVideo sampler)
+        fps: Output video frame rate
+        crf: Video quality (lower = better, default 19)
+    """
+    # Apply defaults
+    if embedded_cfg_scale is None:
+        embedded_cfg_scale = 6.0
+    if negative_prompt is None:
+        negative_prompt = "worst quality, low quality, blurry, distorted, deformed, ugly, watermark, text"
+    if crf is None:
+        crf = 19
 
     workflow = {
         # Load HunyuanVideo model
@@ -3137,7 +3954,7 @@ def build_hunyuan_video_workflow(prompt, input_image, video_model, width, height
                 "seed": seed,
                 "steps": steps,
                 "cfg": cfg_scale,
-                "embedded_cfg_scale": 6.0,
+                "embedded_cfg_scale": embedded_cfg_scale,
             }
         },
         # Decode video
@@ -3153,25 +3970,38 @@ def build_hunyuan_video_workflow(prompt, input_image, video_model, width, height
             "class_type": "VHS_VideoCombine",
             "inputs": {
                 "images": ["7", 0],
-                "frame_rate": 24,
+                "frame_rate": fps,
                 "loop_count": 0,
                 "filename_prefix": f"boomshakalaka_video_{gen_id}",
                 "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": crf,  # NOW CONFIGURABLE
                 "pingpong": False,
                 "save_output": True,
             }
         }
     }
 
+    logger.info(f"Hunyuan workflow built: embedded_cfg_scale={embedded_cfg_scale}, fps={fps}, crf={crf}")
     return workflow
 
 
-def send_to_comfyui(workflow, gen_id):
-    """Send a workflow to ComfyUI and wait for the result."""
+def send_to_comfyui(workflow, gen_id, batch_size=1, max_wait=300):
+    """Send a workflow to ComfyUI and wait for the result.
+
+    Args:
+        workflow: ComfyUI workflow JSON
+        gen_id: Base generation ID
+        batch_size: Expected number of images (for multi-image batches)
+        max_wait: Maximum wait time in seconds (default 300 = 5 min, use 1800 for video)
+
+    Returns:
+        dict with 'images' array containing all generated images, or 'error'
+    """
     import httpx
     import time
 
-    logger.info(f"send_to_comfyui called for gen_id: {gen_id}")
+    logger.info(f"send_to_comfyui called for gen_id: {gen_id}, batch_size: {batch_size}, max_wait: {max_wait}s")
 
     try:
         # Queue the prompt
@@ -3200,7 +4030,6 @@ def send_to_comfyui(workflow, gen_id):
             return {'error': 'No prompt ID returned'}
 
         # Poll for completion
-        max_wait = 300  # 5 minutes max
         poll_interval = 1
         elapsed = 0
 
@@ -3231,14 +4060,15 @@ def send_to_comfyui(workflow, gen_id):
                         logger.info(f"Node {node_id} output keys: {list(node_output.keys())}")
                         logger.debug(f"Node {node_id} full output: {json.dumps(node_output, indent=2)[:500]}")
 
-                    # Find the SaveImage output
+                    # Find the SaveImage output - collect ALL images for batch support
+                    images_result = []
                     for node_id, node_output in outputs.items():
                         if 'images' in node_output:
-                            logger.info(f"Found images in node {node_id}")
-                            for img in node_output['images']:
+                            logger.info(f"Found {len(node_output['images'])} images in node {node_id}")
+                            for idx, img in enumerate(node_output['images']):
                                 filename = img.get('filename')
                                 subfolder = img.get('subfolder', '')
-                                logger.info(f"Image file: {filename}, subfolder: {subfolder}")
+                                logger.info(f"Image {idx}: {filename}, subfolder: {subfolder}")
 
                                 # Copy the image to our generations directory
                                 src_path = COMFY_DIR / 'output' / subfolder / filename
@@ -3249,21 +4079,31 @@ def send_to_comfyui(workflow, gen_id):
                                     date_dir = GENERATIONS_DIR / datetime.now().strftime('%Y/%m/%d')
                                     date_dir.mkdir(parents=True, exist_ok=True)
 
+                                    # Generate unique ID for each image in batch
+                                    img_gen_id = f"{gen_id}_{idx}" if batch_size > 1 else gen_id
+
                                     # Copy to our directory
-                                    dst_path = date_dir / f'{gen_id}_full.png'
+                                    dst_path = date_dir / f'{img_gen_id}_full.png'
                                     import shutil
                                     shutil.copy2(str(src_path), str(dst_path))
                                     logger.info(f"Copied to {dst_path}")
 
                                     # Also create a simple version in root for easy access
-                                    simple_dst = GENERATIONS_DIR / f'{gen_id}.png'
+                                    simple_dst = GENERATIONS_DIR / f'{img_gen_id}.png'
                                     shutil.copy2(str(src_path), str(simple_dst))
                                     logger.info(f"Copied to {simple_dst}")
 
-                                    return {
+                                    images_result.append({
+                                        'id': img_gen_id,
+                                        'url': f'/api/ai/image/{img_gen_id}',
                                         'output_path': str(dst_path),
                                         'filename': filename
-                                    }
+                                    })
+
+                            # If we found images, return them all
+                            if images_result:
+                                logger.info(f"Returning {len(images_result)} images")
+                                return {'images': images_result}
 
                         # Check for video outputs (gifs/videos from VHS_VideoCombine)
                         # VHS_VideoCombine uses 'gifs' key even for mp4 output

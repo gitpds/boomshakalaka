@@ -128,6 +128,10 @@
                         <span class="nav-dot"></span>
                         Generate
                     </a>
+                    <a href="{{ url_for('ai_video') }}" class="nav-subitem {% if active_page == 'ai_video' %}active{% endif %}">
+                        <span class="nav-dot"></span>
+                        Video Studio
+                    </a>
                     <a href="{{ url_for('ai_saved') }}" class="nav-subitem {% if active_page == 'ai_saved' %}active{% endif %}">
                         <span class="nav-dot"></span>
                         Saved
