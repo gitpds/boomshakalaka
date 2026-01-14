@@ -1963,7 +1963,13 @@ def api_ai_save():
         if not gen_id:
             return jsonify({'error': 'Generation ID required'}), 400
 
-        # Save to database
+        # Check if image file exists
+        image_path = GENERATIONS_DIR / f'{gen_id}.png'
+        if not image_path.exists():
+            return jsonify({'error': 'Image file not found'}), 404
+
+        # Save to database with thumbnail_path set
+        output_path_str = str(image_path)
         save_generation(
             gen_id=gen_id,
             prompt=params.get('prompt', ''),
@@ -1975,12 +1981,32 @@ def api_ai_save():
             steps=params.get('steps', 25),
             cfg_scale=params.get('cfg_scale', 7.0),
             sampler=params.get('sampler', 'euler'),
-            output_path=str(GENERATIONS_DIR / f'{gen_id}.png'),
+            output_path=output_path_str,
+            thumbnail_path=output_path_str,  # Set thumbnail_path for gallery preview
             workflow_json=json.dumps(params.get('workflow', {})),
         )
 
         return jsonify({'saved': True, 'id': gen_id})
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/generation/<gen_id>')
+def api_ai_generation(gen_id):
+    """Get a saved generation's details for loading into the generate page."""
+    import sqlite3
+
+    db_path = DATABASES_DIR / 'generations.db'
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute('SELECT * FROM generations WHERE id = ?', (gen_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return jsonify(dict(row))
+        return jsonify({'error': 'Not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -3277,17 +3303,22 @@ def send_to_comfyui(workflow, gen_id):
         return {'error': str(e)}
 
 
-def save_generation(gen_id, prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, output_path, workflow_json):
+def save_generation(gen_id, prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, output_path, workflow_json, thumbnail_path=None):
     """Save generation metadata to database."""
     import sqlite3
 
     db_path = DATABASES_DIR / 'generations.db'
     conn = sqlite3.connect(str(db_path))
 
+    # Use output_path as thumbnail if not specified
+    if thumbnail_path is None:
+        thumbnail_path = output_path
+
+    # Use INSERT OR REPLACE to handle re-saving the same generation
     conn.execute('''
-        INSERT INTO generations (id, prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, output_path, workflow_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (gen_id, prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, output_path, workflow_json))
+        INSERT OR REPLACE INTO generations (id, prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, output_path, thumbnail_path, workflow_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (gen_id, prompt, negative_prompt, model, width, height, seed, steps, cfg_scale, sampler, output_path, thumbnail_path, workflow_json))
 
     conn.commit()
     conn.close()

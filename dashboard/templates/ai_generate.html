@@ -556,12 +556,6 @@
                             <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
                     </button>
-                    <button class="btn btn-secondary btn-sm" onclick="addToCompare()" id="compare-btn" disabled title="Add to comparison">
-                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"/>
-                            <rect x="14" y="3" width="7" height="7"/>
-                        </svg>
-                    </button>
                 </div>
             </div>
             <div class="card-body">
@@ -1705,7 +1699,7 @@ async function generateVideo(params) {
     }
 }
 
-function displayVideo(url, params) {
+function displayVideo(url, params, skipHistory = false) {
     console.log('displayVideo called with URL:', url);
 
     const placeholder = document.getElementById('output-placeholder');
@@ -1752,10 +1746,11 @@ function displayVideo(url, params) {
     // Enable action buttons
     document.getElementById('save-gallery-btn').disabled = false;
     document.getElementById('download-btn').disabled = false;
-    document.getElementById('compare-btn').disabled = true; // Video compare not implemented
 
-    // Add to session history
-    addVideoToSessionHistory(url, params);
+    // Add to session history (skip if loading from history)
+    if (!skipHistory) {
+        addVideoToSessionHistory(url, params);
+    }
 }
 
 function addVideoToSessionHistory(url, params) {
@@ -1775,8 +1770,11 @@ function addVideoToSessionHistory(url, params) {
         </div>
     `;
     thumb.onclick = () => {
-        displayVideo(url, params);
-        lastGeneration = { ...params, video_url: url, is_video: true };
+        displayVideo(url, params, true);  // Skip adding to history
+        // Extract ID from URL for save functionality
+        const idMatch = url.match(/\/api\/ai\/video\/([^/]+)/);
+        const id = idMatch ? idMatch[1] : null;
+        lastGeneration = { ...params, video_url: url, id: id, is_video: true };
     };
     thumb.onmouseover = () => {
         thumb.style.borderColor = 'var(--accent)';
@@ -1789,9 +1787,12 @@ function addVideoToSessionHistory(url, params) {
 
     container.appendChild(thumb);
     sessionHistory.push({ url, params, is_video: true });
+
+    // Persist to sessionStorage
+    saveSessionHistoryToStorage();
 }
 
-function displayImage(url, params) {
+function displayImage(url, params, skipHistory = false) {
     const placeholder = document.getElementById('output-placeholder');
     const img = document.getElementById('output-image');
 
@@ -1809,10 +1810,11 @@ function displayImage(url, params) {
     // Enable action buttons
     document.getElementById('save-gallery-btn').disabled = false;
     document.getElementById('download-btn').disabled = false;
-    document.getElementById('compare-btn').disabled = false;
 
-    // Add to session history
-    addToSessionHistory(url, params);
+    // Add to session history (skip if loading from history)
+    if (!skipHistory) {
+        addToSessionHistory(url, params);
+    }
 
     // Update seed if it was random
     if (params.seed === -1 && lastGeneration) {
@@ -1828,10 +1830,13 @@ function addToSessionHistory(url, params) {
         container.innerHTML = '';
     }
 
+    // Capture current index BEFORE pushing to array
+    const index = sessionHistory.length;
+
     const thumb = document.createElement('div');
     thumb.style.cssText = 'width: 80px; height: 80px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s;';
     thumb.innerHTML = `<img src="${url}" style="width: 100%; height: 100%; object-fit: cover;">`;
-    thumb.onclick = () => loadFromHistory(sessionHistory.length);
+    thumb.onclick = () => loadFromHistory(index);  // Use captured index
     thumb.onmouseover = () => thumb.style.borderColor = 'var(--accent)';
     thumb.onmouseout = () => thumb.style.borderColor = 'transparent';
 
@@ -1844,6 +1849,9 @@ function addToSessionHistory(url, params) {
 
     container.appendChild(thumb);
     sessionHistory.push({ url, params });
+
+    // Persist to sessionStorage
+    saveSessionHistoryToStorage();
 }
 
 function loadFromHistory(index) {
@@ -1863,8 +1871,19 @@ function loadFromHistory(index) {
     document.getElementById('cfg-value').textContent = item.params.cfg_scale || 7;
     document.getElementById('sampler').value = item.params.sampler || 'euler';
 
-    // Display image
-    displayImage(item.url, item.params);
+    // Extract ID from URL (format: /api/ai/image/{id} or /api/ai/video/{id})
+    const idMatch = item.url.match(/\/api\/ai\/(?:image|video)\/([^/]+)/);
+    const id = idMatch ? idMatch[1] : null;
+
+    // Display image (skip adding to history since we're loading from history)
+    displayImage(item.url, item.params, true);
+
+    // Set lastGeneration so save/regenerate work
+    if (item.is_video) {
+        lastGeneration = { ...item.params, video_url: item.url, id: id, is_video: true };
+    } else {
+        lastGeneration = { ...item.params, image_url: item.url, id: id };
+    }
 }
 
 function regenerate() {
@@ -1936,18 +1955,116 @@ function downloadImage() {
     link.click();
 }
 
-function addToCompare() {
-    if (!lastGeneration) return;
-    // Store in localStorage for compare page
-    const compareList = JSON.parse(localStorage.getItem('compareList') || '[]');
-    compareList.push(lastGeneration);
-    localStorage.setItem('compareList', JSON.stringify(compareList.slice(-8))); // Keep last 8
-    alert('Added to comparison. Go to Compare page to view.');
-}
-
 function clearSession() {
     sessionHistory = [];
+    sessionStorage.removeItem('aiStudioHistory');
     document.getElementById('session-history').innerHTML = '<div style="color: var(--text-muted); font-size: 0.9rem;">Generated images from this session will appear here</div>';
 }
+
+// Session storage persistence
+function saveSessionHistoryToStorage() {
+    try {
+        sessionStorage.setItem('aiStudioHistory', JSON.stringify(sessionHistory));
+    } catch (e) {
+        console.warn('Could not save session history:', e);
+    }
+}
+
+function loadSessionHistoryFromStorage() {
+    try {
+        const stored = sessionStorage.getItem('aiStudioHistory');
+        if (stored) {
+            const items = JSON.parse(stored);
+            if (items.length > 0) {
+                const container = document.getElementById('session-history');
+                container.innerHTML = '';  // Clear placeholder
+
+                items.forEach((item, idx) => {
+                    const thumb = document.createElement('div');
+                    thumb.style.cssText = 'width: 80px; height: 80px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: border-color 0.2s;';
+
+                    if (item.is_video) {
+                        thumb.innerHTML = `
+                            <video src="${item.url}" style="width: 100%; height: 100%; object-fit: cover;" muted></video>
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; background: rgba(0,0,0,0.5); padding: 4px; border-radius: 50%;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            </div>
+                        `;
+                        thumb.style.position = 'relative';
+                        thumb.onclick = () => {
+                            displayVideo(item.url, item.params, true);  // Skip adding to history
+                            // Extract ID from URL for save functionality
+                            const idMatch = item.url.match(/\/api\/ai\/video\/([^/]+)/);
+                            const id = idMatch ? idMatch[1] : null;
+                            lastGeneration = { ...item.params, video_url: item.url, id: id, is_video: true };
+                        };
+                    } else {
+                        thumb.innerHTML = `<img src="${item.url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                        thumb.onclick = () => loadFromHistory(idx);
+                    }
+
+                    thumb.onmouseover = () => thumb.style.borderColor = 'var(--accent)';
+                    thumb.onmouseout = () => thumb.style.borderColor = 'transparent';
+                    thumb.draggable = true;
+                    thumb.ondragstart = (e) => {
+                        e.dataTransfer.setData('text/plain', item.url);
+                        e.dataTransfer.setData('application/x-generated-image', 'true');
+                    };
+
+                    container.appendChild(thumb);
+                    sessionHistory.push(item);
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('Could not load session history:', e);
+    }
+}
+
+// Handle ?load= parameter to load a saved generation
+async function handleLoadParameter() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const loadId = urlParams.get('load');
+
+    if (!loadId) return;
+
+    try {
+        const response = await fetch(`/api/ai/generation/${loadId}`);
+        const gen = await response.json();
+
+        if (gen.error) {
+            console.error('Failed to load generation:', gen.error);
+            return;
+        }
+
+        // Populate form fields
+        document.getElementById('prompt').value = gen.prompt || '';
+        document.getElementById('negative_prompt').value = gen.negative_prompt || '';
+        if (gen.model) document.getElementById('model').value = gen.model;
+        document.getElementById('width').value = gen.width || 1024;
+        document.getElementById('height').value = gen.height || 1024;
+        document.getElementById('seed').value = gen.seed || -1;
+        document.getElementById('steps').value = gen.steps || 25;
+        document.getElementById('steps-value').textContent = gen.steps || 25;
+        document.getElementById('cfg_scale').value = gen.cfg_scale || 7;
+        document.getElementById('cfg-value').textContent = gen.cfg_scale || 7;
+        if (gen.sampler) document.getElementById('sampler').value = gen.sampler;
+
+        // Display the image
+        displayImage(`/api/ai/image/${loadId}`, gen);
+
+        // Store as lastGeneration for save/regenerate
+        lastGeneration = { ...gen, id: loadId, image_url: `/api/ai/image/${loadId}` };
+
+    } catch (e) {
+        console.error('Error loading generation:', e);
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadSessionHistoryFromStorage();
+    handleLoadParameter();
+});
 </script>
 {% endblock %}
