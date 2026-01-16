@@ -1,0 +1,775 @@
+{% extends "base.html" %}
+
+{% block title %}Kanban Board{% endblock %}
+{% block sidebar_title %}Kanban Board{% endblock %}
+{% block page_title %}Kanban Board{% endblock %}
+{% block page_subtitle %}Drag-and-drop task management{% endblock %}
+
+{% block content %}
+<div class="kanban-container">
+    <div class="kanban-header">
+        <div class="kanban-actions">
+            <button class="btn btn-primary" onclick="KanbanBoard.showTaskModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Task
+            </button>
+        </div>
+    </div>
+
+    <div class="kanban-board" id="kanban-board">
+        <div class="kanban-column" data-column="backlog">
+            <div class="column-header">
+                <span class="column-title">Backlog</span>
+                <span class="column-count" data-count="backlog">0</span>
+            </div>
+            <div class="column-tasks" data-column="backlog"></div>
+        </div>
+
+        <div class="kanban-column" data-column="todo">
+            <div class="column-header">
+                <span class="column-title">To Do</span>
+                <span class="column-count" data-count="todo">0</span>
+            </div>
+            <div class="column-tasks" data-column="todo"></div>
+        </div>
+
+        <div class="kanban-column" data-column="in_progress">
+            <div class="column-header">
+                <span class="column-title">In Progress</span>
+                <span class="column-count" data-count="in_progress">0</span>
+            </div>
+            <div class="column-tasks" data-column="in_progress"></div>
+        </div>
+
+        <div class="kanban-column" data-column="done">
+            <div class="column-header">
+                <span class="column-title">Done</span>
+                <span class="column-count" data-count="done">0</span>
+            </div>
+            <div class="column-tasks" data-column="done"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Modal -->
+<div class="task-modal" id="task-modal">
+    <div class="task-dialog">
+        <div class="modal-header">
+            <h3 id="modal-title">Add Task</h3>
+            <button class="modal-close" onclick="KanbanBoard.hideTaskModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <form id="task-form" onsubmit="KanbanBoard.saveTask(event)">
+            <input type="hidden" id="task-id">
+            <div class="form-group">
+                <label for="task-title">Title</label>
+                <input type="text" id="task-title" required placeholder="Enter task title...">
+            </div>
+            <div class="form-group">
+                <label for="task-description">Description</label>
+                <textarea id="task-description" rows="3" placeholder="Enter task description..."></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="task-column">Column</label>
+                    <select id="task-column">
+                        <option value="backlog">Backlog</option>
+                        <option value="todo">To Do</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="done">Done</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="task-priority">Priority</label>
+                    <select id="task-priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="task-due-date">Due Date (optional)</label>
+                <input type="date" id="task-due-date">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="KanbanBoard.hideTaskModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="delete-btn" onclick="KanbanBoard.deleteTask()" style="display: none;">Delete</button>
+                <button type="submit" class="btn btn-primary">Save Task</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.kanban-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 140px);
+    min-height: 400px;
+}
+
+.kanban-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+}
+
+.kanban-actions .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kanban-actions .btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Kanban Board */
+.kanban-board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    flex: 1;
+    overflow-x: auto;
+    padding-bottom: 16px;
+}
+
+.kanban-column {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    min-width: 280px;
+    max-height: 100%;
+}
+
+.column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.column-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.column-count {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.column-tasks {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 100px;
+}
+
+.column-tasks.drag-over {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
+/* Task Cards */
+.task-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: grab;
+    transition: all 0.15s ease;
+}
+
+.task-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.task-card.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.task-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.task-title {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.4;
+    flex: 1;
+}
+
+.task-priority {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.task-priority.high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.task-priority.medium {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.task-priority.low {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.task-description {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.task-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.task-due-date {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.task-due-date svg {
+    width: 12px;
+    height: 12px;
+}
+
+.task-due-date.overdue {
+    color: #ef4444;
+}
+
+.task-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.task-card:hover .task-actions {
+    opacity: 1;
+}
+
+.task-action-btn {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.task-action-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.task-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Empty State */
+.column-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+    min-height: 80px;
+}
+
+/* Task Modal */
+.task-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.task-modal.visible {
+    display: flex;
+}
+
+.task-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.modal-close svg {
+    width: 20px;
+    height: 20px;
+}
+
+#task-form {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-primary);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .kanban-board {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .kanban-board {
+        grid-template-columns: 1fr;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+const KanbanBoard = {
+    tasks: [],
+    editingTaskId: null,
+
+    async init() {
+        await this.loadTasks();
+        this.setupDragAndDrop();
+    },
+
+    async loadTasks() {
+        try {
+            const resp = await fetch('/api/kanban/tasks');
+            const data = await resp.json();
+            this.tasks = data.tasks || [];
+            this.renderTasks();
+        } catch (err) {
+            console.error('Failed to load tasks:', err);
+        }
+    },
+
+    renderTasks() {
+        const columns = ['backlog', 'todo', 'in_progress', 'done'];
+
+        columns.forEach(column => {
+            const container = document.querySelector(`.column-tasks[data-column="${column}"]`);
+            const columnTasks = this.tasks
+                .filter(t => t.column === column)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            // Update count
+            document.querySelector(`[data-count="${column}"]`).textContent = columnTasks.length;
+
+            if (columnTasks.length === 0) {
+                container.innerHTML = '<div class="column-empty">No tasks</div>';
+                return;
+            }
+
+            container.innerHTML = columnTasks.map(task => this.renderTaskCard(task)).join('');
+        });
+    },
+
+    renderTaskCard(task) {
+        const dueDate = task.due_date ? new Date(task.due_date) : null;
+        const isOverdue = dueDate && dueDate < new Date() && task.column !== 'done';
+
+        return `
+            <div class="task-card" draggable="true" data-id="${task.id}">
+                <div class="task-card-header">
+                    <span class="task-title">${this.escapeHtml(task.title)}</span>
+                    <span class="task-priority ${task.priority}">${task.priority}</span>
+                </div>
+                ${task.description ? `<div class="task-description">${this.escapeHtml(task.description)}</div>` : ''}
+                <div class="task-footer">
+                    ${dueDate ? `
+                        <span class="task-due-date ${isOverdue ? 'overdue' : ''}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="16" y1="2" x2="16" y2="6"/>
+                                <line x1="8" y1="2" x2="8" y2="6"/>
+                                <line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            ${dueDate.toLocaleDateString()}
+                        </span>
+                    ` : '<span></span>'}
+                    <div class="task-actions">
+                        <button class="task-action-btn" onclick="KanbanBoard.editTask('${task.id}')" title="Edit">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    setupDragAndDrop() {
+        const board = document.getElementById('kanban-board');
+
+        board.addEventListener('dragstart', (e) => {
+            if (e.target.classList.contains('task-card')) {
+                e.target.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', e.target.dataset.id);
+                e.dataTransfer.effectAllowed = 'move';
+            }
+        });
+
+        board.addEventListener('dragend', (e) => {
+            if (e.target.classList.contains('task-card')) {
+                e.target.classList.remove('dragging');
+            }
+            document.querySelectorAll('.column-tasks').forEach(col => {
+                col.classList.remove('drag-over');
+            });
+        });
+
+        board.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const column = e.target.closest('.column-tasks');
+            if (column) {
+                e.dataTransfer.dropEffect = 'move';
+                column.classList.add('drag-over');
+            }
+        });
+
+        board.addEventListener('dragleave', (e) => {
+            const column = e.target.closest('.column-tasks');
+            if (column && !column.contains(e.relatedTarget)) {
+                column.classList.remove('drag-over');
+            }
+        });
+
+        board.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const column = e.target.closest('.column-tasks');
+            if (!column) return;
+
+            column.classList.remove('drag-over');
+
+            const taskId = e.dataTransfer.getData('text/plain');
+            const newColumn = column.dataset.column;
+
+            // Find task and update
+            const task = this.tasks.find(t => t.id === taskId);
+            if (task && task.column !== newColumn) {
+                task.column = newColumn;
+                await this.updateTask(task);
+                this.renderTasks();
+            }
+        });
+    },
+
+    showTaskModal(taskId = null) {
+        this.editingTaskId = taskId;
+        const modal = document.getElementById('task-modal');
+        const title = document.getElementById('modal-title');
+        const deleteBtn = document.getElementById('delete-btn');
+
+        if (taskId) {
+            const task = this.tasks.find(t => t.id === taskId);
+            if (task) {
+                title.textContent = 'Edit Task';
+                document.getElementById('task-id').value = task.id;
+                document.getElementById('task-title').value = task.title;
+                document.getElementById('task-description').value = task.description || '';
+                document.getElementById('task-column').value = task.column;
+                document.getElementById('task-priority').value = task.priority;
+                document.getElementById('task-due-date').value = task.due_date || '';
+                deleteBtn.style.display = 'block';
+            }
+        } else {
+            title.textContent = 'Add Task';
+            document.getElementById('task-form').reset();
+            document.getElementById('task-id').value = '';
+            deleteBtn.style.display = 'none';
+        }
+
+        modal.classList.add('visible');
+        setTimeout(() => document.getElementById('task-title').focus(), 100);
+    },
+
+    hideTaskModal() {
+        document.getElementById('task-modal').classList.remove('visible');
+        this.editingTaskId = null;
+    },
+
+    editTask(taskId) {
+        this.showTaskModal(taskId);
+    },
+
+    async saveTask(e) {
+        e.preventDefault();
+
+        const taskData = {
+            title: document.getElementById('task-title').value,
+            description: document.getElementById('task-description').value,
+            column: document.getElementById('task-column').value,
+            priority: document.getElementById('task-priority').value,
+            due_date: document.getElementById('task-due-date').value || null
+        };
+
+        const taskId = document.getElementById('task-id').value;
+
+        try {
+            if (taskId) {
+                // Update existing task
+                await fetch(`/api/kanban/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(taskData)
+                });
+
+                const task = this.tasks.find(t => t.id === taskId);
+                if (task) {
+                    Object.assign(task, taskData);
+                }
+            } else {
+                // Create new task
+                const resp = await fetch('/api/kanban/tasks', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(taskData)
+                });
+                const newTask = await resp.json();
+                this.tasks.push(newTask);
+            }
+
+            this.hideTaskModal();
+            this.renderTasks();
+        } catch (err) {
+            console.error('Failed to save task:', err);
+        }
+    },
+
+    async deleteTask() {
+        const taskId = document.getElementById('task-id').value;
+        if (!taskId) return;
+
+        if (!confirm('Are you sure you want to delete this task?')) return;
+
+        try {
+            await fetch(`/api/kanban/tasks/${taskId}`, {method: 'DELETE'});
+            this.tasks = this.tasks.filter(t => t.id !== taskId);
+            this.hideTaskModal();
+            this.renderTasks();
+        } catch (err) {
+            console.error('Failed to delete task:', err);
+        }
+    },
+
+    async updateTask(task) {
+        try {
+            await fetch(`/api/kanban/tasks/${task.id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(task)
+            });
+        } catch (err) {
+            console.error('Failed to update task:', err);
+        }
+    },
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    KanbanBoard.init();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        KanbanBoard.hideTaskModal();
+    }
+});
+</script>
+{% endblock %}

@@ -1882,6 +1882,25 @@ def terminal():
     """Web terminal page - embeds ttyd for browser-based terminal access"""
     return render_template('terminal.html',
                          active_page='terminal',
+                         active_category='workshop',
+                         **get_common_context())
+
+
+@app.route('/workshop/kanban')
+def workshop_kanban():
+    """Kanban board for task management"""
+    return render_template('workshop_kanban.html',
+                         active_page='workshop_kanban',
+                         active_category='workshop',
+                         **get_common_context())
+
+
+@app.route('/workshop/agents')
+def workshop_agents():
+    """8-bit Agent Office visualization"""
+    return render_template('workshop_agents.html',
+                         active_page='workshop_agents',
+                         active_category='workshop',
                          **get_common_context())
 
 
@@ -4734,6 +4753,117 @@ def api_automation_clear_failures():
         return jsonify({'success': True, 'cleared': count})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# Kanban Board API
+# =============================================================================
+
+KANBAN_FILE = PROJECT_ROOT / 'data' / 'kanban.json'
+
+
+def load_kanban_data():
+    """Load kanban tasks from JSON file."""
+    if KANBAN_FILE.exists():
+        try:
+            with open(KANBAN_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {'tasks': []}
+
+
+def save_kanban_data(data):
+    """Save kanban tasks to JSON file."""
+    KANBAN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(KANBAN_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+@app.route('/api/kanban/tasks')
+def api_kanban_tasks():
+    """Get all kanban tasks."""
+    data = load_kanban_data()
+    return jsonify(data)
+
+
+@app.route('/api/kanban/tasks', methods=['POST'])
+def api_kanban_create_task():
+    """Create a new kanban task."""
+    task_data = request.get_json() or {}
+
+    task = {
+        'id': str(uuid.uuid4()),
+        'title': task_data.get('title', 'Untitled Task'),
+        'description': task_data.get('description', ''),
+        'column': task_data.get('column', 'backlog'),
+        'priority': task_data.get('priority', 'medium'),
+        'due_date': task_data.get('due_date'),
+        'created_at': datetime.now().isoformat(),
+        'order': task_data.get('order', 0)
+    }
+
+    data = load_kanban_data()
+    data['tasks'].append(task)
+    save_kanban_data(data)
+
+    return jsonify(task), 201
+
+
+@app.route('/api/kanban/tasks/<task_id>', methods=['PUT'])
+def api_kanban_update_task(task_id):
+    """Update a kanban task."""
+    task_data = request.get_json() or {}
+    data = load_kanban_data()
+
+    for task in data['tasks']:
+        if task['id'] == task_id:
+            task['title'] = task_data.get('title', task['title'])
+            task['description'] = task_data.get('description', task['description'])
+            task['column'] = task_data.get('column', task['column'])
+            task['priority'] = task_data.get('priority', task['priority'])
+            task['due_date'] = task_data.get('due_date', task.get('due_date'))
+            task['order'] = task_data.get('order', task.get('order', 0))
+            save_kanban_data(data)
+            return jsonify(task)
+
+    return jsonify({'error': 'Task not found'}), 404
+
+
+@app.route('/api/kanban/tasks/<task_id>', methods=['DELETE'])
+def api_kanban_delete_task(task_id):
+    """Delete a kanban task."""
+    data = load_kanban_data()
+
+    original_len = len(data['tasks'])
+    data['tasks'] = [t for t in data['tasks'] if t['id'] != task_id]
+
+    if len(data['tasks']) < original_len:
+        save_kanban_data(data)
+        return jsonify({'success': True})
+
+    return jsonify({'error': 'Task not found'}), 404
+
+
+@app.route('/api/kanban/tasks/reorder', methods=['POST'])
+def api_kanban_reorder_tasks():
+    """Reorder tasks within or between columns."""
+    reorder_data = request.get_json() or {}
+    task_orders = reorder_data.get('tasks', [])
+
+    data = load_kanban_data()
+
+    # Create a lookup for quick access
+    task_lookup = {t['id']: t for t in data['tasks']}
+
+    for order_info in task_orders:
+        task_id = order_info.get('id')
+        if task_id in task_lookup:
+            task_lookup[task_id]['column'] = order_info.get('column', task_lookup[task_id]['column'])
+            task_lookup[task_id]['order'] = order_info.get('order', 0)
+
+    save_kanban_data(data)
+    return jsonify({'success': True})
 
 
 def main():
