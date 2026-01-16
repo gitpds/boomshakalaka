@@ -60,6 +60,25 @@ try:
 except ImportError:
     VIDEO_UTILS_AVAILABLE = False
 
+# Automation Hub for job scheduling and monitoring
+# Add project root to path for automation imports
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+try:
+    from automation.runner.db import (
+        init_database as init_jobs_db,
+        get_all_jobs, get_job, create_job, update_job, toggle_job,
+        get_job_runs, get_run, get_stats_summary, get_recent_failures,
+        clear_recent_failures
+    )
+    from automation.runner.executor import JobExecutor, register_job
+    AUTOMATION_AVAILABLE = True
+except ImportError as e:
+    print(f"Automation import failed: {e}")
+    AUTOMATION_AVAILABLE = False
+
 # Setup logging for AI Studio debugging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -1873,10 +1892,30 @@ def overview():
     return redirect(url_for('home'))
 
 
+@app.route('/automation')
 @app.route('/jobs')
-def jobs():
-    """Redirect to home (jobs are shown there now)"""
-    return redirect(url_for('home'))
+def automation():
+    """Automation Hub - Job scheduling and monitoring"""
+    jobs_list = []
+    stats = {}
+    failures = []
+
+    if AUTOMATION_AVAILABLE:
+        try:
+            init_jobs_db()
+            jobs_list = get_all_jobs()
+            stats = get_stats_summary()
+            failures = get_recent_failures(hours=24)
+        except Exception as e:
+            logger.error(f"Failed to load automation data: {e}")
+
+    return render_template('automation.html',
+                           active_category='automation',
+                           active_page='automation',
+                           jobs=jobs_list,
+                           stats=stats,
+                           failures=failures,
+                           automation_available=AUTOMATION_AVAILABLE)
 
 
 @app.route('/health')
@@ -4524,6 +4563,177 @@ def api_terminal_select(window_id):
     save_terminal_sessions(sessions)
 
     return jsonify({'success': True})
+
+
+# ============================================
+# Automation Hub API
+# ============================================
+
+@app.route('/api/automation/jobs')
+def api_automation_jobs():
+    """Get all automation jobs with stats."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        init_jobs_db()
+        jobs = get_all_jobs()
+        stats = get_stats_summary()
+        return jsonify({'jobs': jobs, 'stats': stats})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>')
+def api_automation_job(job_id):
+    """Get a single job by ID."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        job = get_job(job_id)
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>', methods=['PUT'])
+def api_automation_update_job(job_id):
+    """Update a job's configuration."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Handle config specially - convert dict to JSON string
+        updates = {}
+        if 'config' in data:
+            import json
+            updates['config_json'] = json.dumps(data['config'])
+        if 'enabled' in data:
+            updates['enabled'] = 1 if data['enabled'] else 0
+        if 'description' in data:
+            updates['description'] = data['description']
+
+        job = update_job(job_id, updates)
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>/runs')
+def api_automation_job_runs(job_id):
+    """Get run history for a job."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        runs = get_job_runs(job_id, limit=limit)
+        return jsonify({'runs': runs})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>/trigger', methods=['POST'])
+def api_automation_trigger(job_id):
+    """Manually trigger a job."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        executor = JobExecutor()
+        result = executor.run_job(job_id, trigger_type='manual', triggered_by='dashboard')
+
+        return jsonify({
+            'success': result.success,
+            'exit_code': result.exit_code,
+            'duration_seconds': result.duration_seconds,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'error_message': result.error_message,
+            'result_data': result.result_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>/toggle', methods=['POST'])
+def api_automation_toggle(job_id):
+    """Toggle a job's enabled state."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        job = toggle_job(job_id)
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/runs/<run_id>')
+def api_automation_run(run_id):
+    """Get details of a specific run."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        run = get_run(run_id)
+        if not run:
+            return jsonify({'error': 'Run not found'}), 404
+        return jsonify(run)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/stats')
+def api_automation_stats():
+    """Get automation statistics summary."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        stats = get_stats_summary()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/failures')
+def api_automation_failures():
+    """Get recent failures."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        hours = request.args.get('hours', 24, type=int)
+        failures = get_recent_failures(hours=hours)
+        return jsonify({'failures': failures})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/failures', methods=['DELETE'])
+def api_automation_clear_failures():
+    """Clear recent failures."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        hours = request.args.get('hours', 24, type=int)
+        count = clear_recent_failures(hours=hours)
+        return jsonify({'success': True, 'cleared': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 def main():
