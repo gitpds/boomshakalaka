@@ -2,7 +2,6 @@
 Monthly Inventory Email Job
 
 Sends monthly inventory check reminders with Google Form links.
-Migrated from N8N workflow.
 """
 
 import os
