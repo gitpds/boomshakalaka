@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block title %}Vibecraft{% endblock %}
+{% block sidebar_title %}Vibecraft{% endblock %}
+{% block page_title %}Vibecraft{% endblock %}
+{% block page_subtitle %}3D Claude Code Visualization{% endblock %}
+
+{% block content %}
+<div class="vibecraft-container">
+    <!-- Status Header -->
+    <div class="vibecraft-header">
+        <div class="vibecraft-status-section">
+            <div class="status-indicator" id="vibecraft-status">
+                <span class="status-dot" id="status-dot"></span>
+                <span class="status-text" id="status-text">Checking...</span>
+            </div>
+        </div>
+        <div class="vibecraft-actions">
+            <button class="action-btn" onclick="VibecraftControl.reconnect()" title="Reconnect">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                <span>Reconnect</span>
+            </button>
+            <button class="action-btn" onclick="VibecraftControl.openNewTab()" title="Open in New Tab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                <span>New Tab</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- iframe Container -->
+    <div class="vibecraft-content">
+        <iframe
+            id="vibecraft-iframe"
+            src="http://localhost:4003"
+            allow="autoplay"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+        ></iframe>
+
+        <!-- Offline Overlay -->
+        <div class="offline-overlay" id="offline-overlay">
+            <div class="offline-content">
+                <svg class="offline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    <line x1="1" y1="1" x2="23" y2="23" stroke-width="2.5"/>
+                </svg>
+                <h3>Vibecraft Unavailable</h3>
+                <p>Unable to connect to Vibecraft at <code>localhost:4003</code></p>
+                <div class="offline-tips">
+                    <p><strong>To start Vibecraft:</strong></p>
+                    <ul>
+                        <li>First time setup: <code>npx vibecraft setup</code></li>
+                        <li>Start the server: <code>npx vibecraft</code></li>
+                        <li>Default port is 4003</li>
+                    </ul>
+                    <p style="margin-top: 12px;"><strong>Remote access via SSH:</strong></p>
+                    <ul>
+                        <li>Add to your SSH connection: <code>-L 4003:localhost:4003</code></li>
+                    </ul>
+                </div>
+                <button class="btn btn-primary" onclick="VibecraftControl.reconnect()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.vibecraft-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+    min-height: 400px;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+/* Header Bar */
+.vibecraft-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.vibecraft-status-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.3s ease;
+}
+
+.status-dot.online {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.status-dot.offline {
+    background: var(--error);
+}
+
+.status-dot.checking {
+    background: var(--warning);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.vibecraft-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.action-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.action-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* iframe Content */
+.vibecraft-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: #0a0a0f;
+}
+
+.vibecraft-content iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Offline Overlay */
+.offline-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-primary);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.offline-overlay.visible {
+    display: flex;
+}
+
+.offline-content {
+    text-align: center;
+    padding: 40px;
+    max-width: 500px;
+}
+
+.offline-icon {
+    width: 80px;
+    height: 80px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+.offline-content h3 {
+    font-size: 20px;
+    color: var(--text-primary);
+    margin: 0 0 12px 0;
+}
+
+.offline-content p {
+    color: var(--text-secondary);
+    margin: 0 0 20px 0;
+}
+
+.offline-content code {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+}
+
+.offline-tips {
+    text-align: left;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.offline-tips p {
+    margin: 0 0 10px 0;
+}
+
+.offline-tips ul {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--text-muted);
+}
+
+.offline-tips li {
+    margin-bottom: 6px;
+}
+
+.offline-content .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.offline-content .btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .vibecraft-container {
+        height: calc(100vh - 80px);
+        border-radius: 0;
+    }
+
+    .vibecraft-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .vibecraft-status-section {
+        justify-content: center;
+    }
+
+    .vibecraft-actions {
+        justify-content: center;
+    }
+
+    .action-btn span {
+        display: none;
+    }
+}
+</style>
+
+<script>
+const VibecraftControl = {
+    serverUrl: 'http://localhost:4003',
+    checkInterval: null,
+    isOnline: false,
+
+    init() {
+        this.checkConnection();
+        // Check connection every 30 seconds
+        this.checkInterval = setInterval(() => this.checkConnection(), 30000);
+
+        // Also check when iframe loads/errors
+        const iframe = document.getElementById('vibecraft-iframe');
+        iframe.onload = () => this.onIframeLoad();
+        iframe.onerror = () => this.setOffline();
+    },
+
+    async checkConnection() {
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('status-text');
+
+        dot.className = 'status-dot checking';
+        text.textContent = 'Checking...';
+
+        try {
+            // Try to fetch from the Vibecraft server
+            const response = await fetch(this.serverUrl, {
+                method: 'HEAD',
+                mode: 'no-cors',
+                signal: AbortSignal.timeout(5000)
+            });
+
+            // With no-cors, we can't read the response but if it doesn't throw, the server is likely up
+            // We'll rely on the iframe load event for final confirmation
+            this.setOnline();
+        } catch (err) {
+            this.setOffline();
+        }
+    },
+
+    setOnline() {
+        this.isOnline = true;
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('status-text');
+        const overlay = document.getElementById('offline-overlay');
+
+        dot.className = 'status-dot online';
+        text.textContent = 'Connected';
+        overlay.classList.remove('visible');
+    },
+
+    setOffline() {
+        this.isOnline = false;
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('status-text');
+        const overlay = document.getElementById('offline-overlay');
+
+        dot.className = 'status-dot offline';
+        text.textContent = 'Offline';
+        overlay.classList.add('visible');
+    },
+
+    onIframeLoad() {
+        // iframe loaded successfully
+        if (!this.isOnline) {
+            this.setOnline();
+        }
+    },
+
+    reconnect() {
+        const iframe = document.getElementById('vibecraft-iframe');
+        const overlay = document.getElementById('offline-overlay');
+
+        // Hide overlay temporarily
+        overlay.classList.remove('visible');
+
+        // Reload iframe
+        iframe.src = this.serverUrl;
+
+        // Recheck connection
+        setTimeout(() => this.checkConnection(), 2000);
+    },
+
+    openNewTab() {
+        window.open(this.serverUrl, '_blank');
+    }
+};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    VibecraftControl.init();
+});
+</script>
+{% endblock %}

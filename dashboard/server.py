@@ -17,6 +17,7 @@ import json
 import uuid
 import logging
 import sqlite3
+import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, Response, stream_with_context
@@ -1904,6 +1905,23 @@ def workshop_agents():
                          **get_common_context())
 
 
+@app.route('/workshop/vibecraft')
+def workshop_vibecraft():
+    """Vibecraft - 3D Claude Code visualization"""
+    return render_template('workshop_vibecraft.html',
+                         active_page='workshop_vibecraft',
+                         active_category='workshop',
+                         **get_common_context())
+
+
+@app.route('/reggie')
+def reggie():
+    """Reggie robot control dashboard - embedded interface"""
+    return render_template('reggie.html',
+                         active_page='reggie',
+                         **get_common_context())
+
+
 # Keep old routes for backwards compatibility
 @app.route('/overview')
 def overview():
@@ -1985,6 +2003,85 @@ def api_stats():
         'log_files_count': len(LOG_FILES),
         'timestamp': datetime.now().isoformat(),
     })
+
+
+# ============================================
+# Reggie Robot API Proxy Endpoints
+# ============================================
+
+REGGIE_DASHBOARD_URL = 'http://192.168.0.168:3008'
+REGGIE_BACKEND_URL = 'http://192.168.0.168:3001'
+REGGIE_ROBOT_URL = 'http://192.168.0.11:8000'
+
+
+@app.route('/api/reggie/health')
+def api_reggie_health():
+    """Check Reggie dashboard and backend health"""
+    result = {
+        'dashboard': False,
+        'backend': False,
+        'robot': False,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    # Check dashboard (React frontend)
+    try:
+        resp = requests.get(REGGIE_DASHBOARD_URL, timeout=3)
+        result['dashboard'] = resp.status_code == 200
+    except requests.RequestException:
+        pass
+
+    # Check backend (Express API)
+    try:
+        resp = requests.get(f'{REGGIE_BACKEND_URL}/api/health', timeout=3)
+        if resp.status_code == 200:
+            result['backend'] = True
+            data = resp.json()
+            result['robot'] = data.get('robot_connected', False)
+    except requests.RequestException:
+        pass
+
+    # Direct robot check if backend didn't report
+    if result['backend'] and not result.get('robot'):
+        try:
+            resp = requests.get(f'{REGGIE_ROBOT_URL}/api/health', timeout=2)
+            result['robot'] = resp.status_code == 200
+        except requests.RequestException:
+            pass
+
+    return jsonify(result)
+
+
+@app.route('/api/reggie/status')
+def api_reggie_status():
+    """Get Reggie's current status from backend"""
+    try:
+        resp = requests.get(f'{REGGIE_BACKEND_URL}/api/status', timeout=5)
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+        return jsonify({'error': 'Backend returned error', 'status_code': resp.status_code}), 502
+    except requests.Timeout:
+        return jsonify({'error': 'Request to Reggie backend timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': f'Failed to connect to Reggie backend: {str(e)}'}), 503
+
+
+@app.route('/api/reggie/proxy/<path:endpoint>', methods=['GET', 'POST'])
+def api_reggie_proxy(endpoint):
+    """Proxy requests to Reggie's backend API"""
+    url = f'{REGGIE_BACKEND_URL}/api/{endpoint}'
+
+    try:
+        if request.method == 'POST':
+            resp = requests.post(url, json=request.get_json(), timeout=10)
+        else:
+            resp = requests.get(url, params=request.args, timeout=10)
+
+        return jsonify(resp.json()), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
 
 
 @app.route('/api/team-videos/<team>')
