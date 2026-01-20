@@ -17,6 +17,13 @@ Personal workstation server with web dashboard, remote terminal access, and secu
   - Tab rename, close via right-click context menu
   - Keyboard shortcuts (Ctrl+T new tab, Ctrl+W close)
   - Theme synced with dashboard
+  - **Split-pane File Viewer** - View code/markdown alongside terminal
+    - Browse files with built-in file browser
+    - Search files by name
+    - Recent files list
+    - Markdown rendering with syntax highlighting
+    - Code syntax highlighting (50+ languages)
+    - API endpoint for Claude Code integration
 
 - **Secure Remote Access**
   - SSH with key-only authentication from internet
@@ -290,6 +297,68 @@ python scripts/dashboard_ctl.py start
 ```
 
 The script automatically detects if the dashboard is managed by systemd and handles restarts appropriately.
+
+## Terminal File Viewer
+
+The terminal page includes a split-pane file viewer for viewing code, markdown, and text files alongside your terminal session.
+
+### Using the File Viewer
+
+1. **Toggle Panel** - Click the split-pane icon in the tab bar (or press `Ctrl+\`)
+2. **Browse Files** - Click the folder icon to open the file browser
+   - **Recent** tab shows recently viewed files
+   - **Browse** tab lets you navigate directories
+   - **Search** tab finds files by name
+3. **Direct Path** - Paste a file path and press Enter
+
+### API Endpoints
+
+The file viewer can be controlled via API, useful for Claude Code integration:
+
+```bash
+# Display a file (auto-detects markdown vs code)
+curl -X POST http://localhost:3003/api/terminal/display \
+  -H "Content-Type: application/json" \
+  -d '{"type": "file", "path": "/home/pds/project/README.md"}'
+
+# Display raw code with language hint
+curl -X POST http://localhost:3003/api/terminal/display \
+  -H "Content-Type: application/json" \
+  -d '{"type": "code", "content": "def hello():\n    print(\"hi\")", "language": "python"}'
+
+# Display raw markdown
+curl -X POST http://localhost:3003/api/terminal/display \
+  -H "Content-Type: application/json" \
+  -d '{"type": "markdown", "content": "# Hello\n\nThis is **bold**"}'
+
+# Get current display state
+curl http://localhost:3003/api/terminal/display
+
+# Clear the display
+curl -X DELETE http://localhost:3003/api/terminal/display
+
+# List directory contents
+curl "http://localhost:3003/api/terminal/files/list?path=/home/pds"
+
+# Search for files
+curl "http://localhost:3003/api/terminal/files/search?q=README"
+```
+
+### Claude Code Integration
+
+When working in Claude Code, you can ask it to display files in the viewer:
+
+```
+"Hey Claude, load /home/pds/project/docs/api.md in the file viewer"
+```
+
+Claude will use the API to send the file to your terminal's side panel.
+
+### Supported File Types
+
+- **Markdown** (`.md`) - Rendered with full formatting
+- **Code** - Syntax highlighted for 50+ languages including Python, JavaScript, TypeScript, Go, Rust, SQL, YAML, and more
+- **Text** (`.txt`, `.env`, etc.) - Plain text display
 
 ## Troubleshooting
 

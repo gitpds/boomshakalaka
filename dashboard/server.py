@@ -4682,6 +4682,235 @@ def api_terminal_select(window_id):
 
 
 # ============================================
+# Terminal Content Viewer API
+# ============================================
+
+# In-memory storage for display content (could be moved to file/DB if persistence needed)
+_terminal_display_state = {
+    'type': None,      # 'markdown', 'url', 'code', 'file'
+    'content': None,   # Raw content or URL
+    'path': None,      # For file type
+    'language': None,  # For code type
+    'timestamp': None  # When content was last updated
+}
+
+# Allowed directories for file reading (security)
+TERMINAL_DISPLAY_ALLOWED_DIRS = [
+    Path('/home/pds/boomshakalaka'),
+    Path('/home/pds'),
+    Path('/tmp'),
+]
+
+
+def is_path_allowed(file_path):
+    """Check if file path is within allowed directories."""
+    try:
+        resolved = Path(file_path).resolve()
+        return any(
+            resolved == allowed or allowed in resolved.parents
+            for allowed in TERMINAL_DISPLAY_ALLOWED_DIRS
+        )
+    except (ValueError, OSError):
+        return False
+
+
+@app.route('/api/terminal/display', methods=['GET'])
+def api_terminal_display_get():
+    """Get current display content for terminal side panel."""
+    return jsonify(_terminal_display_state)
+
+
+@app.route('/api/terminal/display', methods=['POST'])
+def api_terminal_display_set():
+    """Set content to display in terminal side panel.
+
+    Request body:
+        type: 'markdown' | 'url' | 'code' | 'file'
+        content: string (raw content or URL)
+        path: string (optional, for file reading)
+        language: string (optional, for code highlighting)
+    """
+    global _terminal_display_state
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'JSON body required'}), 400
+
+    content_type = data.get('type')
+    if content_type not in ('markdown', 'url', 'code', 'file'):
+        return jsonify({'error': 'Invalid type. Must be: markdown, url, code, or file'}), 400
+
+    content = data.get('content', '')
+    path = data.get('path')
+    language = data.get('language', 'plaintext')
+
+    # Handle file type - read the file content
+    if content_type == 'file':
+        if not path:
+            return jsonify({'error': 'path required for file type'}), 400
+
+        if not is_path_allowed(path):
+            return jsonify({'error': 'Path not allowed'}), 403
+
+        file_path = Path(path)
+        if not file_path.exists():
+            return jsonify({'error': f'File not found: {path}'}), 404
+
+        if not file_path.is_file():
+            return jsonify({'error': f'Not a file: {path}'}), 400
+
+        try:
+            content = file_path.read_text(encoding='utf-8', errors='replace')
+            # Detect language from extension
+            ext = file_path.suffix.lower()
+            ext_to_lang = {
+                '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+                '.jsx': 'jsx', '.tsx': 'tsx', '.json': 'json',
+                '.html': 'html', '.css': 'css', '.scss': 'scss',
+                '.md': 'markdown', '.yaml': 'yaml', '.yml': 'yaml',
+                '.sh': 'bash', '.bash': 'bash', '.zsh': 'zsh',
+                '.sql': 'sql', '.go': 'go', '.rs': 'rust',
+                '.java': 'java', '.c': 'c', '.cpp': 'cpp', '.h': 'c',
+                '.rb': 'ruby', '.php': 'php', '.swift': 'swift',
+                '.kt': 'kotlin', '.r': 'r', '.lua': 'lua',
+                '.toml': 'toml', '.ini': 'ini', '.xml': 'xml',
+            }
+            if ext == '.md':
+                content_type = 'markdown'  # Auto-render markdown files
+            else:
+                language = ext_to_lang.get(ext, 'plaintext')
+                content_type = 'code'
+        except Exception as e:
+            return jsonify({'error': f'Failed to read file: {str(e)}'}), 500
+
+    # Update state
+    _terminal_display_state = {
+        'type': content_type,
+        'content': content,
+        'path': path,
+        'language': language,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    return jsonify({'success': True, 'state': _terminal_display_state})
+
+
+@app.route('/api/terminal/display', methods=['DELETE'])
+def api_terminal_display_clear():
+    """Clear the display content."""
+    global _terminal_display_state
+    _terminal_display_state = {
+        'type': None,
+        'content': None,
+        'path': None,
+        'language': None,
+        'timestamp': None
+    }
+    return jsonify({'success': True})
+
+
+@app.route('/api/terminal/files/list')
+def api_terminal_files_list():
+    """List files in a directory for the file browser."""
+    dir_path = request.args.get('path', '/home/pds')
+
+    if not is_path_allowed(dir_path):
+        return jsonify({'error': 'Path not allowed'}), 403
+
+    path = Path(dir_path)
+    if not path.exists():
+        return jsonify({'error': 'Directory not found'}), 404
+    if not path.is_dir():
+        return jsonify({'error': 'Not a directory'}), 400
+
+    items = []
+    try:
+        for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            # Skip hidden files
+            if item.name.startswith('.'):
+                continue
+            items.append({
+                'name': item.name,
+                'path': str(item),
+                'is_dir': item.is_dir(),
+                'ext': item.suffix.lower() if item.is_file() else None
+            })
+    except PermissionError:
+        return jsonify({'error': 'Permission denied'}), 403
+
+    # Get parent directory
+    parent = str(path.parent) if path != Path('/') else None
+    if parent and not is_path_allowed(parent):
+        parent = None
+
+    return jsonify({
+        'path': str(path),
+        'parent': parent,
+        'items': items
+    })
+
+
+@app.route('/api/terminal/files/search')
+def api_terminal_files_search():
+    """Search for files by name."""
+    query = request.args.get('q', '').strip()
+    base_path = request.args.get('path', '/home/pds')
+
+    if not query or len(query) < 2:
+        return jsonify({'error': 'Query too short'}), 400
+
+    if not is_path_allowed(base_path):
+        return jsonify({'error': 'Path not allowed'}), 403
+
+    results = []
+    base = Path(base_path)
+
+    if not base.exists():
+        return jsonify({'error': 'Base path not found'}), 404
+
+    try:
+        # Use glob to search, limit results
+        patterns = [f'**/*{query}*', f'**/*{query.lower()}*', f'**/*{query.upper()}*']
+        seen = set()
+
+        for pattern in patterns:
+            for match in base.glob(pattern):
+                if str(match) in seen:
+                    continue
+                seen.add(str(match))
+
+                # Skip hidden files/dirs
+                if any(part.startswith('.') for part in match.parts):
+                    continue
+
+                # Only include viewable files
+                if match.is_file():
+                    ext = match.suffix.lower()
+                    viewable = ext in ['.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.json',
+                                       '.html', '.css', '.yaml', '.yml', '.sh', '.txt',
+                                       '.sql', '.go', '.rs', '.java', '.c', '.cpp', '.h',
+                                       '.rb', '.php', '.toml', '.ini', '.xml', '.env']
+                    if viewable:
+                        results.append({
+                            'name': match.name,
+                            'path': str(match),
+                            'is_dir': False,
+                            'ext': ext
+                        })
+
+                if len(results) >= 50:  # Limit results
+                    break
+
+            if len(results) >= 50:
+                break
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify({'results': results, 'query': query})
+
+
+# ============================================
 # Automation Hub API
 # ============================================
 
