@@ -24,8 +24,21 @@
         </button>
     </div>
     <div class="terminal-main" id="terminal-main">
-        <div class="terminal-content">
-            <iframe id="terminal-iframe" src=""></iframe>
+        <div class="terminal-content" id="terminal-content">
+            <!-- Top pane -->
+            <div class="terminal-pane" id="terminal-pane-top" data-pane="top">
+                <iframe id="terminal-iframe" src=""></iframe>
+            </div>
+
+            <!-- Resizable divider -->
+            <div class="pane-divider" id="pane-divider">
+                <div class="divider-grip"></div>
+            </div>
+
+            <!-- Bottom pane -->
+            <div class="terminal-pane" id="terminal-pane-bottom" data-pane="bottom">
+                <iframe id="terminal-iframe-bottom" src=""></iframe>
+            </div>
         </div>
         <div class="content-panel" id="content-panel">
             <div class="panel-header">
@@ -345,20 +358,64 @@
     grid-template-columns: 1fr 1fr;
 }
 
-/* Terminal Content - Single iframe */
-/* Terminal always uses dark theme (#060a14) for best readability */
+/* Dual pane layout */
 .terminal-content {
+    display: flex;
+    flex-direction: column;
     position: relative;
     overflow: hidden;
-    background: #060a14;
+    background: #122637;
     min-width: 0;
 }
 
-.terminal-content iframe {
+.terminal-pane {
+    position: relative;
+    overflow: hidden;
+    min-height: 100px;
+}
+
+#terminal-pane-top {
+    flex: 1;
+}
+
+#terminal-pane-bottom {
+    flex: 1;
+}
+
+.terminal-pane iframe {
     width: 100%;
     height: 100%;
     border: none;
-    background: #060a14;
+    background: #122637;
+}
+
+/* Focused pane indicator */
+.terminal-pane.focused {
+    box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* Resizable divider */
+.pane-divider {
+    height: 6px;
+    background: var(--bg-secondary);
+    cursor: row-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pane-divider:hover {
+    background: var(--bg-tertiary);
+}
+
+.divider-grip {
+    width: 40px;
+    height: 4px;
+    background: var(--border-light);
+    border-radius: 2px;
 }
 
 /* Content Panel */
@@ -1520,31 +1577,111 @@ const ContentViewer = {
     }
 };
 
-// Persistent Terminal Manager - backed by tmux sessions
+// Persistent Terminal Manager - backed by paired tmux sessions
 const TerminalManager = {
     windows: [],
     activeWindowId: null,
     contextWindowId: null,
+    splitRatio: 0.5,
+    isDragging: false,
+    focusedPane: 'top',
 
-    getTerminalUrl() {
+    getTerminalUrl(port = 7681) {
         // Direct connection to ttyd
         const host = window.location.hostname;
-        return `http://${host}:7681`;
+        return `http://${host}:${port}`;
     },
 
     async init() {
         // Load existing windows from backend
         await this.loadWindows();
 
-        // Load ttyd directly
-        const iframe = document.getElementById('terminal-iframe');
-        iframe.src = this.getTerminalUrl();
+        // Load BOTH iframes - top (7681) and bottom (7682)
+        document.getElementById('terminal-iframe').src = this.getTerminalUrl(7681);
+        document.getElementById('terminal-iframe-bottom').src = this.getTerminalUrl(7682);
 
+        this.setupPaneResizer();
+        this.loadSplitRatio();
         this.setupKeyboardShortcuts();
         this.setupContextMenu();
 
         // Initialize content viewer
         ContentViewer.init();
+    },
+
+    // Pane resize logic
+    setupPaneResizer() {
+        const divider = document.getElementById('pane-divider');
+        const container = document.getElementById('terminal-content');
+
+        divider.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            this.isDragging = true;
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const relativeY = e.clientY - containerRect.top;
+            const ratio = relativeY / containerRect.height;
+
+            // Clamp between 20% and 80%
+            this.setSplitRatio(Math.max(0.2, Math.min(0.8, ratio)));
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (this.isDragging) {
+                this.isDragging = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                this.saveSplitRatio();
+            }
+        });
+    },
+
+    setSplitRatio(ratio) {
+        this.splitRatio = ratio;
+        const topPane = document.getElementById('terminal-pane-top');
+        const bottomPane = document.getElementById('terminal-pane-bottom');
+
+        topPane.style.flex = `${ratio}`;
+        bottomPane.style.flex = `${1 - ratio}`;
+    },
+
+    loadSplitRatio() {
+        try {
+            const stored = localStorage.getItem('terminal_split_ratio');
+            if (stored) {
+                this.setSplitRatio(parseFloat(stored));
+            }
+        } catch (e) {
+            // Ignore storage errors
+        }
+    },
+
+    saveSplitRatio() {
+        try {
+            localStorage.setItem('terminal_split_ratio', this.splitRatio.toString());
+        } catch (e) {
+            // Ignore storage errors
+        }
+    },
+
+    // Toggle focus between top and bottom panes
+    togglePaneFocus() {
+        this.focusedPane = this.focusedPane === 'top' ? 'bottom' : 'top';
+        document.querySelectorAll('.terminal-pane').forEach(p => {
+            p.classList.toggle('focused', p.dataset.pane === this.focusedPane);
+        });
+
+        // Focus the iframe
+        const iframe = this.focusedPane === 'top'
+            ? document.getElementById('terminal-iframe')
+            : document.getElementById('terminal-iframe-bottom');
+        iframe.focus();
     },
 
     async loadWindows() {
@@ -1727,8 +1864,11 @@ const TerminalManager = {
     },
 
     reconnect() {
-        const iframe = document.getElementById('terminal-iframe');
-        iframe.src = iframe.src;
+        // Reconnect both iframes
+        const iframeTop = document.getElementById('terminal-iframe');
+        const iframeBottom = document.getElementById('terminal-iframe-bottom');
+        iframeTop.src = iframeTop.src;
+        iframeBottom.src = iframeBottom.src;
         this.hideContextMenu();
     },
 
@@ -1789,6 +1929,11 @@ const TerminalManager = {
             if (e.ctrlKey && e.key === 'Tab') {
                 e.preventDefault();
                 this.nextTab();
+            }
+            // Ctrl+`: Toggle focus between top/bottom panes
+            if (e.ctrlKey && e.key === '`') {
+                e.preventDefault();
+                this.togglePaneFocus();
             }
             // Ctrl+\: Toggle panel
             if (e.ctrlKey && e.key === '\\') {

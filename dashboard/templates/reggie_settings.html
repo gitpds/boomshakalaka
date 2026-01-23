@@ -1,0 +1,797 @@
+{% extends "reggie_base.html" %}
+
+{% block reggie_content %}
+<div class="settings-layout">
+    <!-- Left Column: Audio & Network -->
+    <div class="settings-column">
+        <!-- Volume Controls -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                </svg>
+                <span>Volume Controls</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="volume-section">
+                    <div class="volume-row">
+                        <div class="volume-info">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                            </svg>
+                            <span>Speaker</span>
+                        </div>
+                        <input type="range" id="volume-speaker" min="0" max="100" value="50" onchange="SettingsPage.setVolume('speaker', this.value)">
+                        <span class="volume-value" id="volume-speaker-val">50%</span>
+                        <button class="volume-test-btn" onclick="SettingsPage.testSound()" title="Test Sound">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="volume-row">
+                        <div class="volume-info">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                                <line x1="12" y1="19" x2="12" y2="23"/>
+                                <line x1="8" y1="23" x2="16" y2="23"/>
+                            </svg>
+                            <span>Microphone</span>
+                        </div>
+                        <input type="range" id="volume-mic" min="0" max="100" value="50" onchange="SettingsPage.setVolume('mic', this.value)">
+                        <span class="volume-value" id="volume-mic-val">50%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network Info -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                    <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                    <line x1="12" y1="20" x2="12.01" y2="20"/>
+                </svg>
+                <span>Network</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="info-table">
+                    <div class="info-row">
+                        <span class="info-label">Robot IP</span>
+                        <span class="info-value">192.168.0.11</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">API Port</span>
+                        <span class="info-value">8000</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Camera Port</span>
+                        <span class="info-value">8443</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">WebSocket</span>
+                        <span class="info-value" id="ws-url">ws://192.168.0.11:8000/api/state/ws/full</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Endpoints -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                <span>API Reference</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="api-list">
+                    <div class="api-item">
+                        <code>GET /api/daemon/status</code>
+                        <span>Daemon state</span>
+                    </div>
+                    <div class="api-item">
+                        <code>POST /api/daemon/start</code>
+                        <span>Start daemon</span>
+                    </div>
+                    <div class="api-item">
+                        <code>POST /api/daemon/stop</code>
+                        <span>Stop daemon</span>
+                    </div>
+                    <div class="api-item">
+                        <code>GET /api/state/full</code>
+                        <span>Full robot state</span>
+                    </div>
+                    <div class="api-item">
+                        <code>POST /api/move/goto</code>
+                        <span>Move to pose</span>
+                    </div>
+                    <div class="api-item">
+                        <code>POST /api/motors/set_mode/{mode}</code>
+                        <span>Set motor mode</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Daemon & Diagnostics -->
+    <div class="settings-column">
+        <!-- Daemon Control -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+                <span>Daemon Control</span>
+                <span class="reggie-card-badge" id="daemon-badge">--</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="daemon-status-section">
+                    <div class="daemon-status-row">
+                        <span class="daemon-label">State</span>
+                        <span class="daemon-value" id="daemon-state">--</span>
+                    </div>
+                    <div class="daemon-status-row">
+                        <span class="daemon-label">Uptime</span>
+                        <span class="daemon-value" id="daemon-uptime">--</span>
+                    </div>
+                </div>
+
+                <div class="daemon-actions">
+                    <button class="reggie-btn" onclick="SettingsPage.startDaemon()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Start
+                    </button>
+                    <button class="reggie-btn" onclick="SettingsPage.stopDaemon()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="6" y="6" width="12" height="12"/>
+                        </svg>
+                        Stop
+                    </button>
+                    <button class="reggie-btn restart-btn" onclick="SettingsPage.restartDaemon()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Restart
+                    </button>
+                </div>
+
+                <div class="daemon-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="wake-on-start" checked>
+                        <span>Wake up animation on start</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="sleep-on-stop" checked>
+                        <span>Sleep animation on stop</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Motor Status -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+                </svg>
+                <span>Motor Status</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="motor-status-grid">
+                    <div class="motor-status-item">
+                        <span class="motor-label">Mode</span>
+                        <span class="motor-value" id="motor-mode">--</span>
+                    </div>
+                    <div class="motor-status-item">
+                        <span class="motor-label">Head Motors</span>
+                        <span class="motor-value" id="head-motors">--</span>
+                    </div>
+                    <div class="motor-status-item">
+                        <span class="motor-label">Body Motor</span>
+                        <span class="motor-value" id="body-motor">--</span>
+                    </div>
+                    <div class="motor-status-item">
+                        <span class="motor-label">Antenna Motors</span>
+                        <span class="motor-value" id="antenna-motors">--</span>
+                    </div>
+                </div>
+                <button class="reggie-btn reggie-btn-sm" onclick="SettingsPage.refreshMotorStatus()">
+                    Refresh Status
+                </button>
+            </div>
+        </div>
+
+        <!-- Diagnostics -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                <span>Diagnostics</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="diagnostics-info">
+                    <div class="diag-row">
+                        <span class="diag-label">API Latency</span>
+                        <span class="diag-value" id="api-latency">--</span>
+                    </div>
+                    <div class="diag-row">
+                        <span class="diag-label">WS State</span>
+                        <span class="diag-value" id="ws-state">--</span>
+                    </div>
+                    <div class="diag-row">
+                        <span class="diag-label">Last Update</span>
+                        <span class="diag-value" id="last-update">--</span>
+                    </div>
+                </div>
+                <div class="diag-actions">
+                    <button class="reggie-btn reggie-btn-sm" onclick="SettingsPage.pingApi()">
+                        Ping API
+                    </button>
+                    <button class="reggie-btn reggie-btn-sm" onclick="SettingsPage.reconnectWs()">
+                        Reconnect WS
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- External Links -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                <span>External Links</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="external-links">
+                    <a href="http://192.168.0.11:8000/docs" target="_blank" class="external-link">
+                        <span>Robot API Docs</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                    </a>
+                    <a href="http://192.168.0.168:3008" target="_blank" class="external-link">
+                        <span>MacBook Dashboard</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Settings Layout */
+.settings-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.settings-column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Volume Controls */
+.volume-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.volume-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 50px 32px;
+    align-items: center;
+    gap: 12px;
+}
+
+.volume-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.volume-info svg {
+    width: 18px;
+    height: 18px;
+    color: var(--accent);
+}
+
+.volume-row input[type="range"] {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-primary);
+    border-radius: 3px;
+}
+
+.volume-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+}
+
+.volume-value {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.volume-test-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.volume-test-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.volume-test-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Info Table */
+.info-table {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.info-value {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+}
+
+/* API List */
+.api-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.api-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+}
+
+.api-item code {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+}
+
+.api-item span {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Daemon Control */
+.daemon-status-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 16px;
+}
+
+.daemon-status-row {
+    background: var(--bg-primary);
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.daemon-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.daemon-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.daemon-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.daemon-actions .reggie-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.daemon-actions .reggie-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.restart-btn {
+    background: var(--warning);
+    border-color: var(--warning);
+    color: #fff;
+}
+
+.restart-btn:hover {
+    filter: brightness(1.1);
+}
+
+.daemon-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.checkbox-label input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
+/* Motor Status */
+.motor-status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.motor-status-item {
+    background: var(--bg-primary);
+    padding: 10px;
+    border-radius: 6px;
+}
+
+.motor-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.motor-value {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+}
+
+/* Diagnostics */
+.diagnostics-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.diag-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+}
+
+.diag-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.diag-value {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+}
+
+.diag-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.diag-actions .reggie-btn {
+    flex: 1;
+}
+
+/* External Links */
+.external-links {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.external-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.15s;
+}
+
+.external-link:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.external-link svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .settings-layout {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block reggie_scripts %}
+<script>
+const SettingsPage = {
+    lastStateUpdate: null,
+
+    init() {
+        this.loadVolume();
+        this.updateDaemonStatus();
+        this.updateDiagnostics();
+
+        // Listen for state updates
+        ReggieShared.on('stateUpdate', () => {
+            this.lastStateUpdate = new Date();
+        });
+
+        ReggieShared.on('connectionChange', (data) => {
+            this.updateDaemonUI(data.daemon);
+        });
+
+        ReggieShared.on('motorModeChange', (mode) => {
+            document.getElementById('motor-mode').textContent = mode;
+        });
+
+        // Update diagnostics periodically
+        setInterval(() => this.updateDiagnostics(), 5000);
+    },
+
+    async loadVolume() {
+        try {
+            const [speakerRes, micRes] = await Promise.all([
+                fetch('/api/reggie/proxy/volume/current'),
+                fetch('/api/reggie/proxy/volume/microphone/current')
+            ]);
+
+            if (speakerRes.ok) {
+                const data = await speakerRes.json();
+                const vol = data.volume ?? 50;
+                document.getElementById('volume-speaker').value = vol;
+                document.getElementById('volume-speaker-val').textContent = vol + '%';
+            }
+
+            if (micRes.ok) {
+                const data = await micRes.json();
+                const vol = data.volume ?? 50;
+                document.getElementById('volume-mic').value = vol;
+                document.getElementById('volume-mic-val').textContent = vol + '%';
+            }
+        } catch (err) {
+            console.error('Failed to load volume:', err);
+        }
+    },
+
+    async setVolume(type, value) {
+        const endpoint = type === 'speaker' ? 'volume/set' : 'volume/microphone/set';
+        document.getElementById(`volume-${type === 'speaker' ? 'speaker' : 'mic'}-val`).textContent = value + '%';
+
+        try {
+            await fetch(`/api/reggie/proxy/${endpoint}?volume=${value}`, { method: 'POST' });
+        } catch (err) {
+            console.error('Failed to set volume:', err);
+        }
+    },
+
+    async testSound() {
+        try {
+            await fetch('/api/reggie/proxy/volume/test-sound', { method: 'POST' });
+        } catch (err) {
+            console.error('Failed to test sound:', err);
+        }
+    },
+
+    async updateDaemonStatus() {
+        try {
+            const response = await fetch('/api/reggie/health');
+            if (response.ok) {
+                const data = await response.json();
+                this.updateDaemonUI(data.daemon);
+            }
+        } catch (err) {
+            console.error('Failed to get daemon status:', err);
+        }
+    },
+
+    updateDaemonUI(state) {
+        const badge = document.getElementById('daemon-badge');
+        const stateEl = document.getElementById('daemon-state');
+
+        if (state === 'running') {
+            badge.textContent = 'Running';
+            badge.style.background = 'var(--success)';
+            stateEl.textContent = 'Running';
+        } else {
+            badge.textContent = state || 'Stopped';
+            badge.style.background = 'var(--error)';
+            stateEl.textContent = state || 'Stopped';
+        }
+    },
+
+    async startDaemon() {
+        const wakeUp = document.getElementById('wake-on-start').checked;
+        try {
+            await fetch('/api/reggie/daemon/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wake_up: wakeUp })
+            });
+            setTimeout(() => this.updateDaemonStatus(), 2000);
+        } catch (err) {
+            console.error('Failed to start daemon:', err);
+        }
+    },
+
+    async stopDaemon() {
+        const gotoSleep = document.getElementById('sleep-on-stop').checked;
+        try {
+            await fetch('/api/reggie/daemon/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ goto_sleep: gotoSleep })
+            });
+            setTimeout(() => this.updateDaemonStatus(), 2000);
+        } catch (err) {
+            console.error('Failed to stop daemon:', err);
+        }
+    },
+
+    async restartDaemon() {
+        await this.stopDaemon();
+        setTimeout(() => this.startDaemon(), 3000);
+    },
+
+    async refreshMotorStatus() {
+        try {
+            const response = await fetch('/api/reggie/motors/mode');
+            if (response.ok) {
+                const data = await response.json();
+                document.getElementById('motor-mode').textContent = data.mode || '--';
+                // Note: Individual motor status would require additional API endpoints
+            }
+        } catch (err) {
+            console.error('Failed to get motor status:', err);
+        }
+    },
+
+    updateDiagnostics() {
+        // WS State
+        const wsState = ReggieShared.ws?.readyState;
+        const wsStates = ['Connecting', 'Open', 'Closing', 'Closed'];
+        document.getElementById('ws-state').textContent = wsStates[wsState] || 'Unknown';
+
+        // Last Update
+        if (this.lastStateUpdate) {
+            const ago = Math.floor((Date.now() - this.lastStateUpdate) / 1000);
+            document.getElementById('last-update').textContent = `${ago}s ago`;
+        }
+    },
+
+    async pingApi() {
+        const start = performance.now();
+        try {
+            await fetch('/api/reggie/health');
+            const latency = Math.round(performance.now() - start);
+            document.getElementById('api-latency').textContent = `${latency}ms`;
+        } catch (err) {
+            document.getElementById('api-latency').textContent = 'Error';
+        }
+    },
+
+    reconnectWs() {
+        if (ReggieShared.ws) {
+            ReggieShared.ws.close();
+        }
+        ReggieShared.connectWebSocket();
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    SettingsPage.init();
+});
+</script>
+{% endblock %}

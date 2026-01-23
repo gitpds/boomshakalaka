@@ -1,0 +1,597 @@
+{% extends "reggie_base.html" %}
+
+{% block reggie_content %}
+<div class="control-layout">
+    <!-- Left Column: Head & Body Controls -->
+    <div class="control-column">
+        <!-- Head Pose Card -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    <circle cx="9" cy="10" r="1.5"/>
+                    <circle cx="15" cy="10" r="1.5"/>
+                    <path d="M9 15h6"/>
+                </svg>
+                <span>Head Pose</span>
+                <span class="reggie-card-badge" id="head-live-badge" style="display: none;">Live</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="slider-group">
+                    <div class="reggie-slider-row">
+                        <label>Roll</label>
+                        <input type="range" id="head-roll" min="-45" max="45" step="1" value="0">
+                        <span class="reggie-slider-value" id="head-roll-val">0°</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>Pitch</label>
+                        <input type="range" id="head-pitch" min="-45" max="45" step="1" value="0">
+                        <span class="reggie-slider-value" id="head-pitch-val">0°</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>Yaw</label>
+                        <input type="range" id="head-yaw" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="head-yaw-val">0°</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Body Rotation Card -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="8" width="16" height="12" rx="2"/>
+                    <line x1="12" y1="2" x2="12" y2="8"/>
+                </svg>
+                <span>Body Rotation</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="slider-group">
+                    <div class="reggie-slider-row">
+                        <label>Yaw</label>
+                        <input type="range" id="body-yaw" min="-180" max="180" step="1" value="0">
+                        <span class="reggie-slider-value" id="body-yaw-val">0°</span>
+                    </div>
+                </div>
+                <div class="body-visual">
+                    <div class="body-indicator" id="body-indicator">
+                        <div class="body-arrow"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Antennas Card -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 12h6l3-9 6 18 3-9h4"/>
+                </svg>
+                <span>Antennas</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="slider-group">
+                    <div class="reggie-slider-row">
+                        <label>Left</label>
+                        <input type="range" id="antenna-left" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="antenna-left-val">0°</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>Right</label>
+                        <input type="range" id="antenna-right" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="antenna-right-val">0°</span>
+                    </div>
+                </div>
+                <div class="antenna-sync">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="sync-antennas">
+                        <span>Sync antennas</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Motor Mode & Presets -->
+    <div class="control-column">
+        <!-- Motor Mode Card -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+                </svg>
+                <span>Motor Mode</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="motor-mode-grid">
+                    <button class="motor-mode-btn" id="mode-enabled" onclick="ControlPage.setMotorMode('enabled')">
+                        <div class="mode-icon">⚡</div>
+                        <div class="mode-name">Enabled</div>
+                        <div class="mode-desc">Motors active, full control</div>
+                    </button>
+                    <button class="motor-mode-btn" id="mode-disabled" onclick="ControlPage.setMotorMode('disabled')">
+                        <div class="mode-icon">⏹</div>
+                        <div class="mode-name">Disabled</div>
+                        <div class="mode-desc">Motors off, no resistance</div>
+                    </button>
+                    <button class="motor-mode-btn" id="mode-gravity" onclick="ControlPage.setMotorMode('gravity_compensation')">
+                        <div class="mode-icon">🪶</div>
+                        <div class="mode-name">Float</div>
+                        <div class="mode-desc">Gravity compensation mode</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Presets Card -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <span>Quick Presets</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="preset-grid-large">
+                    <button class="preset-btn-large" onclick="ControlPage.preset('up')" title="Look Up">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="18 15 12 9 6 15"/>
+                        </svg>
+                        <span>Up</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="ControlPage.preset('down')" title="Look Down">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                        <span>Down</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="ControlPage.preset('left')" title="Look Left">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                        <span>Left</span>
+                    </button>
+                    <button class="preset-btn-large" onclick="ControlPage.preset('right')" title="Look Right">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                        <span>Right</span>
+                    </button>
+                    <button class="preset-btn-large center" onclick="ControlPage.preset('center')" title="Center All">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <span>Center</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current State Card -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>Current State</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="state-grid">
+                    <div class="state-item">
+                        <span class="state-label">Head Roll</span>
+                        <span class="state-value" id="state-roll">--</span>
+                    </div>
+                    <div class="state-item">
+                        <span class="state-label">Head Pitch</span>
+                        <span class="state-value" id="state-pitch">--</span>
+                    </div>
+                    <div class="state-item">
+                        <span class="state-label">Head Yaw</span>
+                        <span class="state-value" id="state-yaw">--</span>
+                    </div>
+                    <div class="state-item">
+                        <span class="state-label">Body Yaw</span>
+                        <span class="state-value" id="state-body">--</span>
+                    </div>
+                    <div class="state-item">
+                        <span class="state-label">L Antenna</span>
+                        <span class="state-value" id="state-ant-l">--</span>
+                    </div>
+                    <div class="state-item">
+                        <span class="state-label">R Antenna</span>
+                        <span class="state-value" id="state-ant-r">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Control Layout */
+.control-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.control-column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Slider Group */
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Body Visual */
+.body-visual {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0 10px;
+}
+
+.body-indicator {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid var(--border-color);
+    background: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.body-arrow {
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 20px solid var(--accent);
+    transform: translateY(-5px);
+}
+
+/* Antenna Sync */
+.antenna-sync {
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    margin-top: 12px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.checkbox-label input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
+/* Motor Mode Grid */
+.motor-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.motor-mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px 10px;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.motor-mode-btn:hover {
+    border-color: var(--accent);
+}
+
+.motor-mode-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.motor-mode-btn.active .mode-name,
+.motor-mode-btn.active .mode-desc {
+    color: var(--bg-primary);
+}
+
+.mode-icon {
+    font-size: 24px;
+}
+
+.mode-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.mode-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* Preset Grid Large */
+.preset-grid-large {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.preset-btn-large {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 20px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.preset-btn-large svg {
+    width: 24px;
+    height: 24px;
+}
+
+.preset-btn-large span {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.preset-btn-large:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+.preset-btn-large.center {
+    grid-column: span 2;
+    background: var(--bg-tertiary);
+}
+
+/* State Grid */
+.state-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.state-item {
+    background: var(--bg-primary);
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.state-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.state-value {
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .control-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .motor-mode-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .state-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 500px) {
+    .state-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+{% endblock %}
+
+{% block reggie_scripts %}
+<script>
+const ControlPage = {
+    isUserDragging: false,
+    sliderDebounce: null,
+    syncAntennas: false,
+
+    init() {
+        this.setupSliders();
+        this.setupAntennaSync();
+
+        // Listen for state updates from WebSocket
+        ReggieShared.on('stateUpdate', (state) => {
+            this.updateFromState(state);
+        });
+
+        // Listen for motor mode changes
+        ReggieShared.on('motorModeChange', (mode) => {
+            this.updateMotorModeUI(mode);
+        });
+
+        // Show live badge when WS connected
+        const checkWS = setInterval(() => {
+            const badge = document.getElementById('head-live-badge');
+            if (badge) {
+                badge.style.display = ReggieShared.ws?.readyState === WebSocket.OPEN ? 'inline' : 'none';
+            }
+        }, 1000);
+    },
+
+    setupSliders() {
+        const sliders = ['head-roll', 'head-pitch', 'head-yaw', 'body-yaw', 'antenna-left', 'antenna-right'];
+
+        sliders.forEach(id => {
+            const slider = document.getElementById(id);
+            if (!slider) return;
+
+            slider.addEventListener('mousedown', () => { this.isUserDragging = true; });
+            slider.addEventListener('touchstart', () => { this.isUserDragging = true; });
+            document.addEventListener('mouseup', () => { this.isUserDragging = false; });
+            document.addEventListener('touchend', () => { this.isUserDragging = false; });
+
+            slider.addEventListener('input', (e) => {
+                document.getElementById(id + '-val').textContent = Math.round(e.target.value) + '°';
+
+                // Handle body yaw visual
+                if (id === 'body-yaw') {
+                    document.getElementById('body-indicator').style.transform = `rotate(${e.target.value}deg)`;
+                }
+
+                // Handle antenna sync
+                if (this.syncAntennas && (id === 'antenna-left' || id === 'antenna-right')) {
+                    const otherId = id === 'antenna-left' ? 'antenna-right' : 'antenna-left';
+                    document.getElementById(otherId).value = e.target.value;
+                    document.getElementById(otherId + '-val').textContent = Math.round(e.target.value) + '°';
+                }
+
+                if (this.sliderDebounce) clearTimeout(this.sliderDebounce);
+                this.sliderDebounce = setTimeout(() => this.sendPose(), 50);
+            });
+        });
+    },
+
+    setupAntennaSync() {
+        const checkbox = document.getElementById('sync-antennas');
+        if (checkbox) {
+            checkbox.addEventListener('change', (e) => {
+                this.syncAntennas = e.target.checked;
+            });
+        }
+    },
+
+    updateFromState(state) {
+        if (this.isUserDragging) return;
+
+        // Update sliders
+        if (state.headPose) {
+            this.updateSlider('head-roll', state.headPose.roll);
+            this.updateSlider('head-pitch', state.headPose.pitch);
+            this.updateSlider('head-yaw', state.headPose.yaw);
+
+            document.getElementById('state-roll').textContent = Math.round(state.headPose.roll) + '°';
+            document.getElementById('state-pitch').textContent = Math.round(state.headPose.pitch) + '°';
+            document.getElementById('state-yaw').textContent = Math.round(state.headPose.yaw) + '°';
+        }
+
+        if (state.bodyYaw !== undefined) {
+            this.updateSlider('body-yaw', state.bodyYaw);
+            document.getElementById('body-indicator').style.transform = `rotate(${state.bodyYaw}deg)`;
+            document.getElementById('state-body').textContent = Math.round(state.bodyYaw) + '°';
+        }
+
+        if (state.antennas) {
+            this.updateSlider('antenna-left', state.antennas[0]);
+            this.updateSlider('antenna-right', state.antennas[1]);
+            document.getElementById('state-ant-l').textContent = Math.round(state.antennas[0]) + '°';
+            document.getElementById('state-ant-r').textContent = Math.round(state.antennas[1]) + '°';
+        }
+    },
+
+    updateSlider(id, value) {
+        const slider = document.getElementById(id);
+        const valEl = document.getElementById(id + '-val');
+        if (slider) slider.value = value;
+        if (valEl) valEl.textContent = Math.round(value) + '°';
+    },
+
+    async sendPose() {
+        const pose = {
+            head_pose: {
+                x: 0, y: 0, z: 0,
+                roll: ReggieShared.degToRad(parseFloat(document.getElementById('head-roll').value)),
+                pitch: ReggieShared.degToRad(parseFloat(document.getElementById('head-pitch').value)),
+                yaw: ReggieShared.degToRad(parseFloat(document.getElementById('head-yaw').value))
+            },
+            body_yaw: ReggieShared.degToRad(parseFloat(document.getElementById('body-yaw').value)),
+            antennas: [
+                ReggieShared.degToRad(parseFloat(document.getElementById('antenna-left').value)),
+                ReggieShared.degToRad(parseFloat(document.getElementById('antenna-right').value))
+            ]
+        };
+
+        await ReggieShared.sendPose(pose);
+    },
+
+    setMotorMode(mode) {
+        ReggieShared.setMotorMode(mode);
+    },
+
+    updateMotorModeUI(mode) {
+        document.querySelectorAll('.motor-mode-btn').forEach(btn => btn.classList.remove('active'));
+        const btnId = 'mode-' + (mode === 'gravity_compensation' ? 'gravity' : mode);
+        document.getElementById(btnId)?.classList.add('active');
+    },
+
+    preset(direction) {
+        const presets = {
+            up: { pitch: -30 },
+            down: { pitch: 30 },
+            left: { yaw: -45 },
+            right: { yaw: 45 },
+            center: { roll: 0, pitch: 0, yaw: 0, body: 0 }
+        };
+
+        const p = presets[direction];
+        if (!p) return;
+
+        ['roll', 'pitch', 'yaw'].forEach(key => {
+            if (p[key] !== undefined) {
+                this.updateSlider('head-' + key, p[key]);
+            }
+        });
+
+        if (p.body !== undefined) {
+            this.updateSlider('body-yaw', p.body);
+            document.getElementById('body-indicator').style.transform = `rotate(${p.body}deg)`;
+        }
+
+        this.sendPose();
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    ControlPage.init();
+});
+</script>
+{% endblock %}

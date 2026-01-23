@@ -1916,9 +1916,61 @@ def workshop_vibecraft():
 
 @app.route('/reggie')
 def reggie():
-    """Reggie robot control dashboard - embedded interface"""
+    """Reggie robot control dashboard - Overview page"""
     return render_template('reggie.html',
                          active_page='reggie',
+                         reggie_page='overview',
+                         page_name='Overview',
+                         **get_common_context())
+
+
+@app.route('/reggie/control')
+def reggie_control():
+    """Reggie motion control page"""
+    return render_template('reggie_control.html',
+                         active_page='reggie',
+                         reggie_page='control',
+                         page_name='Motion Control',
+                         **get_common_context())
+
+
+@app.route('/reggie/camera')
+def reggie_camera():
+    """Reggie camera feed page"""
+    return render_template('reggie_camera.html',
+                         active_page='reggie',
+                         reggie_page='camera',
+                         page_name='Camera',
+                         **get_common_context())
+
+
+@app.route('/reggie/moves')
+def reggie_moves():
+    """Reggie move player page"""
+    return render_template('reggie_moves.html',
+                         active_page='reggie',
+                         reggie_page='moves',
+                         page_name='Moves',
+                         **get_common_context())
+
+
+@app.route('/reggie/apps')
+def reggie_apps():
+    """Reggie apps management page"""
+    return render_template('reggie_apps.html',
+                         active_page='reggie',
+                         reggie_page='apps',
+                         page_name='Apps',
+                         **get_common_context())
+
+
+@app.route('/reggie/settings')
+def reggie_settings():
+    """Reggie settings and diagnostics page"""
+    return render_template('reggie_settings.html',
+                         active_page='reggie',
+                         reggie_page='settings',
+                         page_name='Settings',
                          **get_common_context())
 
 
@@ -2008,68 +2060,167 @@ def api_stats():
 # ============================================
 # Reggie Robot API Proxy Endpoints
 # ============================================
+# Direct connection to robot API at 192.168.0.11:8000
+# MacBook dashboard at 192.168.0.168:3008 is optional (for iframe fallback)
 
-REGGIE_DASHBOARD_URL = 'http://192.168.0.168:3008'
-REGGIE_BACKEND_URL = 'http://192.168.0.168:3001'
 REGGIE_ROBOT_URL = 'http://192.168.0.11:8000'
+REGGIE_DASHBOARD_URL = 'http://192.168.0.168:3008'  # Optional MacBook dashboard
 
 
 @app.route('/api/reggie/health')
 def api_reggie_health():
-    """Check Reggie dashboard and backend health"""
+    """Check Reggie robot health (primary) and optional MacBook dashboard"""
     result = {
-        'dashboard': False,
-        'backend': False,
         'robot': False,
+        'dashboard': False,
+        'daemon': None,
         'timestamp': datetime.now().isoformat()
     }
 
-    # Check dashboard (React frontend)
+    # Primary: Check robot API directly
     try:
-        resp = requests.get(REGGIE_DASHBOARD_URL, timeout=3)
+        resp = requests.get(f'{REGGIE_ROBOT_URL}/api/daemon/status', timeout=3)
+        if resp.status_code == 200:
+            result['robot'] = True
+            data = resp.json()
+            result['daemon'] = data.get('state', 'unknown')
+    except requests.RequestException:
+        pass
+
+    # Secondary: Check MacBook dashboard (optional)
+    try:
+        resp = requests.get(REGGIE_DASHBOARD_URL, timeout=2)
         result['dashboard'] = resp.status_code == 200
     except requests.RequestException:
         pass
-
-    # Check backend (Express API)
-    try:
-        resp = requests.get(f'{REGGIE_BACKEND_URL}/api/health', timeout=3)
-        if resp.status_code == 200:
-            result['backend'] = True
-            data = resp.json()
-            result['robot'] = data.get('robot_connected', False)
-    except requests.RequestException:
-        pass
-
-    # Direct robot check if backend didn't report
-    if result['backend'] and not result.get('robot'):
-        try:
-            resp = requests.get(f'{REGGIE_ROBOT_URL}/api/health', timeout=2)
-            result['robot'] = resp.status_code == 200
-        except requests.RequestException:
-            pass
 
     return jsonify(result)
 
 
 @app.route('/api/reggie/status')
 def api_reggie_status():
-    """Get Reggie's current status from backend"""
+    """Get Reggie's full robot state"""
     try:
-        resp = requests.get(f'{REGGIE_BACKEND_URL}/api/status', timeout=5)
+        resp = requests.get(f'{REGGIE_ROBOT_URL}/api/state/full', timeout=5)
         if resp.status_code == 200:
             return jsonify(resp.json())
-        return jsonify({'error': 'Backend returned error', 'status_code': resp.status_code}), 502
+        return jsonify({'error': 'Robot returned error', 'status_code': resp.status_code}), 502
     except requests.Timeout:
-        return jsonify({'error': 'Request to Reggie backend timed out'}), 504
+        return jsonify({'error': 'Request to robot timed out'}), 504
     except requests.RequestException as e:
-        return jsonify({'error': f'Failed to connect to Reggie backend: {str(e)}'}), 503
+        return jsonify({'error': f'Failed to connect to robot: {str(e)}'}), 503
+
+
+@app.route('/api/reggie/daemon/<action>', methods=['POST'])
+def api_reggie_daemon(action):
+    """Control robot daemon (start/stop)"""
+    if action not in ['start', 'stop']:
+        return jsonify({'error': 'Invalid action. Use start or stop'}), 400
+
+    try:
+        params = request.get_json() or {}
+        if action == 'start':
+            url = f'{REGGIE_ROBOT_URL}/api/daemon/start'
+            query_params = {'wake_up': str(params.get('wake_up', True)).lower()}
+        else:
+            url = f'{REGGIE_ROBOT_URL}/api/daemon/stop'
+            query_params = {'goto_sleep': str(params.get('goto_sleep', True)).lower()}
+
+        # Robot API expects query params, not JSON body
+        resp = requests.post(url, params=query_params, timeout=10)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/move/goto', methods=['POST'])
+def api_reggie_move_goto():
+    """Move robot to target pose"""
+    try:
+        data = request.get_json() or {}
+        # Robot API requires duration field
+        if 'duration' not in data:
+            data['duration'] = 0.5  # Default 500ms for smooth movement
+        resp = requests.post(f'{REGGIE_ROBOT_URL}/api/move/goto', json=data, timeout=10)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/move/play/<path:move_path>', methods=['POST'])
+def api_reggie_move_play(move_path):
+    """Play a recorded move or animation"""
+    try:
+        resp = requests.post(f'{REGGIE_ROBOT_URL}/api/move/play/{move_path}', timeout=30)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/move/stop', methods=['POST'])
+def api_reggie_move_stop():
+    """Stop current movement"""
+    try:
+        resp = requests.post(f'{REGGIE_ROBOT_URL}/api/move/stop', timeout=5)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/moves/list/<dataset>')
+def api_reggie_moves_list(dataset):
+    """List available moves from a dataset"""
+    # Map friendly names to full paths
+    dataset_map = {
+        'dances': 'pollen-robotics/reachy-mini-dances-library',
+        'emotions': 'pollen-robotics/reachy-mini-emotions-library'
+    }
+    dataset_path = dataset_map.get(dataset, dataset)
+
+    try:
+        resp = requests.get(
+            f'{REGGIE_ROBOT_URL}/api/move/recorded-move-datasets/list/{dataset_path}',
+            timeout=5
+        )
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+        return jsonify({'error': 'Failed to get moves', 'status_code': resp.status_code}), 502
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/motors/mode', methods=['GET', 'POST'])
+def api_reggie_motors_mode():
+    """Get or set motor mode"""
+    try:
+        if request.method == 'POST':
+            data = request.get_json()
+            mode = data.get('mode', 'enabled')
+            resp = requests.post(f'{REGGIE_ROBOT_URL}/api/motors/set_mode/{mode}', timeout=5)
+        else:
+            resp = requests.get(f'{REGGIE_ROBOT_URL}/api/motors/status', timeout=5)
+
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
 
 
 @app.route('/api/reggie/proxy/<path:endpoint>', methods=['GET', 'POST'])
 def api_reggie_proxy(endpoint):
-    """Proxy requests to Reggie's backend API"""
-    url = f'{REGGIE_BACKEND_URL}/api/{endpoint}'
+    """Proxy any request to robot API"""
+    url = f'{REGGIE_ROBOT_URL}/api/{endpoint}'
 
     try:
         if request.method == 'POST':
@@ -2077,7 +2228,14 @@ def api_reggie_proxy(endpoint):
         else:
             resp = requests.get(url, params=request.args, timeout=10)
 
-        return jsonify(resp.json()), resp.status_code
+        # Handle empty responses
+        if not resp.text:
+            return jsonify({'success': True}), resp.status_code
+
+        try:
+            return jsonify(resp.json()), resp.status_code
+        except ValueError:
+            return resp.text, resp.status_code
     except requests.Timeout:
         return jsonify({'error': 'Request timed out'}), 504
     except requests.RequestException as e:
@@ -4562,10 +4720,10 @@ def save_terminal_sessions(data):
 
 
 def get_tmux_windows():
-    """Get list of tmux windows in dashboard session."""
+    """Get list of tmux windows from dashboard-top session."""
     try:
         result = subprocess.run(
-            ['tmux', 'list-windows', '-t', 'dashboard', '-F', '#{window_index}'],
+            ['tmux', 'list-windows', '-t', 'dashboard-top', '-F', '#{window_index}'],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:
@@ -4596,19 +4754,31 @@ def api_terminal_windows():
 
 @app.route('/api/terminal/windows', methods=['POST'])
 def api_terminal_create():
-    """Create new terminal window."""
+    """Create new terminal window in BOTH paired sessions."""
     data = request.get_json() or {}
     name = data.get('name', 'New Terminal')
 
-    # Create new tmux window
+    # Create new tmux window in top session
     try:
-        result = subprocess.run(
-            ['tmux', 'new-window', '-t', 'dashboard', '-P', '-F', '#{window_index}'],
+        result_top = subprocess.run(
+            ['tmux', 'new-window', '-t', 'dashboard-top', '-P', '-F', '#{window_index}'],
             capture_output=True, text=True, timeout=5
         )
 
-        if result.returncode == 0:
-            window_id = result.stdout.strip()
+        if result_top.returncode == 0:
+            window_id = result_top.stdout.strip()
+
+            # Create matching window in bottom session
+            subprocess.run(
+                ['tmux', 'new-window', '-t', 'dashboard-bottom'],
+                capture_output=True, text=True, timeout=5
+            )
+
+            # Select both windows to sync them
+            subprocess.run(['tmux', 'select-window', '-t', f'dashboard-top:{window_id}'],
+                          capture_output=True, timeout=5)
+            subprocess.run(['tmux', 'select-window', '-t', f'dashboard-bottom:{window_id}'],
+                          capture_output=True, timeout=5)
 
             # Save metadata
             sessions = get_terminal_sessions()
@@ -4641,15 +4811,20 @@ def api_terminal_rename(window_id):
 
 @app.route('/api/terminal/windows/<window_id>', methods=['DELETE'])
 def api_terminal_close(window_id):
-    """Close terminal window."""
+    """Close terminal window from BOTH paired sessions."""
     # Don't allow closing last window
     tmux_windows = get_tmux_windows()
     if len(tmux_windows) <= 1:
         return jsonify({'error': 'Cannot close last window'}), 400
 
     try:
+        # Kill window in both sessions
         subprocess.run(
-            ['tmux', 'kill-window', '-t', f'dashboard:{window_id}'],
+            ['tmux', 'kill-window', '-t', f'dashboard-top:{window_id}'],
+            capture_output=True, timeout=5
+        )
+        subprocess.run(
+            ['tmux', 'kill-window', '-t', f'dashboard-bottom:{window_id}'],
             capture_output=True, timeout=5
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -4665,10 +4840,15 @@ def api_terminal_close(window_id):
 
 @app.route('/api/terminal/windows/<window_id>/select', methods=['POST'])
 def api_terminal_select(window_id):
-    """Select/focus terminal window."""
+    """Select/focus terminal window in BOTH paired sessions."""
     try:
+        # Select in both sessions to keep them in sync
         subprocess.run(
-            ['tmux', 'select-window', '-t', f'dashboard:{window_id}'],
+            ['tmux', 'select-window', '-t', f'dashboard-top:{window_id}'],
+            capture_output=True, timeout=5
+        )
+        subprocess.run(
+            ['tmux', 'select-window', '-t', f'dashboard-bottom:{window_id}'],
             capture_output=True, timeout=5
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -5190,6 +5370,39 @@ def api_kanban_reorder_tasks():
 
     save_kanban_data(data)
     return jsonify({'success': True})
+
+
+# =============================================================================
+# Dev Port Manager API
+# =============================================================================
+
+@app.route('/api/dev-port')
+def api_dev_port():
+    """Get next available dev server port."""
+    import socket
+    PORT_RANGE = (4000, 4019)
+
+    for port in range(PORT_RANGE[0], PORT_RANGE[1] + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('localhost', port)) != 0:
+                return jsonify({'port': port, 'range': list(PORT_RANGE)})
+
+    return jsonify({'error': 'No available ports'}), 503
+
+
+@app.route('/api/dev-port/list')
+def api_dev_port_list():
+    """List all dev ports and their status."""
+    import socket
+    PORT_RANGE = (4000, 4019)
+
+    ports = []
+    for port in range(PORT_RANGE[0], PORT_RANGE[1] + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            in_use = s.connect_ex(('localhost', port)) == 0
+            ports.append({'port': port, 'in_use': in_use})
+
+    return jsonify({'ports': ports, 'range': list(PORT_RANGE)})
 
 
 def main():
