@@ -1,0 +1,763 @@
+{% extends "reggie_base.html" %}
+
+{% block reggie_content %}
+<div class="camera-layout">
+    <!-- Main Camera View -->
+    <div class="camera-main">
+        <div class="reggie-card camera-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 7l-7 5 7 5V7z"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+                <span>Camera Feed</span>
+                <span class="reggie-card-badge" id="camera-badge" style="display: none;">Live</span>
+                <div class="camera-header-actions">
+                    <button class="header-action-btn" onclick="CameraPage.toggleFullscreen()" title="Fullscreen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 3 21 3 21 9"/>
+                            <polyline points="9 21 3 21 3 15"/>
+                            <line x1="21" y1="3" x2="14" y2="10"/>
+                            <line x1="3" y1="21" x2="10" y2="14"/>
+                        </svg>
+                    </button>
+                    <button class="header-action-btn" onclick="CameraPage.screenshot()" title="Screenshot">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="camera-body" id="camera-body">
+                <div class="camera-container" id="camera-container">
+                    <video id="camera-video" autoplay playsinline muted></video>
+                    <div class="camera-placeholder" id="camera-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        <span class="camera-status-title" id="camera-status-text">Camera not connected</span>
+                        <span class="camera-status-hint">Connect to the WebRTC stream from the robot</span>
+                        <button class="reggie-btn reggie-btn-primary" id="camera-connect-btn" onclick="CameraPage.connect()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M23 7l-7 5 7 5V7z"/>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                            </svg>
+                            Connect Camera
+                        </button>
+                    </div>
+                    <div class="camera-overlay" id="camera-overlay">
+                        <div class="live-indicator">
+                            <span class="live-dot"></span>
+                            <span>Live</span>
+                        </div>
+                        <div class="camera-controls">
+                            <button class="camera-control-btn" onclick="CameraPage.disconnect()" title="Disconnect">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                    <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3"/>
+                                    <path d="M21 13V8a2 2 0 0 0-2-2H9"/>
+                                    <path d="M23 19L16 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar: Stream Info -->
+    <div class="camera-sidebar">
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>Stream Info</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="info-list">
+                    <div class="info-item">
+                        <span class="info-label">Status</span>
+                        <span class="info-value" id="stream-status">Disconnected</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Protocol</span>
+                        <span class="info-value">WebRTC</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Signaling</span>
+                        <span class="info-value">192.168.0.11:8443</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Producer</span>
+                        <span class="info-value" id="producer-name">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Resolution</span>
+                        <span class="info-value" id="video-resolution">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                <span>Requirements</span>
+            </div>
+            <div class="reggie-card-body">
+                <ul class="requirements-list">
+                    <li id="req-robot">
+                        <span class="req-icon">⚪</span>
+                        <span>Robot API accessible</span>
+                    </li>
+                    <li id="req-daemon">
+                        <span class="req-icon">⚪</span>
+                        <span>Daemon running</span>
+                    </li>
+                    <li id="req-stream">
+                        <span class="req-icon">⚪</span>
+                        <span>Streaming enabled</span>
+                    </li>
+                </ul>
+                <p class="requirements-note">
+                    The camera requires the daemon to be started with streaming enabled.
+                    If the camera doesn't connect, try restarting the daemon.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Camera Layout */
+.camera-layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+    height: 100%;
+}
+
+.camera-main {
+    display: flex;
+    flex-direction: column;
+}
+
+.camera-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.camera-header-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+}
+
+.header-action-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.header-action-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.header-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Camera Body */
+.camera-body {
+    flex: 1;
+    padding: 0;
+    min-height: 400px;
+}
+
+.camera-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+}
+
+.camera-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+}
+
+.camera-container video.connected {
+    display: block;
+}
+
+.camera-placeholder {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: var(--bg-primary);
+}
+
+.camera-placeholder svg {
+    width: 64px;
+    height: 64px;
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.camera-status-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.camera-status-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.camera-placeholder .reggie-btn {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.camera-placeholder .reggie-btn svg {
+    width: 18px;
+    height: 18px;
+    opacity: 1;
+}
+
+.camera-placeholder.hidden {
+    display: none;
+}
+
+/* Camera Overlay */
+.camera-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+    pointer-events: none;
+}
+
+.camera-overlay.visible {
+    display: block;
+}
+
+.live-indicator {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 20px;
+    font-size: 12px;
+    color: #fff;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.camera-controls {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.camera-control-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.7);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.camera-control-btn:hover {
+    background: rgba(0,0,0,0.9);
+}
+
+.camera-control-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Sidebar */
+.camera-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.info-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.info-value {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+}
+
+/* Requirements */
+.requirements-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.requirements-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.req-icon {
+    font-size: 10px;
+}
+
+.requirements-list li.ok .req-icon::before {
+    content: '✅';
+}
+
+.requirements-list li.fail .req-icon::before {
+    content: '❌';
+}
+
+.requirements-note {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+/* Fullscreen */
+.camera-card.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    border-radius: 0;
+}
+
+.camera-card.fullscreen .reggie-card-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    background: rgba(0,0,0,0.7);
+    border: none;
+}
+
+.camera-card.fullscreen .camera-body {
+    height: 100vh;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .camera-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .camera-sidebar {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .camera-sidebar {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block reggie_scripts %}
+<script>
+const CameraPage = {
+    signalingUrl: 'ws://192.168.0.11:8443',
+    ws: null,
+    pc: null,
+    sessionId: null,
+    producerPeerId: null,
+    pendingIceCandidates: [],
+    isConnecting: false,
+    isFullscreen: false,
+
+    init() {
+        // Update requirements based on connection status
+        ReggieShared.on('connectionChange', (data) => {
+            this.updateRequirements(data);
+        });
+
+        // Try to auto-connect if daemon is running
+        setTimeout(() => {
+            if (ReggieShared.state.daemonRunning) {
+                this.connect();
+            }
+        }, 1000);
+    },
+
+    updateRequirements(data) {
+        const reqRobot = document.getElementById('req-robot');
+        const reqDaemon = document.getElementById('req-daemon');
+
+        if (reqRobot) {
+            reqRobot.className = data.connected ? 'ok' : 'fail';
+            reqRobot.querySelector('.req-icon').textContent = data.connected ? '✅' : '❌';
+        }
+
+        if (reqDaemon) {
+            reqDaemon.className = data.daemon === 'running' ? 'ok' : 'fail';
+            reqDaemon.querySelector('.req-icon').textContent = data.daemon === 'running' ? '✅' : '❌';
+        }
+    },
+
+    connect() {
+        if (this.isConnecting || this.pc) return;
+        this.isConnecting = true;
+
+        const statusText = document.getElementById('camera-status-text');
+        const streamStatus = document.getElementById('stream-status');
+        const connectBtn = document.getElementById('camera-connect-btn');
+
+        statusText.textContent = 'Connecting...';
+        streamStatus.textContent = 'Connecting...';
+        connectBtn.disabled = true;
+
+        try {
+            // Create peer connection
+            this.pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            this.pc.addTransceiver('video', { direction: 'recvonly' });
+            this.pc.addTransceiver('audio', { direction: 'recvonly' });
+
+            this.pc.ontrack = (event) => {
+                console.log('[Camera] Received track:', event.track.kind);
+                const video = document.getElementById('camera-video');
+                if (video && event.streams[0]) {
+                    video.srcObject = event.streams[0];
+                    video.classList.add('connected');
+                    document.getElementById('camera-placeholder').classList.add('hidden');
+                    document.getElementById('camera-overlay').classList.add('visible');
+                    document.getElementById('camera-badge').style.display = 'inline';
+                    document.getElementById('stream-status').textContent = 'Connected';
+
+                    // Update resolution when video loads
+                    video.onloadedmetadata = () => {
+                        document.getElementById('video-resolution').textContent =
+                            `${video.videoWidth}x${video.videoHeight}`;
+                    };
+
+                    // Update streaming requirement
+                    const reqStream = document.getElementById('req-stream');
+                    if (reqStream) {
+                        reqStream.className = 'ok';
+                        reqStream.querySelector('.req-icon').textContent = '✅';
+                    }
+
+                    ReggieShared.updateCameraStatus(true);
+                    this.isConnecting = false;
+                }
+            };
+
+            this.pc.onconnectionstatechange = () => {
+                console.log('[Camera] Connection state:', this.pc.connectionState);
+                if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed') {
+                    this.handleDisconnect();
+                }
+            };
+
+            this.pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    if (this.sessionId) {
+                        this.sendMessage({
+                            type: 'peer',
+                            sessionId: this.sessionId,
+                            ice: {
+                                candidate: event.candidate.candidate,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                sdpMid: event.candidate.sdpMid
+                            }
+                        });
+                    } else {
+                        this.pendingIceCandidates.push(event.candidate);
+                    }
+                }
+            };
+
+            // Connect to signaling server
+            this.ws = new WebSocket(this.signalingUrl);
+
+            this.ws.onopen = () => {
+                console.log('[Camera] WebSocket connected');
+                statusText.textContent = 'Connected to signaling...';
+            };
+
+            this.ws.onmessage = async (event) => {
+                const msg = JSON.parse(event.data);
+                await this.handleMessage(msg);
+            };
+
+            this.ws.onerror = (err) => {
+                console.error('[Camera] WebSocket error:', err);
+                statusText.textContent = 'Connection failed';
+                streamStatus.textContent = 'Error';
+                this.cleanup();
+            };
+
+            this.ws.onclose = () => {
+                console.log('[Camera] WebSocket closed');
+                if (this.isConnecting) {
+                    statusText.textContent = 'Connection closed';
+                    this.cleanup();
+                }
+            };
+
+        } catch (err) {
+            console.error('[Camera] Error:', err);
+            statusText.textContent = 'Error: ' + err.message;
+            this.cleanup();
+        }
+    },
+
+    async handleMessage(msg) {
+        const statusText = document.getElementById('camera-status-text');
+        const producerName = document.getElementById('producer-name');
+
+        switch (msg.type) {
+            case 'welcome':
+                this.sendMessage({ type: 'setPeerStatus', roles: ['listener'], meta: {} });
+                this.sendMessage({ type: 'list' });
+                statusText.textContent = 'Finding camera...';
+                break;
+
+            case 'list':
+                const producer = msg.producers.find(p => p.meta?.name === 'reachymini');
+                if (!producer) {
+                    statusText.textContent = 'Camera not available';
+                    document.getElementById('stream-status').textContent = 'No producer';
+                    this.cleanup();
+                    return;
+                }
+                this.producerPeerId = producer.id;
+                producerName.textContent = producer.meta?.name || 'Unknown';
+                this.sendMessage({ type: 'startSession', peerId: producer.id });
+                statusText.textContent = 'Starting session...';
+                break;
+
+            case 'sessionStarted':
+                this.sessionId = msg.sessionId;
+                statusText.textContent = 'Waiting for stream...';
+                break;
+
+            case 'peer':
+                if (msg.sdp && msg.sdp.type === 'offer') {
+                    await this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp }));
+                    const answer = await this.pc.createAnswer();
+                    await this.pc.setLocalDescription(answer);
+                    this.sendMessage({ type: 'peer', sessionId: this.sessionId, sdp: { type: 'answer', sdp: answer.sdp } });
+
+                    // Flush pending ICE candidates
+                    for (const candidate of this.pendingIceCandidates) {
+                        this.sendMessage({
+                            type: 'peer',
+                            sessionId: this.sessionId,
+                            ice: { candidate: candidate.candidate, sdpMLineIndex: candidate.sdpMLineIndex, sdpMid: candidate.sdpMid }
+                        });
+                    }
+                    this.pendingIceCandidates = [];
+                }
+                if (msg.ice) {
+                    await this.pc.addIceCandidate(new RTCIceCandidate({
+                        candidate: msg.ice.candidate,
+                        sdpMLineIndex: msg.ice.sdpMLineIndex,
+                        sdpMid: msg.ice.sdpMid
+                    }));
+                }
+                break;
+
+            case 'error':
+                console.error('[Camera] Signaling error:', msg.details);
+                statusText.textContent = 'Error: ' + msg.details;
+                break;
+        }
+    },
+
+    sendMessage(msg) {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(msg));
+        }
+    },
+
+    disconnect() {
+        if (this.sessionId && this.ws?.readyState === WebSocket.OPEN) {
+            this.sendMessage({ type: 'endSession', sessionId: this.sessionId });
+        }
+        this.cleanup();
+    },
+
+    handleDisconnect() {
+        this.cleanup();
+    },
+
+    cleanup() {
+        this.isConnecting = false;
+
+        if (this.ws) {
+            this.ws.onopen = null;
+            this.ws.onmessage = null;
+            this.ws.onerror = null;
+            this.ws.onclose = null;
+            if (this.ws.readyState === WebSocket.OPEN) this.ws.close();
+            this.ws = null;
+        }
+
+        if (this.pc) {
+            this.pc.ontrack = null;
+            this.pc.onconnectionstatechange = null;
+            this.pc.onicecandidate = null;
+            this.pc.close();
+            this.pc = null;
+        }
+
+        const video = document.getElementById('camera-video');
+        if (video) {
+            video.srcObject = null;
+            video.classList.remove('connected');
+        }
+
+        document.getElementById('camera-placeholder')?.classList.remove('hidden');
+        document.getElementById('camera-overlay')?.classList.remove('visible');
+        document.getElementById('camera-badge').style.display = 'none';
+        document.getElementById('camera-status-text').textContent = 'Camera not connected';
+        document.getElementById('stream-status').textContent = 'Disconnected';
+        document.getElementById('video-resolution').textContent = '--';
+        document.getElementById('producer-name').textContent = '--';
+        document.getElementById('camera-connect-btn').disabled = false;
+
+        const reqStream = document.getElementById('req-stream');
+        if (reqStream) {
+            reqStream.className = '';
+            reqStream.querySelector('.req-icon').textContent = '⚪';
+        }
+
+        ReggieShared.updateCameraStatus(false);
+        this.sessionId = null;
+        this.producerPeerId = null;
+        this.pendingIceCandidates = [];
+    },
+
+    toggleFullscreen() {
+        const card = document.querySelector('.camera-card');
+        this.isFullscreen = !this.isFullscreen;
+        card.classList.toggle('fullscreen', this.isFullscreen);
+    },
+
+    screenshot() {
+        const video = document.getElementById('camera-video');
+        if (!video || !video.srcObject) return;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+
+        const link = document.createElement('a');
+        link.download = `reggie-screenshot-${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    CameraPage.init();
+});
+
+// Exit fullscreen on Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && CameraPage.isFullscreen) {
+        CameraPage.toggleFullscreen();
+    }
+});
+</script>
+{% endblock %}

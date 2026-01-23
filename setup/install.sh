@@ -151,8 +151,16 @@ systemctl daemon-reload
 systemctl enable ttyd
 systemctl start ttyd
 
+# Install ttyd-bottom service (bottom terminal pane)
+cp "$SETUP_DIR/ttyd-bottom.service" /etc/systemd/system/ttyd-bottom.service
+chmod 644 /etc/systemd/system/ttyd-bottom.service
+systemctl daemon-reload
+systemctl enable ttyd-bottom
+systemctl start ttyd-bottom
+
 echo -e "${GREEN}  ✓ ttyd installed and running${NC}"
-echo "    - Web terminal on port 7681"
+echo "    - Top terminal on port 7681"
+echo "    - Bottom terminal on port 7682"
 echo "    - Each tab = independent terminal"
 
 # ==========================================
@@ -177,9 +185,13 @@ ufw allow 51820/udp
 ufw allow from 192.168.0.0/24 to any port 3003
 ufw allow from 10.200.200.0/24 to any port 3003
 
-# Allow ttyd from local network and VPN only
+# Allow ttyd from local network and VPN only (top terminal - port 7681)
 ufw allow from 192.168.0.0/24 to any port 7681
 ufw allow from 10.200.200.0/24 to any port 7681
+
+# Allow ttyd-bottom from local network and VPN only (bottom terminal - port 7682)
+ufw allow from 192.168.0.0/24 to any port 7682
+ufw allow from 10.200.200.0/24 to any port 7682
 
 # Enable firewall
 ufw --force enable
@@ -188,7 +200,8 @@ echo -e "${GREEN}  ✓ Firewall configured${NC}"
 echo "    - SSH: Open (key-only from internet)"
 echo "    - WireGuard: UDP 51820"
 echo "    - Dashboard: Local network + VPN only"
-echo "    - ttyd: Local network + VPN only"
+echo "    - ttyd (top): Port 7681, Local network + VPN only"
+echo "    - ttyd (bottom): Port 7682, Local network + VPN only"
 
 # ==========================================
 # STEP 6: Restart SSH

@@ -1,0 +1,16 @@
+[Unit]
+Description=ttyd - Terminal in browser (bottom pane)
+After=network.target
+
+[Service]
+Type=simple
+User=pds
+WorkingDirectory=/home/pds
+Environment="HOME=/home/pds"
+Environment="TERM=xterm-256color"
+ExecStart=/home/pds/boomshakalaka/scripts/start_ttyd_bottom.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

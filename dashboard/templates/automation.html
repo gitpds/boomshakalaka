@@ -1,0 +1,1026 @@
+{% extends "base.html" %}
+
+{% block title %}Automation Hub{% endblock %}
+{% block page_title %}Automation Hub{% endblock %}
+{% block page_subtitle %}Scheduled jobs, monitoring, and alerts{% endblock %}
+
+{% block content %}
+{% if not automation_available %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p>Automation module not available. Check that the automation package is installed.</p>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+            </div>
+            <span class="stat-badge">Total</span>
+        </div>
+        <div class="stat-value">{{ stats.total_jobs or 0 }}</div>
+        <div class="stat-label">Total Jobs</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-header">
+            <div class="stat-icon success">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <span class="stat-badge success">Active</span>
+        </div>
+        <div class="stat-value">{{ stats.enabled_jobs or 0 }}</div>
+        <div class="stat-label">Enabled Jobs</div>
+    </div>
+
+    <div class="stat-card {% if stats.success_rate_24h and stats.success_rate_24h >= 90 %}success{% elif stats.success_rate_24h and stats.success_rate_24h >= 70 %}warning{% elif stats.runs_24h %}error{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if stats.success_rate_24h and stats.success_rate_24h >= 90 %}success{% elif stats.success_rate_24h and stats.success_rate_24h >= 70 %}warning{% elif stats.runs_24h %}error{% else %}accent{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+            </div>
+            <span class="stat-badge">24h</span>
+        </div>
+        <div class="stat-value">{{ stats.success_rate_24h or 0 }}%</div>
+        <div class="stat-label">Success Rate</div>
+    </div>
+
+    <div class="stat-card {% if stats.failures_24h and stats.failures_24h > 0 %}error{% else %}success{% endif %}">
+        <div class="stat-header">
+            <div class="stat-icon {% if stats.failures_24h and stats.failures_24h > 0 %}error{% else %}success{% endif %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    {% if stats.failures_24h and stats.failures_24h > 0 %}
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                    {% else %}
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                    {% endif %}
+                </svg>
+            </div>
+            <span class="stat-badge {% if stats.failures_24h and stats.failures_24h > 0 %}error{% else %}success{% endif %}">24h</span>
+        </div>
+        <div class="stat-value">{{ stats.failures_24h or 0 }}</div>
+        <div class="stat-label">Failures</div>
+    </div>
+</div>
+
+<!-- Jobs List -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Scheduled Jobs
+        </span>
+        <button class="btn btn-sm btn-secondary" onclick="refreshJobs()">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Refresh
+        </button>
+    </div>
+    <div class="card-body">
+        {% if jobs %}
+        <div class="job-list" id="jobs-list">
+            {% for job in jobs %}
+            <div class="job-card-expandable" data-job-id="{{ job.id }}">
+                <!-- Job Header (clickable to expand) -->
+                <div class="job-header" onclick="toggleJobDetails('{{ job.id }}')">
+                    <div class="job-status {% if not job.enabled %}stopped{% elif job.last_failure_at and (not job.last_success_at or job.last_failure_at > job.last_success_at) %}error{% else %}running{% endif %}"></div>
+                    <div class="job-info">
+                        <div class="job-name">{{ job.name }}</div>
+                        <div class="job-schedule">
+                            {% if job.schedule_human %}{{ job.schedule_human }}{% elif job.schedule %}{{ job.schedule }}{% else %}Not scheduled{% endif %}
+                        </div>
+                    </div>
+                    <div class="job-meta">
+                        {% if job.total_runs and job.total_runs > 0 %}
+                        <span class="badge {% if job.success_rate and job.success_rate >= 90 %}badge-success{% elif job.success_rate and job.success_rate >= 70 %}badge-warning{% else %}badge-error{% endif %}">
+                            {{ job.success_rate|round(0)|int if job.success_rate else 0 }}% success
+                        </span>
+                        {% else %}
+                        <span class="badge">No runs</span>
+                        {% endif %}
+                    </div>
+                    <div class="job-expand-icon">
+                        <svg class="expand-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Expandable Details Panel -->
+                <div class="job-details" id="job-details-{{ job.id }}" style="display: none;">
+                    <div class="job-details-content">
+                        <!-- Plain English Description -->
+                        <div class="job-detail-section">
+                            <h4>What This Does</h4>
+                            <p class="job-description-text" id="job-desc-{{ job.id }}">{{ job.description or 'No description' }}</p>
+                        </div>
+
+                        <!-- Config Details (populated by JS) -->
+                        <div class="job-detail-section">
+                            <h4>Configuration</h4>
+                            <div class="job-config-details" id="job-config-{{ job.id }}">
+                                <div class="loading-small">Loading...</div>
+                            </div>
+                        </div>
+
+                        <!-- Last Run Info -->
+                        <div class="job-detail-section">
+                            <h4>Last Run</h4>
+                            <p class="job-last-run">
+                                {% if job.last_run_at %}
+                                {{ job.last_run_at }} -
+                                {% if job.last_success_at and (not job.last_failure_at or job.last_success_at >= job.last_failure_at) %}
+                                <span class="text-success">Success</span>
+                                {% else %}
+                                <span class="text-error">Failed</span>
+                                {% endif %}
+                                {% else %}
+                                Never run
+                                {% endif %}
+                            </p>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="job-detail-actions">
+                            <button class="btn btn-primary" onclick="triggerJob('{{ job.id }}')">
+                                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="5 3 19 12 5 21 5 3"/>
+                                </svg>
+                                Run Now
+                            </button>
+                            <button class="btn {% if job.enabled %}btn-secondary{% else %}btn-outline{% endif %}" onclick="toggleJob('{{ job.id }}')">
+                                {% if job.enabled %}Disable{% else %}Enable{% endif %}
+                            </button>
+                            <button class="btn btn-outline" onclick="showJobLogs('{{ job.id }}')">
+                                View Logs
+                            </button>
+                            <button class="btn btn-outline" onclick="editJobConfig('{{ job.id }}')">
+                                Edit Config
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <p>No jobs configured yet.</p>
+            <p class="text-muted">Jobs will appear here once registered.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if failures %}
+<!-- Recent Failures -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            Recent Failures (24h)
+        </span>
+        <button class="btn btn-sm btn-outline" onclick="clearFailures()">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            Clear All
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="job-list">
+            {% for failure in failures[:5] %}
+            <div class="job-item">
+                <div class="job-status error"></div>
+                <div class="job-info">
+                    <div class="job-name">{{ failure.job_name }}</div>
+                    <div class="job-schedule">{{ failure.error_message[:80] }}{% if failure.error_message|length > 80 %}...{% endif %}</div>
+                </div>
+                <div class="job-meta">
+                    <span class="badge badge-error">{{ failure.completed_at }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Job Logs Modal -->
+<div id="job-logs-modal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeJobLogs()"></div>
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h2 class="modal-title" id="job-logs-title">Job Logs</h2>
+            <button class="modal-close" onclick="closeJobLogs()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="job-logs-content">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Result Modal -->
+<div id="job-result-modal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeJobResult()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">Job Execution Result</h2>
+            <button class="modal-close" onclick="closeJobResult()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="job-result-content">
+                <div class="loading">Running job...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Edit Modal -->
+<div id="job-edit-modal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeJobEdit()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">Edit Job Configuration</h2>
+            <button class="modal-close" onclick="closeJobEdit()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="job-edit-content">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Job descriptions in plain English (customized per job type)
+const JOB_DESCRIPTIONS = {
+    'inventory_email_florida': {
+        title: 'Florida Monthly Inventory',
+        description: 'Sends monthly inventory check reminder emails to Florida location staff with Google Form links.',
+        formatConfig: formatInventoryConfig
+    },
+    'inventory_email_michigan': {
+        title: 'Michigan Monthly Inventory',
+        description: 'Sends monthly inventory check reminder emails to Michigan location staff with Google Form links.',
+        formatConfig: formatInventoryConfig
+    }
+};
+
+// Shared formatter for inventory email jobs
+function formatInventoryConfig(config) {
+    const recipients = config.recipients || [];
+    const isTest = (config.subject_prefix || '').includes('[TEST]');
+    const location = config.location || 'Unknown';
+
+    let html = '<div class="config-item">';
+    html += `<span class="config-label">Location:</span> ${location}`;
+    html += '</div>';
+
+    html += '<div class="config-item">';
+    html += `<span class="config-label">Mode:</span> `;
+    html += isTest
+        ? '<span class="badge badge-warning">Test Mode</span>'
+        : '<span class="badge badge-success">Production</span>';
+    html += '</div>';
+
+    html += '<div class="config-item">';
+    html += `<span class="config-label">Recipients:</span>`;
+    html += '<ul class="config-list">';
+    recipients.forEach(r => {
+        const name = r.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        html += `<li>${name} <span class="text-muted">(${r})</span></li>`;
+    });
+    html += '</ul></div>';
+
+    if (config.form_urls) {
+        html += '<div class="config-item">';
+        html += `<span class="config-label">Form Links:</span> ${Object.keys(config.form_urls).length} configured`;
+        html += '</div>';
+    }
+
+    return html;
+}
+
+// Default config formatter for unknown jobs
+function formatConfigDefault(config) {
+    let html = '';
+    for (const [key, value] of Object.entries(config)) {
+        html += `<div class="config-item">`;
+        html += `<span class="config-label">${key.replace(/_/g, ' ')}:</span> `;
+        if (Array.isArray(value)) {
+            html += value.join(', ');
+        } else if (typeof value === 'object') {
+            html += JSON.stringify(value);
+        } else {
+            html += value;
+        }
+        html += '</div>';
+    }
+    return html || '<span class="text-muted">No configuration</span>';
+}
+
+// Toggle job details expansion
+async function toggleJobDetails(jobId) {
+    const details = document.getElementById(`job-details-${jobId}`);
+    const card = details.closest('.job-card-expandable');
+    const isExpanded = details.style.display !== 'none';
+
+    if (isExpanded) {
+        details.style.display = 'none';
+        card.classList.remove('expanded');
+    } else {
+        details.style.display = 'block';
+        card.classList.add('expanded');
+
+        // Load config details
+        await loadJobConfig(jobId);
+    }
+}
+
+// Load and display job configuration
+async function loadJobConfig(jobId) {
+    const configDiv = document.getElementById(`job-config-${jobId}`);
+    const descDiv = document.getElementById(`job-desc-${jobId}`);
+
+    try {
+        const response = await fetch(`/api/automation/jobs/${jobId}`);
+        const job = await response.json();
+
+        // Parse config
+        let config = {};
+        if (job.config_json) {
+            try {
+                config = JSON.parse(job.config_json);
+            } catch (e) {}
+        }
+
+        // Use custom formatter if available
+        const jobInfo = JOB_DESCRIPTIONS[jobId];
+        if (jobInfo) {
+            descDiv.textContent = jobInfo.description;
+            configDiv.innerHTML = jobInfo.formatConfig(config);
+        } else {
+            configDiv.innerHTML = formatConfigDefault(config);
+        }
+    } catch (error) {
+        configDiv.innerHTML = `<span class="text-error">Failed to load config: ${error.message}</span>`;
+    }
+}
+
+// Edit job configuration
+async function editJobConfig(jobId) {
+    const response = await fetch(`/api/automation/jobs/${jobId}`);
+    const job = await response.json();
+
+    let config = {};
+    if (job.config_json) {
+        try {
+            config = JSON.parse(job.config_json);
+        } catch (e) {}
+    }
+
+    // Show edit modal
+    const modal = document.getElementById('job-edit-modal');
+    const content = document.getElementById('job-edit-content');
+
+    modal.style.display = 'flex';
+
+    // Build edit form based on job type
+    if (jobId === 'inventory_email_florida' || jobId === 'inventory_email_michigan') {
+        content.innerHTML = `
+            <div class="form-group">
+                <label class="form-label">Recipients (one per line)</label>
+                <textarea id="edit-recipients" class="form-textarea" rows="4">${(config.recipients || []).join('\\n')}</textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" id="edit-test-mode" ${(config.subject_prefix || '').includes('[TEST]') ? 'checked' : ''}>
+                    Test Mode (adds [TEST] to subject)
+                </label>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="saveJobConfig('${jobId}')">Save Changes</button>
+                <button class="btn btn-outline" onclick="closeJobEdit()">Cancel</button>
+            </div>
+        `;
+    } else {
+        content.innerHTML = `
+            <div class="form-group">
+                <label class="form-label">Configuration (JSON)</label>
+                <textarea id="edit-config-json" class="form-textarea" rows="10">${JSON.stringify(config, null, 2)}</textarea>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="saveJobConfigRaw('${jobId}')">Save Changes</button>
+                <button class="btn btn-outline" onclick="closeJobEdit()">Cancel</button>
+            </div>
+        `;
+    }
+}
+
+// Save job config (inventory email specific)
+async function saveJobConfig(jobId) {
+    const recipients = document.getElementById('edit-recipients').value
+        .split('\\n')
+        .map(r => r.trim())
+        .filter(r => r);
+    const testMode = document.getElementById('edit-test-mode').checked;
+
+    // Build form_urls from recipients
+    const formUrls = {};
+    recipients.forEach(r => {
+        // Preserve existing form URLs or use default
+        formUrls[r] = 'https://forms.gle/7zRwrhQ4s8sRkfpQ6';
+    });
+
+    const config = {
+        recipients: recipients,
+        form_urls: formUrls,
+        subject_prefix: testMode ? '[TEST] Monthly Inventory Check' : 'Monthly Inventory Check'
+    };
+
+    try {
+        const response = await fetch(`/api/automation/jobs/${jobId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: config })
+        });
+
+        if (response.ok) {
+            closeJobEdit();
+            location.reload();
+        } else {
+            alert('Failed to save configuration');
+        }
+    } catch (error) {
+        alert('Error saving: ' + error.message);
+    }
+}
+
+function closeJobEdit() {
+    document.getElementById('job-edit-modal').style.display = 'none';
+}
+
+// Refresh jobs list
+async function refreshJobs() {
+    try {
+        const response = await fetch('/api/automation/jobs');
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (error) {
+        console.error('Failed to refresh jobs:', error);
+    }
+}
+
+// Clear recent failures
+async function clearFailures() {
+    if (!confirm('Clear all recent failures from the last 24 hours?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/automation/failures', {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            location.reload();
+        } else {
+            alert('Failed to clear failures');
+        }
+    } catch (error) {
+        console.error('Failed to clear failures:', error);
+        alert('Error clearing failures: ' + error.message);
+    }
+}
+
+// Trigger a job manually
+async function triggerJob(jobId) {
+    const modal = document.getElementById('job-result-modal');
+    const content = document.getElementById('job-result-content');
+
+    modal.style.display = 'flex';
+    content.innerHTML = '<div class="loading">Running job...</div>';
+
+    try {
+        const response = await fetch(`/api/automation/jobs/${jobId}/trigger`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            content.innerHTML = `
+                <div class="result-success">
+                    <svg class="result-icon success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    <h3>Job completed successfully</h3>
+                    <p class="text-muted">Duration: ${result.duration_seconds.toFixed(2)}s</p>
+                </div>
+                ${result.stdout ? `<div class="result-output"><h4>Output</h4><pre>${escapeHtml(result.stdout)}</pre></div>` : ''}
+            `;
+        } else {
+            content.innerHTML = `
+                <div class="result-error">
+                    <svg class="result-icon error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                    </svg>
+                    <h3>Job failed</h3>
+                    <p class="error-message">${escapeHtml(result.error_message || 'Unknown error')}</p>
+                </div>
+                ${result.stderr ? `<div class="result-output error"><h4>Error Output</h4><pre>${escapeHtml(result.stderr)}</pre></div>` : ''}
+                ${result.stdout ? `<div class="result-output"><h4>Output</h4><pre>${escapeHtml(result.stdout)}</pre></div>` : ''}
+            `;
+        }
+    } catch (error) {
+        content.innerHTML = `
+            <div class="result-error">
+                <svg class="result-icon error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                <h3>Request failed</h3>
+                <p class="error-message">${escapeHtml(error.message)}</p>
+            </div>
+        `;
+    }
+}
+
+// Toggle job enabled state
+async function toggleJob(jobId) {
+    try {
+        const response = await fetch(`/api/automation/jobs/${jobId}/toggle`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            location.reload();
+        }
+    } catch (error) {
+        console.error('Failed to toggle job:', error);
+    }
+}
+
+// Show job logs
+async function showJobLogs(jobId) {
+    const modal = document.getElementById('job-logs-modal');
+    const title = document.getElementById('job-logs-title');
+    const content = document.getElementById('job-logs-content');
+
+    modal.style.display = 'flex';
+    title.textContent = 'Loading...';
+    content.innerHTML = '<div class="loading">Loading logs...</div>';
+
+    try {
+        const [jobResponse, runsResponse] = await Promise.all([
+            fetch(`/api/automation/jobs/${jobId}`),
+            fetch(`/api/automation/jobs/${jobId}/runs?limit=10`)
+        ]);
+
+        const job = await jobResponse.json();
+        const runsData = await runsResponse.json();
+
+        title.textContent = `${job.name} - Run History`;
+
+        if (runsData.runs && runsData.runs.length > 0) {
+            content.innerHTML = runsData.runs.map(run => `
+                <div class="log-entry ${run.status}">
+                    <div class="log-header">
+                        <span class="log-status ${run.status}">${run.status}</span>
+                        <span class="log-time">${run.started_at}</span>
+                        <span class="log-duration">${run.duration_seconds ? run.duration_seconds.toFixed(2) + 's' : '-'}</span>
+                        <span class="log-trigger">${run.trigger_type}</span>
+                    </div>
+                    ${run.error_message ? `<div class="log-error">${escapeHtml(run.error_message)}</div>` : ''}
+                    ${run.stdout ? `<details class="log-output"><summary>Output</summary><pre>${escapeHtml(run.stdout)}</pre></details>` : ''}
+                    ${run.stderr ? `<details class="log-output error"><summary>Errors</summary><pre>${escapeHtml(run.stderr)}</pre></details>` : ''}
+                </div>
+            `).join('');
+        } else {
+            content.innerHTML = '<div class="empty-state"><p>No runs recorded yet.</p></div>';
+        }
+    } catch (error) {
+        content.innerHTML = `<div class="error-state"><p>Failed to load logs: ${escapeHtml(error.message)}</p></div>`;
+    }
+}
+
+// Close modals
+function closeJobLogs() {
+    document.getElementById('job-logs-modal').style.display = 'none';
+}
+
+function closeJobResult() {
+    document.getElementById('job-result-modal').style.display = 'none';
+}
+
+// Escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Close modal on escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeJobLogs();
+        closeJobResult();
+    }
+});
+</script>
+
+<style>
+/* Expandable Job Cards */
+.job-card-expandable {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.job-card-expandable:hover {
+    border-color: var(--accent);
+}
+
+.job-card-expandable.expanded {
+    border-color: var(--accent);
+    box-shadow: 0 4px 20px rgba(255, 140, 0, 0.1);
+}
+
+.job-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    gap: 16px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.job-header:hover {
+    background: rgba(255, 140, 0, 0.05);
+}
+
+.job-expand-icon {
+    margin-left: auto;
+    opacity: 0.5;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.job-card-expandable.expanded .job-expand-icon {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+
+.expand-chevron {
+    width: 20px;
+    height: 20px;
+}
+
+/* Job Details Panel */
+.job-details {
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.job-details-content {
+    padding: 20px;
+}
+
+.job-detail-section {
+    margin-bottom: 20px;
+}
+
+.job-detail-section:last-child {
+    margin-bottom: 0;
+}
+
+.job-detail-section h4 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 8px 0;
+    letter-spacing: 0.5px;
+}
+
+.job-description-text {
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Config Display */
+.config-item {
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.config-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.config-list {
+    margin: 8px 0 0 20px;
+    padding: 0;
+    list-style: disc;
+}
+
+.config-list li {
+    margin-bottom: 4px;
+    color: var(--text-primary);
+}
+
+/* Job Detail Actions */
+.job-detail-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+    margin-top: 20px;
+}
+
+/* Form Styles for Edit Modal */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.form-textarea {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    resize: vertical;
+}
+
+.form-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+/* Text helpers */
+.text-success { color: var(--success); }
+.text-error { color: var(--error); }
+.text-muted { color: var(--text-secondary); opacity: 0.7; }
+
+.loading-small {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* Job Actions */
+.job-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.job-actions .btn {
+    padding: 6px 10px;
+}
+
+.job-actions .btn-icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* Result Modal Styles */
+.result-success, .result-error {
+    text-align: center;
+    padding: 20px;
+}
+
+.result-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+}
+
+.result-icon.success {
+    color: var(--success);
+}
+
+.result-icon.error {
+    color: var(--error);
+}
+
+.result-output {
+    margin-top: 16px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: left;
+}
+
+.result-output h4 {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.result-output pre {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.result-output.error pre {
+    color: var(--error);
+}
+
+.error-message {
+    color: var(--error);
+    font-family: monospace;
+}
+
+/* Log Entry Styles */
+.log-entry {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-left: 3px solid var(--border-color);
+}
+
+.log-entry.success {
+    border-left-color: var(--success);
+}
+
+.log-entry.failed {
+    border-left-color: var(--error);
+}
+
+.log-entry.running {
+    border-left-color: var(--accent);
+}
+
+.log-header {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.log-status {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+}
+
+.log-status.success {
+    color: var(--success);
+    background: var(--success-bg);
+}
+
+.log-status.failed {
+    color: var(--error);
+    background: var(--error-bg);
+}
+
+.log-status.running {
+    color: var(--accent);
+    background: var(--accent-bg);
+}
+
+.log-time, .log-duration, .log-trigger {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.log-error {
+    margin-top: 8px;
+    color: var(--error);
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.log-output {
+    margin-top: 8px;
+}
+
+.log-output summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.log-output pre {
+    margin-top: 8px;
+    font-size: 11px;
+    background: var(--bg-secondary);
+    padding: 8px;
+    border-radius: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+.log-output.error pre {
+    color: var(--error);
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+</style>
+{% endblock %}

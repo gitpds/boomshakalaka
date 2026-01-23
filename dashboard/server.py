@@ -17,6 +17,7 @@ import json
 import uuid
 import logging
 import sqlite3
+import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, Response, stream_with_context
@@ -59,6 +60,25 @@ try:
     VIDEO_UTILS_AVAILABLE = True
 except ImportError:
     VIDEO_UTILS_AVAILABLE = False
+
+# Automation Hub for job scheduling and monitoring
+# Add project root to path for automation imports
+_project_root = Path(__file__).parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+try:
+    from automation.runner.db import (
+        init_database as init_jobs_db,
+        get_all_jobs, get_job, create_job, update_job, toggle_job,
+        get_job_runs, get_run, get_stats_summary, get_recent_failures,
+        clear_recent_failures
+    )
+    from automation.runner.executor import JobExecutor, register_job
+    AUTOMATION_AVAILABLE = True
+except ImportError as e:
+    print(f"Automation import failed: {e}")
+    AUTOMATION_AVAILABLE = False
 
 # Setup logging for AI Studio debugging
 logging.basicConfig(
@@ -1863,6 +1883,94 @@ def terminal():
     """Web terminal page - embeds ttyd for browser-based terminal access"""
     return render_template('terminal.html',
                          active_page='terminal',
+                         active_category='workshop',
+                         **get_common_context())
+
+
+@app.route('/workshop/kanban')
+def workshop_kanban():
+    """Kanban board for task management"""
+    return render_template('workshop_kanban.html',
+                         active_page='workshop_kanban',
+                         active_category='workshop',
+                         **get_common_context())
+
+
+@app.route('/workshop/agents')
+def workshop_agents():
+    """8-bit Agent Office visualization"""
+    return render_template('workshop_agents.html',
+                         active_page='workshop_agents',
+                         active_category='workshop',
+                         **get_common_context())
+
+
+@app.route('/workshop/vibecraft')
+def workshop_vibecraft():
+    """Vibecraft - 3D Claude Code visualization"""
+    return render_template('workshop_vibecraft.html',
+                         active_page='workshop_vibecraft',
+                         active_category='workshop',
+                         **get_common_context())
+
+
+@app.route('/reggie')
+def reggie():
+    """Reggie robot control dashboard - Overview page"""
+    return render_template('reggie.html',
+                         active_page='reggie',
+                         reggie_page='overview',
+                         page_name='Overview',
+                         **get_common_context())
+
+
+@app.route('/reggie/control')
+def reggie_control():
+    """Reggie motion control page"""
+    return render_template('reggie_control.html',
+                         active_page='reggie',
+                         reggie_page='control',
+                         page_name='Motion Control',
+                         **get_common_context())
+
+
+@app.route('/reggie/camera')
+def reggie_camera():
+    """Reggie camera feed page"""
+    return render_template('reggie_camera.html',
+                         active_page='reggie',
+                         reggie_page='camera',
+                         page_name='Camera',
+                         **get_common_context())
+
+
+@app.route('/reggie/moves')
+def reggie_moves():
+    """Reggie move player page"""
+    return render_template('reggie_moves.html',
+                         active_page='reggie',
+                         reggie_page='moves',
+                         page_name='Moves',
+                         **get_common_context())
+
+
+@app.route('/reggie/apps')
+def reggie_apps():
+    """Reggie apps management page"""
+    return render_template('reggie_apps.html',
+                         active_page='reggie',
+                         reggie_page='apps',
+                         page_name='Apps',
+                         **get_common_context())
+
+
+@app.route('/reggie/settings')
+def reggie_settings():
+    """Reggie settings and diagnostics page"""
+    return render_template('reggie_settings.html',
+                         active_page='reggie',
+                         reggie_page='settings',
+                         page_name='Settings',
                          **get_common_context())
 
 
@@ -1873,10 +1981,30 @@ def overview():
     return redirect(url_for('home'))
 
 
+@app.route('/automation')
 @app.route('/jobs')
-def jobs():
-    """Redirect to home (jobs are shown there now)"""
-    return redirect(url_for('home'))
+def automation():
+    """Automation Hub - Job scheduling and monitoring"""
+    jobs_list = []
+    stats = {}
+    failures = []
+
+    if AUTOMATION_AVAILABLE:
+        try:
+            init_jobs_db()
+            jobs_list = get_all_jobs()
+            stats = get_stats_summary()
+            failures = get_recent_failures(hours=24)
+        except Exception as e:
+            logger.error(f"Failed to load automation data: {e}")
+
+    return render_template('automation.html',
+                           active_category='automation',
+                           active_page='automation',
+                           jobs=jobs_list,
+                           stats=stats,
+                           failures=failures,
+                           automation_available=AUTOMATION_AVAILABLE)
 
 
 @app.route('/health')
@@ -1927,6 +2055,191 @@ def api_stats():
         'log_files_count': len(LOG_FILES),
         'timestamp': datetime.now().isoformat(),
     })
+
+
+# ============================================
+# Reggie Robot API Proxy Endpoints
+# ============================================
+# Direct connection to robot API at 192.168.0.11:8000
+# MacBook dashboard at 192.168.0.168:3008 is optional (for iframe fallback)
+
+REGGIE_ROBOT_URL = 'http://192.168.0.11:8000'
+REGGIE_DASHBOARD_URL = 'http://192.168.0.168:3008'  # Optional MacBook dashboard
+
+
+@app.route('/api/reggie/health')
+def api_reggie_health():
+    """Check Reggie robot health (primary) and optional MacBook dashboard"""
+    result = {
+        'robot': False,
+        'dashboard': False,
+        'daemon': None,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    # Primary: Check robot API directly
+    try:
+        resp = requests.get(f'{REGGIE_ROBOT_URL}/api/daemon/status', timeout=3)
+        if resp.status_code == 200:
+            result['robot'] = True
+            data = resp.json()
+            result['daemon'] = data.get('state', 'unknown')
+    except requests.RequestException:
+        pass
+
+    # Secondary: Check MacBook dashboard (optional)
+    try:
+        resp = requests.get(REGGIE_DASHBOARD_URL, timeout=2)
+        result['dashboard'] = resp.status_code == 200
+    except requests.RequestException:
+        pass
+
+    return jsonify(result)
+
+
+@app.route('/api/reggie/status')
+def api_reggie_status():
+    """Get Reggie's full robot state"""
+    try:
+        resp = requests.get(f'{REGGIE_ROBOT_URL}/api/state/full', timeout=5)
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+        return jsonify({'error': 'Robot returned error', 'status_code': resp.status_code}), 502
+    except requests.Timeout:
+        return jsonify({'error': 'Request to robot timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': f'Failed to connect to robot: {str(e)}'}), 503
+
+
+@app.route('/api/reggie/daemon/<action>', methods=['POST'])
+def api_reggie_daemon(action):
+    """Control robot daemon (start/stop)"""
+    if action not in ['start', 'stop']:
+        return jsonify({'error': 'Invalid action. Use start or stop'}), 400
+
+    try:
+        params = request.get_json() or {}
+        if action == 'start':
+            url = f'{REGGIE_ROBOT_URL}/api/daemon/start'
+            query_params = {'wake_up': str(params.get('wake_up', True)).lower()}
+        else:
+            url = f'{REGGIE_ROBOT_URL}/api/daemon/stop'
+            query_params = {'goto_sleep': str(params.get('goto_sleep', True)).lower()}
+
+        # Robot API expects query params, not JSON body
+        resp = requests.post(url, params=query_params, timeout=10)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/move/goto', methods=['POST'])
+def api_reggie_move_goto():
+    """Move robot to target pose"""
+    try:
+        data = request.get_json() or {}
+        # Robot API requires duration field
+        if 'duration' not in data:
+            data['duration'] = 0.5  # Default 500ms for smooth movement
+        resp = requests.post(f'{REGGIE_ROBOT_URL}/api/move/goto', json=data, timeout=10)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/move/play/<path:move_path>', methods=['POST'])
+def api_reggie_move_play(move_path):
+    """Play a recorded move or animation"""
+    try:
+        resp = requests.post(f'{REGGIE_ROBOT_URL}/api/move/play/{move_path}', timeout=30)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/move/stop', methods=['POST'])
+def api_reggie_move_stop():
+    """Stop current movement"""
+    try:
+        resp = requests.post(f'{REGGIE_ROBOT_URL}/api/move/stop', timeout=5)
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/moves/list/<dataset>')
+def api_reggie_moves_list(dataset):
+    """List available moves from a dataset"""
+    # Map friendly names to full paths
+    dataset_map = {
+        'dances': 'pollen-robotics/reachy-mini-dances-library',
+        'emotions': 'pollen-robotics/reachy-mini-emotions-library'
+    }
+    dataset_path = dataset_map.get(dataset, dataset)
+
+    try:
+        resp = requests.get(
+            f'{REGGIE_ROBOT_URL}/api/move/recorded-move-datasets/list/{dataset_path}',
+            timeout=5
+        )
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+        return jsonify({'error': 'Failed to get moves', 'status_code': resp.status_code}), 502
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/motors/mode', methods=['GET', 'POST'])
+def api_reggie_motors_mode():
+    """Get or set motor mode"""
+    try:
+        if request.method == 'POST':
+            data = request.get_json()
+            mode = data.get('mode', 'enabled')
+            resp = requests.post(f'{REGGIE_ROBOT_URL}/api/motors/set_mode/{mode}', timeout=5)
+        else:
+            resp = requests.get(f'{REGGIE_ROBOT_URL}/api/motors/status', timeout=5)
+
+        return jsonify(resp.json() if resp.text else {'success': True}), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/reggie/proxy/<path:endpoint>', methods=['GET', 'POST'])
+def api_reggie_proxy(endpoint):
+    """Proxy any request to robot API"""
+    url = f'{REGGIE_ROBOT_URL}/api/{endpoint}'
+
+    try:
+        if request.method == 'POST':
+            resp = requests.post(url, json=request.get_json(), timeout=10)
+        else:
+            resp = requests.get(url, params=request.args, timeout=10)
+
+        # Handle empty responses
+        if not resp.text:
+            return jsonify({'success': True}), resp.status_code
+
+        try:
+            return jsonify(resp.json()), resp.status_code
+        except ValueError:
+            return resp.text, resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Request timed out'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
 
 
 @app.route('/api/team-videos/<team>')
@@ -4407,10 +4720,10 @@ def save_terminal_sessions(data):
 
 
 def get_tmux_windows():
-    """Get list of tmux windows in dashboard session."""
+    """Get list of tmux windows from dashboard-top session."""
     try:
         result = subprocess.run(
-            ['tmux', 'list-windows', '-t', 'dashboard', '-F', '#{window_index}'],
+            ['tmux', 'list-windows', '-t', 'dashboard-top', '-F', '#{window_index}'],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:
@@ -4441,19 +4754,31 @@ def api_terminal_windows():
 
 @app.route('/api/terminal/windows', methods=['POST'])
 def api_terminal_create():
-    """Create new terminal window."""
+    """Create new terminal window in BOTH paired sessions."""
     data = request.get_json() or {}
     name = data.get('name', 'New Terminal')
 
-    # Create new tmux window
+    # Create new tmux window in top session
     try:
-        result = subprocess.run(
-            ['tmux', 'new-window', '-t', 'dashboard', '-P', '-F', '#{window_index}'],
+        result_top = subprocess.run(
+            ['tmux', 'new-window', '-t', 'dashboard-top', '-P', '-F', '#{window_index}'],
             capture_output=True, text=True, timeout=5
         )
 
-        if result.returncode == 0:
-            window_id = result.stdout.strip()
+        if result_top.returncode == 0:
+            window_id = result_top.stdout.strip()
+
+            # Create matching window in bottom session
+            subprocess.run(
+                ['tmux', 'new-window', '-t', 'dashboard-bottom'],
+                capture_output=True, text=True, timeout=5
+            )
+
+            # Select both windows to sync them
+            subprocess.run(['tmux', 'select-window', '-t', f'dashboard-top:{window_id}'],
+                          capture_output=True, timeout=5)
+            subprocess.run(['tmux', 'select-window', '-t', f'dashboard-bottom:{window_id}'],
+                          capture_output=True, timeout=5)
 
             # Save metadata
             sessions = get_terminal_sessions()
@@ -4486,15 +4811,20 @@ def api_terminal_rename(window_id):
 
 @app.route('/api/terminal/windows/<window_id>', methods=['DELETE'])
 def api_terminal_close(window_id):
-    """Close terminal window."""
+    """Close terminal window from BOTH paired sessions."""
     # Don't allow closing last window
     tmux_windows = get_tmux_windows()
     if len(tmux_windows) <= 1:
         return jsonify({'error': 'Cannot close last window'}), 400
 
     try:
+        # Kill window in both sessions
         subprocess.run(
-            ['tmux', 'kill-window', '-t', f'dashboard:{window_id}'],
+            ['tmux', 'kill-window', '-t', f'dashboard-top:{window_id}'],
+            capture_output=True, timeout=5
+        )
+        subprocess.run(
+            ['tmux', 'kill-window', '-t', f'dashboard-bottom:{window_id}'],
             capture_output=True, timeout=5
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -4510,10 +4840,15 @@ def api_terminal_close(window_id):
 
 @app.route('/api/terminal/windows/<window_id>/select', methods=['POST'])
 def api_terminal_select(window_id):
-    """Select/focus terminal window."""
+    """Select/focus terminal window in BOTH paired sessions."""
     try:
+        # Select in both sessions to keep them in sync
         subprocess.run(
-            ['tmux', 'select-window', '-t', f'dashboard:{window_id}'],
+            ['tmux', 'select-window', '-t', f'dashboard-top:{window_id}'],
+            capture_output=True, timeout=5
+        )
+        subprocess.run(
+            ['tmux', 'select-window', '-t', f'dashboard-bottom:{window_id}'],
             capture_output=True, timeout=5
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -4524,6 +4859,550 @@ def api_terminal_select(window_id):
     save_terminal_sessions(sessions)
 
     return jsonify({'success': True})
+
+
+# ============================================
+# Terminal Content Viewer API
+# ============================================
+
+# In-memory storage for display content (could be moved to file/DB if persistence needed)
+_terminal_display_state = {
+    'type': None,      # 'markdown', 'url', 'code', 'file'
+    'content': None,   # Raw content or URL
+    'path': None,      # For file type
+    'language': None,  # For code type
+    'timestamp': None  # When content was last updated
+}
+
+# Allowed directories for file reading (security)
+TERMINAL_DISPLAY_ALLOWED_DIRS = [
+    Path('/home/pds/boomshakalaka'),
+    Path('/home/pds'),
+    Path('/tmp'),
+]
+
+
+def is_path_allowed(file_path):
+    """Check if file path is within allowed directories."""
+    try:
+        resolved = Path(file_path).resolve()
+        return any(
+            resolved == allowed or allowed in resolved.parents
+            for allowed in TERMINAL_DISPLAY_ALLOWED_DIRS
+        )
+    except (ValueError, OSError):
+        return False
+
+
+@app.route('/api/terminal/display', methods=['GET'])
+def api_terminal_display_get():
+    """Get current display content for terminal side panel."""
+    return jsonify(_terminal_display_state)
+
+
+@app.route('/api/terminal/display', methods=['POST'])
+def api_terminal_display_set():
+    """Set content to display in terminal side panel.
+
+    Request body:
+        type: 'markdown' | 'url' | 'code' | 'file'
+        content: string (raw content or URL)
+        path: string (optional, for file reading)
+        language: string (optional, for code highlighting)
+    """
+    global _terminal_display_state
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'JSON body required'}), 400
+
+    content_type = data.get('type')
+    if content_type not in ('markdown', 'url', 'code', 'file'):
+        return jsonify({'error': 'Invalid type. Must be: markdown, url, code, or file'}), 400
+
+    content = data.get('content', '')
+    path = data.get('path')
+    language = data.get('language', 'plaintext')
+
+    # Handle file type - read the file content
+    if content_type == 'file':
+        if not path:
+            return jsonify({'error': 'path required for file type'}), 400
+
+        if not is_path_allowed(path):
+            return jsonify({'error': 'Path not allowed'}), 403
+
+        file_path = Path(path)
+        if not file_path.exists():
+            return jsonify({'error': f'File not found: {path}'}), 404
+
+        if not file_path.is_file():
+            return jsonify({'error': f'Not a file: {path}'}), 400
+
+        try:
+            content = file_path.read_text(encoding='utf-8', errors='replace')
+            # Detect language from extension
+            ext = file_path.suffix.lower()
+            ext_to_lang = {
+                '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+                '.jsx': 'jsx', '.tsx': 'tsx', '.json': 'json',
+                '.html': 'html', '.css': 'css', '.scss': 'scss',
+                '.md': 'markdown', '.yaml': 'yaml', '.yml': 'yaml',
+                '.sh': 'bash', '.bash': 'bash', '.zsh': 'zsh',
+                '.sql': 'sql', '.go': 'go', '.rs': 'rust',
+                '.java': 'java', '.c': 'c', '.cpp': 'cpp', '.h': 'c',
+                '.rb': 'ruby', '.php': 'php', '.swift': 'swift',
+                '.kt': 'kotlin', '.r': 'r', '.lua': 'lua',
+                '.toml': 'toml', '.ini': 'ini', '.xml': 'xml',
+            }
+            if ext == '.md':
+                content_type = 'markdown'  # Auto-render markdown files
+            else:
+                language = ext_to_lang.get(ext, 'plaintext')
+                content_type = 'code'
+        except Exception as e:
+            return jsonify({'error': f'Failed to read file: {str(e)}'}), 500
+
+    # Update state
+    _terminal_display_state = {
+        'type': content_type,
+        'content': content,
+        'path': path,
+        'language': language,
+        'timestamp': datetime.now().isoformat()
+    }
+
+    return jsonify({'success': True, 'state': _terminal_display_state})
+
+
+@app.route('/api/terminal/display', methods=['DELETE'])
+def api_terminal_display_clear():
+    """Clear the display content."""
+    global _terminal_display_state
+    _terminal_display_state = {
+        'type': None,
+        'content': None,
+        'path': None,
+        'language': None,
+        'timestamp': None
+    }
+    return jsonify({'success': True})
+
+
+@app.route('/api/terminal/files/list')
+def api_terminal_files_list():
+    """List files in a directory for the file browser."""
+    dir_path = request.args.get('path', '/home/pds')
+
+    if not is_path_allowed(dir_path):
+        return jsonify({'error': 'Path not allowed'}), 403
+
+    path = Path(dir_path)
+    if not path.exists():
+        return jsonify({'error': 'Directory not found'}), 404
+    if not path.is_dir():
+        return jsonify({'error': 'Not a directory'}), 400
+
+    items = []
+    try:
+        for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            # Skip hidden files
+            if item.name.startswith('.'):
+                continue
+            items.append({
+                'name': item.name,
+                'path': str(item),
+                'is_dir': item.is_dir(),
+                'ext': item.suffix.lower() if item.is_file() else None
+            })
+    except PermissionError:
+        return jsonify({'error': 'Permission denied'}), 403
+
+    # Get parent directory
+    parent = str(path.parent) if path != Path('/') else None
+    if parent and not is_path_allowed(parent):
+        parent = None
+
+    return jsonify({
+        'path': str(path),
+        'parent': parent,
+        'items': items
+    })
+
+
+@app.route('/api/terminal/files/search')
+def api_terminal_files_search():
+    """Search for files by name."""
+    query = request.args.get('q', '').strip()
+    base_path = request.args.get('path', '/home/pds')
+
+    if not query or len(query) < 2:
+        return jsonify({'error': 'Query too short'}), 400
+
+    if not is_path_allowed(base_path):
+        return jsonify({'error': 'Path not allowed'}), 403
+
+    results = []
+    base = Path(base_path)
+
+    if not base.exists():
+        return jsonify({'error': 'Base path not found'}), 404
+
+    try:
+        # Use glob to search, limit results
+        patterns = [f'**/*{query}*', f'**/*{query.lower()}*', f'**/*{query.upper()}*']
+        seen = set()
+
+        for pattern in patterns:
+            for match in base.glob(pattern):
+                if str(match) in seen:
+                    continue
+                seen.add(str(match))
+
+                # Skip hidden files/dirs
+                if any(part.startswith('.') for part in match.parts):
+                    continue
+
+                # Only include viewable files
+                if match.is_file():
+                    ext = match.suffix.lower()
+                    viewable = ext in ['.md', '.py', '.js', '.ts', '.jsx', '.tsx', '.json',
+                                       '.html', '.css', '.yaml', '.yml', '.sh', '.txt',
+                                       '.sql', '.go', '.rs', '.java', '.c', '.cpp', '.h',
+                                       '.rb', '.php', '.toml', '.ini', '.xml', '.env']
+                    if viewable:
+                        results.append({
+                            'name': match.name,
+                            'path': str(match),
+                            'is_dir': False,
+                            'ext': ext
+                        })
+
+                if len(results) >= 50:  # Limit results
+                    break
+
+            if len(results) >= 50:
+                break
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    return jsonify({'results': results, 'query': query})
+
+
+# ============================================
+# Automation Hub API
+# ============================================
+
+@app.route('/api/automation/jobs')
+def api_automation_jobs():
+    """Get all automation jobs with stats."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        init_jobs_db()
+        jobs = get_all_jobs()
+        stats = get_stats_summary()
+        return jsonify({'jobs': jobs, 'stats': stats})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>')
+def api_automation_job(job_id):
+    """Get a single job by ID."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        job = get_job(job_id)
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>', methods=['PUT'])
+def api_automation_update_job(job_id):
+    """Update a job's configuration."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Handle config specially - convert dict to JSON string
+        updates = {}
+        if 'config' in data:
+            import json
+            updates['config_json'] = json.dumps(data['config'])
+        if 'enabled' in data:
+            updates['enabled'] = 1 if data['enabled'] else 0
+        if 'description' in data:
+            updates['description'] = data['description']
+
+        job = update_job(job_id, updates)
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>/runs')
+def api_automation_job_runs(job_id):
+    """Get run history for a job."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        runs = get_job_runs(job_id, limit=limit)
+        return jsonify({'runs': runs})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>/trigger', methods=['POST'])
+def api_automation_trigger(job_id):
+    """Manually trigger a job."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        executor = JobExecutor()
+        result = executor.run_job(job_id, trigger_type='manual', triggered_by='dashboard')
+
+        return jsonify({
+            'success': result.success,
+            'exit_code': result.exit_code,
+            'duration_seconds': result.duration_seconds,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'error_message': result.error_message,
+            'result_data': result.result_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/jobs/<job_id>/toggle', methods=['POST'])
+def api_automation_toggle(job_id):
+    """Toggle a job's enabled state."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        job = toggle_job(job_id)
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        return jsonify(job)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/runs/<run_id>')
+def api_automation_run(run_id):
+    """Get details of a specific run."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        run = get_run(run_id)
+        if not run:
+            return jsonify({'error': 'Run not found'}), 404
+        return jsonify(run)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/stats')
+def api_automation_stats():
+    """Get automation statistics summary."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        stats = get_stats_summary()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/failures')
+def api_automation_failures():
+    """Get recent failures."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        hours = request.args.get('hours', 24, type=int)
+        failures = get_recent_failures(hours=hours)
+        return jsonify({'failures': failures})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/automation/failures', methods=['DELETE'])
+def api_automation_clear_failures():
+    """Clear recent failures."""
+    if not AUTOMATION_AVAILABLE:
+        return jsonify({'error': 'Automation not available'}), 503
+
+    try:
+        hours = request.args.get('hours', 24, type=int)
+        count = clear_recent_failures(hours=hours)
+        return jsonify({'success': True, 'cleared': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# Kanban Board API
+# =============================================================================
+
+KANBAN_FILE = PROJECT_ROOT / 'data' / 'kanban.json'
+
+
+def load_kanban_data():
+    """Load kanban tasks from JSON file."""
+    if KANBAN_FILE.exists():
+        try:
+            with open(KANBAN_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {'tasks': []}
+
+
+def save_kanban_data(data):
+    """Save kanban tasks to JSON file."""
+    KANBAN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(KANBAN_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+@app.route('/api/kanban/tasks')
+def api_kanban_tasks():
+    """Get all kanban tasks."""
+    data = load_kanban_data()
+    return jsonify(data)
+
+
+@app.route('/api/kanban/tasks', methods=['POST'])
+def api_kanban_create_task():
+    """Create a new kanban task."""
+    task_data = request.get_json() or {}
+
+    task = {
+        'id': str(uuid.uuid4()),
+        'title': task_data.get('title', 'Untitled Task'),
+        'description': task_data.get('description', ''),
+        'column': task_data.get('column', 'backlog'),
+        'priority': task_data.get('priority', 'medium'),
+        'due_date': task_data.get('due_date'),
+        'created_at': datetime.now().isoformat(),
+        'order': task_data.get('order', 0)
+    }
+
+    data = load_kanban_data()
+    data['tasks'].append(task)
+    save_kanban_data(data)
+
+    return jsonify(task), 201
+
+
+@app.route('/api/kanban/tasks/<task_id>', methods=['PUT'])
+def api_kanban_update_task(task_id):
+    """Update a kanban task."""
+    task_data = request.get_json() or {}
+    data = load_kanban_data()
+
+    for task in data['tasks']:
+        if task['id'] == task_id:
+            task['title'] = task_data.get('title', task['title'])
+            task['description'] = task_data.get('description', task['description'])
+            task['column'] = task_data.get('column', task['column'])
+            task['priority'] = task_data.get('priority', task['priority'])
+            task['due_date'] = task_data.get('due_date', task.get('due_date'))
+            task['order'] = task_data.get('order', task.get('order', 0))
+            save_kanban_data(data)
+            return jsonify(task)
+
+    return jsonify({'error': 'Task not found'}), 404
+
+
+@app.route('/api/kanban/tasks/<task_id>', methods=['DELETE'])
+def api_kanban_delete_task(task_id):
+    """Delete a kanban task."""
+    data = load_kanban_data()
+
+    original_len = len(data['tasks'])
+    data['tasks'] = [t for t in data['tasks'] if t['id'] != task_id]
+
+    if len(data['tasks']) < original_len:
+        save_kanban_data(data)
+        return jsonify({'success': True})
+
+    return jsonify({'error': 'Task not found'}), 404
+
+
+@app.route('/api/kanban/tasks/reorder', methods=['POST'])
+def api_kanban_reorder_tasks():
+    """Reorder tasks within or between columns."""
+    reorder_data = request.get_json() or {}
+    task_orders = reorder_data.get('tasks', [])
+
+    data = load_kanban_data()
+
+    # Create a lookup for quick access
+    task_lookup = {t['id']: t for t in data['tasks']}
+
+    for order_info in task_orders:
+        task_id = order_info.get('id')
+        if task_id in task_lookup:
+            task_lookup[task_id]['column'] = order_info.get('column', task_lookup[task_id]['column'])
+            task_lookup[task_id]['order'] = order_info.get('order', 0)
+
+    save_kanban_data(data)
+    return jsonify({'success': True})
+
+
+# =============================================================================
+# Dev Port Manager API
+# =============================================================================
+
+@app.route('/api/dev-port')
+def api_dev_port():
+    """Get next available dev server port."""
+    import socket
+    PORT_RANGE = (4000, 4019)
+
+    for port in range(PORT_RANGE[0], PORT_RANGE[1] + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('localhost', port)) != 0:
+                return jsonify({'port': port, 'range': list(PORT_RANGE)})
+
+    return jsonify({'error': 'No available ports'}), 503
+
+
+@app.route('/api/dev-port/list')
+def api_dev_port_list():
+    """List all dev ports and their status."""
+    import socket
+    PORT_RANGE = (4000, 4019)
+
+    ports = []
+    for port in range(PORT_RANGE[0], PORT_RANGE[1] + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            in_use = s.connect_ex(('localhost', port)) == 0
+            ports.append({'port': port, 'in_use': in_use})
+
+    return jsonify({'ports': ports, 'range': list(PORT_RANGE)})
 
 
 def main():

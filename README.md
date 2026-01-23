@@ -11,12 +11,21 @@ Personal workstation server with web dashboard, remote terminal access, and secu
   - Customizable color themes
 
 - **Web Terminal** - Browser-based terminal access via ttyd + tmux
+  - **Dual terminal panes** - Top and bottom terminals paired per tab
   - Persistent sessions - tabs survive page refresh and browser close
-  - Multiple tabs backed by tmux windows
+  - Multiple tabs backed by paired tmux windows
   - Shared across devices - same terminals on desktop and mobile
   - Tab rename, close via right-click context menu
-  - Keyboard shortcuts (Ctrl+T new tab, Ctrl+W close)
+  - Resizable pane divider (drag to resize, persists on refresh)
+  - Keyboard shortcuts (Ctrl+T new tab, Ctrl+W close, Ctrl+` toggle pane focus)
   - Theme synced with dashboard
+  - **Split-pane File Viewer** - View code/markdown alongside terminal
+    - Browse files with built-in file browser
+    - Search files by name
+    - Recent files list
+    - Markdown rendering with syntax highlighting
+    - Code syntax highlighting (50+ languages)
+    - API endpoint for Claude Code integration
 
 - **Secure Remote Access**
   - SSH with key-only authentication from internet
@@ -123,12 +132,12 @@ cat publickey   # Add to WG_*_PUBLIC_KEY
 If you have SSH access to the server, you can tunnel the dashboard through SSH:
 
 ```bash
-# Create tunnel: local port 3003 -> server's localhost:3003
-ssh -L 3003:localhost:3003 -L 7681:localhost:7681 user@your-server-ip
+# Create tunnel: local ports -> server's localhost
+ssh -L 3003:localhost:3003 -L 7681:localhost:7681 -L 7682:localhost:7682 user@your-server-ip
 
 # Now access in browser:
 # Dashboard: http://localhost:3003
-# Terminal:  http://localhost:7681
+# Terminal:  http://localhost:7681 (top) / http://localhost:7682 (bottom)
 ```
 
 Add to `~/.ssh/config` on your **local machine** for convenience:
@@ -139,12 +148,13 @@ Host boomshakalaka
     IdentityFile ~/.ssh/id_ed25519
     LocalForward 3003 localhost:3003
     LocalForward 7681 localhost:7681
+    LocalForward 7682 localhost:7682
     ServerAliveInterval 60
 ```
 
 Then just: `ssh boomshakalaka` and open `http://localhost:3003`
 
-**Important:** Both ports (3003 and 7681) must be forwarded for the web terminal to work. If you only forward 3003, the terminal iframe will fail to connect.
+**Important:** All three ports (3003, 7681, 7682) must be forwarded for the dual terminal panes to work. If you only forward 3003, the terminal iframes will fail to connect.
 
 ### Option 2: WireGuard VPN (Recommended for Mobile)
 
@@ -188,9 +198,10 @@ WireGuard provides secure access to all services without individual port forward
 
 5. Configure firewall:
    ```bash
-   sudo ufw allow 51820/udp                           # WireGuard
+   sudo ufw allow 51820/udp                              # WireGuard
    sudo ufw allow from 10.200.200.0/24 to any port 3003  # Dashboard via VPN
-   sudo ufw allow from 10.200.200.0/24 to any port 7681  # Terminal via VPN
+   sudo ufw allow from 10.200.200.0/24 to any port 7681  # Terminal top pane via VPN
+   sudo ufw allow from 10.200.200.0/24 to any port 7682  # Terminal bottom pane via VPN
    ```
 
 #### Client Setup (Mobile)
@@ -208,6 +219,12 @@ WireGuard provides secure access to all services without individual port forward
 4. Connect and access:
    - Dashboard: `http://10.200.200.1:3003`
    - Terminal: `http://10.200.200.1:7681`
+
+5. **Add to Home Screen (iOS App)**:
+   - Open `http://10.200.200.1:3003` in Safari
+   - Tap Share → "Add to Home Screen"
+   - Name it "Boomshakalaka" and tap Add
+   - The app opens in standalone mode (no browser chrome)
 
 #### Client Setup (Desktop)
 
@@ -228,9 +245,42 @@ From the same network:
 | Service | Port | Access |
 |---------|------|--------|
 | Dashboard | 3003 | Local, VPN, SSH tunnel |
-| ttyd Terminal | 7681 | Local, VPN, SSH tunnel |
+| ttyd Top Pane | 7681 | Local, VPN, SSH tunnel |
+| ttyd Bottom Pane | 7682 | Local, VPN, SSH tunnel |
 | SSH | 22 | Internet (key auth only) |
 | WireGuard | 51820/udp | Internet |
+
+## Progressive Web App (PWA)
+
+The dashboard supports installation as a standalone app on iOS and Android.
+
+### Configuration Files
+
+- **Manifest**: `dashboard/static/manifest.json` - App name, icons, theme colors
+- **Icon**: `dashboard/static/images/favicon.png` - App icon (B logo on #122637 background)
+- **Meta tags**: In `dashboard/templates/base.html` - Apple-specific PWA settings
+
+### iOS Home Screen App
+
+When added to Home Screen via Safari, the app:
+- Opens in full-screen standalone mode (no Safari UI)
+- Uses the custom "B" icon
+- Has a dark status bar matching the theme
+
+### Customizing the Icon
+
+```bash
+# The favicon serves as both browser tab icon and iOS app icon
+# Original backup: dashboard/static/images/favicon_backup.png
+
+# To modify icon background color or size, edit with PIL:
+python3 << 'EOF'
+from PIL import Image
+img = Image.open("dashboard/static/images/favicon.png").convert("RGBA")
+# ... modify as needed
+img.save("dashboard/static/images/favicon.png")
+EOF
+```
 
 ## Midnight Command Theme
 
@@ -291,6 +341,68 @@ python scripts/dashboard_ctl.py start
 
 The script automatically detects if the dashboard is managed by systemd and handles restarts appropriately.
 
+## Terminal File Viewer
+
+The terminal page includes a split-pane file viewer for viewing code, markdown, and text files alongside your terminal session.
+
+### Using the File Viewer
+
+1. **Toggle Panel** - Click the split-pane icon in the tab bar (or press `Ctrl+\`)
+2. **Browse Files** - Click the folder icon to open the file browser
+   - **Recent** tab shows recently viewed files
+   - **Browse** tab lets you navigate directories
+   - **Search** tab finds files by name
+3. **Direct Path** - Paste a file path and press Enter
+
+### API Endpoints
+
+The file viewer can be controlled via API, useful for Claude Code integration:
+
+```bash
+# Display a file (auto-detects markdown vs code)
+curl -X POST http://localhost:3003/api/terminal/display \
+  -H "Content-Type: application/json" \
+  -d '{"type": "file", "path": "/home/pds/project/README.md"}'
+
+# Display raw code with language hint
+curl -X POST http://localhost:3003/api/terminal/display \
+  -H "Content-Type: application/json" \
+  -d '{"type": "code", "content": "def hello():\n    print(\"hi\")", "language": "python"}'
+
+# Display raw markdown
+curl -X POST http://localhost:3003/api/terminal/display \
+  -H "Content-Type: application/json" \
+  -d '{"type": "markdown", "content": "# Hello\n\nThis is **bold**"}'
+
+# Get current display state
+curl http://localhost:3003/api/terminal/display
+
+# Clear the display
+curl -X DELETE http://localhost:3003/api/terminal/display
+
+# List directory contents
+curl "http://localhost:3003/api/terminal/files/list?path=/home/pds"
+
+# Search for files
+curl "http://localhost:3003/api/terminal/files/search?q=README"
+```
+
+### Claude Code Integration
+
+When working in Claude Code, you can ask it to display files in the viewer:
+
+```
+"Hey Claude, load /home/pds/project/docs/api.md in the file viewer"
+```
+
+Claude will use the API to send the file to your terminal's side panel.
+
+### Supported File Types
+
+- **Markdown** (`.md`) - Rendered with full formatting
+- **Code** - Syntax highlighted for 50+ languages including Python, JavaScript, TypeScript, Go, Rust, SQL, YAML, and more
+- **Text** (`.txt`, `.env`, etc.) - Plain text display
+
 ## Troubleshooting
 
 ### Terminal Shows "localhost refused to connect"
@@ -299,13 +411,14 @@ The script automatically detects if the dashboard is managed by systemd and hand
 - Terminal iframe shows connection refused error
 - Dashboard works but terminal doesn't
 
-**Cause:** Port 7681 isn't being forwarded through SSH tunnel.
+**Cause:** Ports 7681/7682 aren't being forwarded through SSH tunnel.
 
-**Fix:** Ensure your SSH config forwards both ports:
+**Fix:** Ensure your SSH config forwards all three ports:
 ```
 Host boomshakalaka
     LocalForward 3003 localhost:3003
     LocalForward 7681 localhost:7681
+    LocalForward 7682 localhost:7682
 ```
 
 ### Terminal Shows Blinking Cursor / Won't Connect
@@ -386,6 +499,7 @@ pkill -f "ssh boomshakalaka"
 ```bash
 sudo ufw allow from 10.200.200.0/24 to any port 3003
 sudo ufw allow from 10.200.200.0/24 to any port 7681
+sudo ufw allow from 10.200.200.0/24 to any port 7682
 ```
 
 ### ttyd Terminal Read-Only
@@ -407,7 +521,7 @@ grep ExecStart /etc/systemd/system/ttyd.service
 
 ### Web Terminal (ttyd + tmux)
 
-The terminal uses ttyd for browser access and tmux for persistent sessions.
+The terminal uses two ttyd instances for dual panes, each connected to a paired tmux session.
 
 ```bash
 # Install tmux (for persistent sessions)
@@ -418,13 +532,17 @@ sudo curl -L https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
     -o /usr/local/bin/ttyd
 sudo chmod +x /usr/local/bin/ttyd
 
-# Install service (connects ttyd to tmux session)
+# Make scripts executable
+chmod +x scripts/start_ttyd.sh scripts/start_ttyd_bottom.sh
+
+# Install both services (top pane on 7681, bottom pane on 7682)
 sudo cp setup/ttyd.service /etc/systemd/system/
+sudo cp setup/ttyd-bottom.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now ttyd
+sudo systemctl enable --now ttyd ttyd-bottom
 ```
 
-Each browser tab maps to a tmux window. Sessions persist across page refreshes, browser restarts, and are shared across all devices.
+Each browser tab maps to paired tmux windows in `dashboard-top` and `dashboard-bottom` sessions. Sessions persist across page refreshes, browser restarts, and are shared across all devices.
 
 ### SSH Security
 
@@ -438,7 +556,8 @@ sudo systemctl reload sshd
 ```bash
 sudo ufw allow 22/tcp                               # SSH
 sudo ufw allow from 192.168.0.0/24 to any port 3003 # Dashboard (local)
-sudo ufw allow from 192.168.0.0/24 to any port 7681 # Terminal (local)
+sudo ufw allow from 192.168.0.0/24 to any port 7681 # Terminal top (local)
+sudo ufw allow from 192.168.0.0/24 to any port 7682 # Terminal bottom (local)
 sudo ufw allow 51820/udp                            # WireGuard
 sudo ufw enable
 ```

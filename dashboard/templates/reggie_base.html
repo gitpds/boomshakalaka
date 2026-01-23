@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_name|default('Reggie') }}{% endblock %}
+{% block sidebar_title %}Reggie{% endblock %}
+{% block page_title %}{{ page_name|default('Reggie') }}{% endblock %}
+{% block page_subtitle %}Reachy Mini Robot Dashboard{% endblock %}
+
+{% block content %}
+<div class="reggie-dashboard">
+    <!-- Reggie Sub-Navigation -->
+    <div class="reggie-nav">
+        <a href="{{ url_for('reggie') }}" class="reggie-nav-item {% if reggie_page == 'overview' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span>Overview</span>
+        </a>
+        <a href="{{ url_for('reggie_control') }}" class="reggie-nav-item {% if reggie_page == 'control' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+            </svg>
+            <span>Control</span>
+        </a>
+        <a href="{{ url_for('reggie_camera') }}" class="reggie-nav-item {% if reggie_page == 'camera' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 7l-7 5 7 5V7z"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+            </svg>
+            <span>Camera</span>
+        </a>
+        <a href="{{ url_for('reggie_moves') }}" class="reggie-nav-item {% if reggie_page == 'moves' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span>Moves</span>
+        </a>
+        <a href="{{ url_for('reggie_apps') }}" class="reggie-nav-item {% if reggie_page == 'apps' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span>Apps</span>
+        </a>
+        <a href="{{ url_for('reggie_settings') }}" class="reggie-nav-item {% if reggie_page == 'settings' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span>Settings</span>
+        </a>
+
+        <!-- Status Indicators (right side) -->
+        <div class="reggie-nav-status">
+            <div class="status-item" id="robot-status" title="Robot Connection">
+                <span class="status-dot" id="robot-dot"></span>
+                <span class="status-label">Robot</span>
+            </div>
+            <div class="status-item" id="ws-status-item" title="WebSocket State">
+                <span class="status-dot" id="ws-dot"></span>
+                <span class="status-label">WS</span>
+            </div>
+            <div class="status-item" id="camera-status-item" title="Camera Feed">
+                <span class="status-dot" id="camera-dot"></span>
+                <span class="status-label">Cam</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Content -->
+    <div class="reggie-content">
+        {% block reggie_content %}{% endblock %}
+    </div>
+</div>
+
+<style>
+/* Reggie Dashboard Layout */
+.reggie-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+}
+
+/* Reggie Sub-Navigation */
+.reggie-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.reggie-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.reggie-nav-item svg {
+    width: 16px;
+    height: 16px;
+}
+
+.reggie-nav-item:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.reggie-nav-item.active {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.reggie-nav-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-left: 16px;
+    border-left: 1px solid var(--border-color);
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: all 0.3s ease;
+}
+
+.status-dot.online { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-dot.offline { background: var(--error); }
+.status-dot.connecting { background: var(--warning); animation: pulse 1s infinite; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Reggie Content Area */
+.reggie-content {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Common Card Styles */
+.reggie-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.reggie-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.reggie-card-header svg {
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+}
+
+.reggie-card-badge {
+    margin-left: auto;
+    padding: 2px 8px;
+    background: var(--accent);
+    color: var(--bg-primary);
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.reggie-card-body {
+    padding: 14px;
+}
+
+/* Button Styles */
+.reggie-btn {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.reggie-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.reggie-btn-sm {
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+.reggie-btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+.reggie-btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+.reggie-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Slider Styles */
+.reggie-slider-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 50px;
+    align-items: center;
+    gap: 10px;
+}
+
+.reggie-slider-row label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.reggie-slider-row input[type="range"] {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-primary);
+    border-radius: 3px;
+    outline: none;
+}
+
+.reggie-slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-secondary);
+}
+
+.reggie-slider-row input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-secondary);
+}
+
+.reggie-slider-value {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+/* Grid Layouts */
+.reggie-grid {
+    display: grid;
+    gap: 16px;
+}
+
+.reggie-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.reggie-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.reggie-grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 900px) {
+    .reggie-grid-3, .reggie-grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+    .reggie-grid-2, .reggie-grid-3, .reggie-grid-4 { grid-template-columns: 1fr; }
+    .reggie-nav { flex-wrap: wrap; }
+    .reggie-nav-status {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+        padding-left: 0;
+        padding-top: 8px;
+        margin-top: 8px;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+// Shared Reggie utilities and state management
+const ReggieShared = {
+    robotUrl: 'http://192.168.0.11:8000',
+    ws: null,
+    wsReconnectTimer: null,
+    cameraConnected: false,
+
+    state: {
+        connected: false,
+        daemonRunning: false,
+        motorMode: 'disabled',
+        headPose: { roll: 0, pitch: 0, yaw: 0 },
+        bodyYaw: 0,
+        antennas: [0, 0]
+    },
+
+    // State change listeners
+    listeners: {
+        connectionChange: [],
+        stateUpdate: [],
+        motorModeChange: []
+    },
+
+    // Subscribe to state changes
+    on(event, callback) {
+        if (this.listeners[event]) {
+            this.listeners[event].push(callback);
+        }
+    },
+
+    // Emit events
+    emit(event, data) {
+        if (this.listeners[event]) {
+            this.listeners[event].forEach(cb => cb(data));
+        }
+    },
+
+    // Unit conversions
+    radToDeg(rad) { return rad * (180 / Math.PI); },
+    degToRad(deg) { return deg * (Math.PI / 180); },
+
+    // Initialize connection
+    async init() {
+        console.log('Initializing Reggie Shared...');
+        await this.checkHealth();
+        this.connectWebSocket();
+        setInterval(() => this.checkHealth(), 30000);
+    },
+
+    // Check robot health
+    async checkHealth() {
+        this.updateStatusDot('robot-dot', 'connecting');
+
+        try {
+            const response = await fetch('/api/reggie/health', { signal: AbortSignal.timeout(5000) });
+            if (response.ok) {
+                const data = await response.json();
+                this.state.connected = data.robot;
+                this.state.daemonRunning = data.daemon === 'running';
+
+                this.updateStatusDot('robot-dot', data.robot ? 'online' : 'offline');
+                this.emit('connectionChange', { connected: data.robot, daemon: data.daemon });
+                return data;
+            }
+        } catch (err) {
+            console.error('Health check failed:', err);
+        }
+
+        this.state.connected = false;
+        this.updateStatusDot('robot-dot', 'offline');
+        this.emit('connectionChange', { connected: false, daemon: null });
+        return { robot: false, daemon: null };
+    },
+
+    // WebSocket connection
+    connectWebSocket() {
+        if (this.ws?.readyState === WebSocket.OPEN) return;
+
+        this.updateStatusDot('ws-dot', 'connecting');
+
+        try {
+            this.ws = new WebSocket('ws://192.168.0.11:8000/api/state/ws/full');
+
+            this.ws.onopen = () => {
+                console.log('WebSocket connected');
+                this.updateStatusDot('ws-dot', 'online');
+            };
+
+            this.ws.onmessage = (event) => {
+                try {
+                    const state = JSON.parse(event.data);
+                    this.processWebSocketState(state);
+                } catch (e) {}
+            };
+
+            this.ws.onclose = () => {
+                console.log('WebSocket closed');
+                this.updateStatusDot('ws-dot', 'offline');
+
+                if (this.wsReconnectTimer) clearTimeout(this.wsReconnectTimer);
+                this.wsReconnectTimer = setTimeout(() => this.connectWebSocket(), 3000);
+            };
+
+            this.ws.onerror = () => {
+                this.updateStatusDot('ws-dot', 'offline');
+            };
+        } catch (err) {
+            console.error('WebSocket error:', err);
+            this.updateStatusDot('ws-dot', 'offline');
+        }
+    },
+
+    processWebSocketState(wsState) {
+        // Update internal state
+        if (wsState.head_pose) {
+            this.state.headPose = {
+                roll: this.radToDeg(wsState.head_pose.roll || 0),
+                pitch: this.radToDeg(wsState.head_pose.pitch || 0),
+                yaw: this.radToDeg(wsState.head_pose.yaw || 0)
+            };
+        }
+
+        if (wsState.body_yaw !== undefined) {
+            this.state.bodyYaw = this.radToDeg(wsState.body_yaw);
+        }
+
+        if (wsState.antennas_position && Array.isArray(wsState.antennas_position)) {
+            this.state.antennas = [
+                this.radToDeg(wsState.antennas_position[0]),
+                this.radToDeg(wsState.antennas_position[1])
+            ];
+        }
+
+        if (wsState.control_mode && wsState.control_mode !== this.state.motorMode) {
+            this.state.motorMode = wsState.control_mode;
+            this.emit('motorModeChange', wsState.control_mode);
+        }
+
+        // Emit state update for listeners
+        this.emit('stateUpdate', this.state);
+    },
+
+    updateStatusDot(id, status) {
+        const dot = document.getElementById(id);
+        if (dot) {
+            dot.className = 'status-dot ' + status;
+        }
+    },
+
+    updateCameraStatus(connected) {
+        this.cameraConnected = connected;
+        this.updateStatusDot('camera-dot', connected ? 'online' : 'offline');
+    },
+
+    // API Helpers
+    async sendPose(pose) {
+        try {
+            await fetch('/api/reggie/move/goto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pose)
+            });
+            return true;
+        } catch (err) {
+            console.error('Failed to send pose:', err);
+            return false;
+        }
+    },
+
+    async toggleDaemon() {
+        const action = this.state.daemonRunning ? 'stop' : 'start';
+        const params = action === 'start' ? { wake_up: true } : { goto_sleep: true };
+
+        try {
+            await fetch(`/api/reggie/daemon/${action}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
+            setTimeout(() => this.checkHealth(), 1000);
+            return true;
+        } catch (err) {
+            console.error('Failed to toggle daemon:', err);
+            return false;
+        }
+    },
+
+    async setMotorMode(mode) {
+        try {
+            const response = await fetch('/api/reggie/motors/mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode })
+            });
+            if (response.ok) {
+                this.state.motorMode = mode;
+                this.emit('motorModeChange', mode);
+                return true;
+            }
+        } catch (err) {
+            console.error('Failed to set motor mode:', err);
+        }
+        return false;
+    },
+
+    async playAnimation(name) {
+        try {
+            await fetch(`/api/reggie/move/play/${name}`, { method: 'POST' });
+            return true;
+        } catch (err) {
+            console.error('Failed to play animation:', err);
+            return false;
+        }
+    }
+};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    ReggieShared.init();
+});
+</script>
+
+{% block reggie_scripts %}{% endblock %}
+{% endblock %}

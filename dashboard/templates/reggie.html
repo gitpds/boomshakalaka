@@ -1,0 +1,770 @@
+{% extends "reggie_base.html" %}
+
+{% block reggie_content %}
+<div class="overview-layout">
+    <!-- Top Row: Quick Status & Actions -->
+    <div class="overview-top">
+        <!-- Robot Status Card -->
+        <div class="reggie-card overview-status-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="8" width="16" height="12" rx="2"/>
+                    <circle cx="9" cy="14" r="2"/>
+                    <circle cx="15" cy="14" r="2"/>
+                    <path d="M12 2v4"/>
+                    <circle cx="12" cy="2" r="1"/>
+                </svg>
+                <span>Robot Status</span>
+                <span class="reggie-card-badge" id="daemon-badge">--</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="status-grid">
+                    <div class="status-block">
+                        <span class="status-label">Connection</span>
+                        <span class="status-value" id="conn-status">Checking...</span>
+                    </div>
+                    <div class="status-block">
+                        <span class="status-label">Daemon</span>
+                        <span class="status-value" id="daemon-status">--</span>
+                    </div>
+                    <div class="status-block">
+                        <span class="status-label">Motor Mode</span>
+                        <span class="status-value" id="motor-mode">--</span>
+                    </div>
+                    <div class="status-block">
+                        <span class="status-label">WebSocket</span>
+                        <span class="status-value" id="ws-status">--</span>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">IP Address</span>
+                    <span class="info-value">192.168.0.11</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Camera Port</span>
+                    <span class="info-value">8443 (WebRTC)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions Card -->
+        <div class="reggie-card overview-actions-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                </svg>
+                <span>Quick Actions</span>
+            </div>
+            <div class="reggie-card-body">
+                <!-- Power Button -->
+                <div class="power-section">
+                    <button class="power-btn" id="power-btn" onclick="OverviewPage.toggleDaemon()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+                            <line x1="12" y1="2" x2="12" y2="12"/>
+                        </svg>
+                    </button>
+                    <span class="power-label" id="power-label">Daemon Off</span>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="reggie-btn" onclick="OverviewPage.wakeUp()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"/>
+                            <line x1="12" y1="1" x2="12" y2="3"/>
+                            <line x1="12" y1="21" x2="12" y2="23"/>
+                        </svg>
+                        Wake Up
+                    </button>
+                    <button class="reggie-btn" onclick="OverviewPage.sleep()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                        Sleep
+                    </button>
+                    <button class="reggie-btn emergency-btn" onclick="OverviewPage.emergencyStop()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        E-Stop
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mini Camera Preview -->
+        <div class="reggie-card overview-camera-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 7l-7 5 7 5V7z"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+                <span>Camera Preview</span>
+                <span class="reggie-card-badge" id="camera-badge" style="display: none;">Live</span>
+            </div>
+            <div class="reggie-card-body camera-preview-body">
+                <div class="camera-preview-container" id="camera-container">
+                    <video id="camera-video" autoplay playsinline muted></video>
+                    <div class="camera-placeholder" id="camera-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        <span id="camera-status-text">Not connected</span>
+                        <button class="reggie-btn reggie-btn-sm" onclick="CameraPreview.connect()">Connect</button>
+                    </div>
+                    <div class="camera-overlay" id="camera-overlay">
+                        <a href="{{ url_for('reggie_camera') }}" class="fullscreen-link" title="Full Camera View">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="15 3 21 3 21 9"/>
+                                <polyline points="9 21 3 21 3 15"/>
+                                <line x1="21" y1="3" x2="14" y2="10"/>
+                                <line x1="3" y1="21" x2="10" y2="14"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row: Navigation Cards -->
+    <div class="overview-nav-cards">
+        <a href="{{ url_for('reggie_control') }}" class="nav-card">
+            <div class="nav-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+                </svg>
+            </div>
+            <div class="nav-card-content">
+                <h3>Motion Control</h3>
+                <p>Head pose, body rotation, antennas, and presets</p>
+            </div>
+            <div class="nav-card-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </div>
+        </a>
+
+        <a href="{{ url_for('reggie_camera') }}" class="nav-card">
+            <div class="nav-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 7l-7 5 7 5V7z"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+            </div>
+            <div class="nav-card-content">
+                <h3>Camera Feed</h3>
+                <p>Full-screen WebRTC video stream</p>
+            </div>
+            <div class="nav-card-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </div>
+        </a>
+
+        <a href="{{ url_for('reggie_moves') }}" class="nav-card">
+            <div class="nav-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+            </div>
+            <div class="nav-card-content">
+                <h3>Move Player</h3>
+                <p>Dances, emotions, and recorded animations</p>
+            </div>
+            <div class="nav-card-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </div>
+        </a>
+
+        <a href="{{ url_for('reggie_apps') }}" class="nav-card">
+            <div class="nav-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+            </div>
+            <div class="nav-card-content">
+                <h3>Apps</h3>
+                <p>Hugging Face apps management</p>
+            </div>
+            <div class="nav-card-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </div>
+        </a>
+
+        <a href="{{ url_for('reggie_settings') }}" class="nav-card">
+            <div class="nav-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+            </div>
+            <div class="nav-card-content">
+                <h3>Settings</h3>
+                <p>Volume, diagnostics, and configuration</p>
+            </div>
+            <div class="nav-card-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+            </div>
+        </a>
+    </div>
+</div>
+
+<style>
+/* Overview Layout */
+.overview-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.overview-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr 300px;
+    gap: 16px;
+}
+
+/* Status Card */
+.overview-status-card .status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.status-block {
+    background: var(--bg-primary);
+    padding: 10px 12px;
+    border-radius: 6px;
+}
+
+.status-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.status-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--border-color);
+    font-size: 12px;
+}
+
+.info-label {
+    color: var(--text-muted);
+}
+
+.info-value {
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Actions Card */
+.power-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.power-btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    border: 3px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.power-btn svg {
+    width: 32px;
+    height: 32px;
+}
+
+.power-btn:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-secondary);
+}
+
+.power-btn.on {
+    border-color: var(--success);
+    color: var(--success);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.power-label {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.action-buttons .reggie-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+}
+
+.action-buttons .reggie-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.emergency-btn {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.emergency-btn:hover {
+    background: var(--error);
+    color: #fff;
+}
+
+/* Camera Preview */
+.camera-preview-body {
+    padding: 0;
+}
+
+.camera-preview-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #000;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+}
+
+.camera-preview-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+}
+
+.camera-preview-container video.connected {
+    display: block;
+}
+
+.camera-placeholder {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--bg-primary);
+}
+
+.camera-placeholder svg {
+    width: 40px;
+    height: 40px;
+    color: var(--text-muted);
+}
+
+.camera-placeholder span {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.camera-placeholder.hidden {
+    display: none;
+}
+
+.camera-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+    pointer-events: none;
+}
+
+.camera-overlay.visible {
+    display: block;
+}
+
+.fullscreen-link {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    padding: 6px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 4px;
+    color: #fff;
+    pointer-events: auto;
+    transition: all 0.15s;
+}
+
+.fullscreen-link:hover {
+    background: rgba(0,0,0,0.8);
+}
+
+.fullscreen-link svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Navigation Cards */
+.overview-nav-cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+
+.nav-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.nav-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.nav-card-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border-radius: 8px;
+}
+
+.nav-card-icon svg {
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+}
+
+.nav-card-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.nav-card-content h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+}
+
+.nav-card-content p {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nav-card-arrow {
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.nav-card-arrow svg {
+    width: 16px;
+    height: 16px;
+}
+
+.nav-card:hover .nav-card-arrow {
+    color: var(--accent);
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .overview-top {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .overview-camera-card {
+        grid-column: span 2;
+    }
+
+    .overview-nav-cards {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 800px) {
+    .overview-top {
+        grid-template-columns: 1fr;
+    }
+
+    .overview-camera-card {
+        grid-column: span 1;
+    }
+
+    .overview-nav-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 500px) {
+    .overview-nav-cards {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block reggie_scripts %}
+<script>
+// Camera Preview (minimal WebRTC client)
+const CameraPreview = {
+    signalingUrl: 'ws://192.168.0.11:8443',
+    ws: null,
+    pc: null,
+    sessionId: null,
+    isConnecting: false,
+
+    connect() {
+        if (this.isConnecting || this.pc) return;
+        this.isConnecting = true;
+
+        const statusText = document.getElementById('camera-status-text');
+        statusText.textContent = 'Connecting...';
+
+        try {
+            this.pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            this.pc.addTransceiver('video', { direction: 'recvonly' });
+            this.pc.addTransceiver('audio', { direction: 'recvonly' });
+
+            this.pc.ontrack = (event) => {
+                const video = document.getElementById('camera-video');
+                if (video && event.streams[0]) {
+                    video.srcObject = event.streams[0];
+                    video.classList.add('connected');
+                    document.getElementById('camera-placeholder').classList.add('hidden');
+                    document.getElementById('camera-overlay').classList.add('visible');
+                    document.getElementById('camera-badge').style.display = 'inline';
+                    ReggieShared.updateCameraStatus(true);
+                    this.isConnecting = false;
+                }
+            };
+
+            this.pc.onconnectionstatechange = () => {
+                if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed') {
+                    this.cleanup();
+                }
+            };
+
+            this.pc.onicecandidate = (event) => {
+                if (event.candidate && this.sessionId && this.ws?.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: 'peer',
+                        sessionId: this.sessionId,
+                        ice: {
+                            candidate: event.candidate.candidate,
+                            sdpMLineIndex: event.candidate.sdpMLineIndex,
+                            sdpMid: event.candidate.sdpMid
+                        }
+                    }));
+                }
+            };
+
+            this.ws = new WebSocket(this.signalingUrl);
+
+            this.ws.onopen = () => {
+                statusText.textContent = 'Signaling...';
+            };
+
+            this.ws.onmessage = async (event) => {
+                const msg = JSON.parse(event.data);
+                await this.handleMessage(msg);
+            };
+
+            this.ws.onerror = () => {
+                statusText.textContent = 'Connection failed';
+                this.cleanup();
+            };
+
+            this.ws.onclose = () => {
+                if (this.isConnecting) {
+                    statusText.textContent = 'Connection closed';
+                    this.cleanup();
+                }
+            };
+
+        } catch (err) {
+            statusText.textContent = 'Error: ' + err.message;
+            this.cleanup();
+        }
+    },
+
+    async handleMessage(msg) {
+        switch (msg.type) {
+            case 'welcome':
+                this.ws.send(JSON.stringify({ type: 'setPeerStatus', roles: ['listener'], meta: {} }));
+                this.ws.send(JSON.stringify({ type: 'list' }));
+                break;
+
+            case 'list':
+                const producer = msg.producers.find(p => p.meta?.name === 'reachymini');
+                if (!producer) {
+                    document.getElementById('camera-status-text').textContent = 'Camera not available';
+                    this.cleanup();
+                    return;
+                }
+                this.ws.send(JSON.stringify({ type: 'startSession', peerId: producer.id }));
+                break;
+
+            case 'sessionStarted':
+                this.sessionId = msg.sessionId;
+                break;
+
+            case 'peer':
+                if (msg.sdp && msg.sdp.type === 'offer') {
+                    await this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp }));
+                    const answer = await this.pc.createAnswer();
+                    await this.pc.setLocalDescription(answer);
+                    this.ws.send(JSON.stringify({ type: 'peer', sessionId: this.sessionId, sdp: { type: 'answer', sdp: answer.sdp } }));
+                }
+                if (msg.ice) {
+                    await this.pc.addIceCandidate(new RTCIceCandidate({
+                        candidate: msg.ice.candidate,
+                        sdpMLineIndex: msg.ice.sdpMLineIndex,
+                        sdpMid: msg.ice.sdpMid
+                    }));
+                }
+                break;
+        }
+    },
+
+    cleanup() {
+        this.isConnecting = false;
+        if (this.ws) {
+            this.ws.onopen = null;
+            this.ws.onmessage = null;
+            this.ws.onerror = null;
+            this.ws.onclose = null;
+            if (this.ws.readyState === WebSocket.OPEN) this.ws.close();
+            this.ws = null;
+        }
+        if (this.pc) {
+            this.pc.close();
+            this.pc = null;
+        }
+
+        const video = document.getElementById('camera-video');
+        if (video) {
+            video.srcObject = null;
+            video.classList.remove('connected');
+        }
+
+        document.getElementById('camera-placeholder')?.classList.remove('hidden');
+        document.getElementById('camera-overlay')?.classList.remove('visible');
+        const badge = document.getElementById('camera-badge');
+        if (badge) badge.style.display = 'none';
+
+        ReggieShared.updateCameraStatus(false);
+        this.sessionId = null;
+    }
+};
+
+// Overview Page Controller
+const OverviewPage = {
+    init() {
+        // Listen for connection changes
+        ReggieShared.on('connectionChange', (data) => {
+            document.getElementById('conn-status').textContent = data.connected ? 'Connected' : 'Disconnected';
+            document.getElementById('daemon-status').textContent = data.daemon || '--';
+            document.getElementById('daemon-badge').textContent = data.daemon === 'running' ? 'Running' : 'Stopped';
+
+            const powerBtn = document.getElementById('power-btn');
+            const powerLabel = document.getElementById('power-label');
+            if (data.daemon === 'running') {
+                powerBtn.classList.add('on');
+                powerLabel.textContent = 'Daemon On';
+            } else {
+                powerBtn.classList.remove('on');
+                powerLabel.textContent = 'Daemon Off';
+            }
+        });
+
+        // Listen for motor mode changes
+        ReggieShared.on('motorModeChange', (mode) => {
+            document.getElementById('motor-mode').textContent = mode;
+        });
+
+        // Update WS status
+        const wsCheck = setInterval(() => {
+            const wsStatus = ReggieShared.ws?.readyState === WebSocket.OPEN ? 'Connected' : 'Disconnected';
+            document.getElementById('ws-status').textContent = wsStatus;
+        }, 1000);
+    },
+
+    toggleDaemon() {
+        ReggieShared.toggleDaemon();
+    },
+
+    wakeUp() {
+        ReggieShared.playAnimation('wake_up');
+    },
+
+    sleep() {
+        ReggieShared.playAnimation('goto_sleep');
+    },
+
+    emergencyStop() {
+        ReggieShared.setMotorMode('disabled');
+    }
+};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    OverviewPage.init();
+});
+</script>
+{% endblock %}

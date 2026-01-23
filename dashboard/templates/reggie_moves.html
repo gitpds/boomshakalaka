@@ -1,0 +1,703 @@
+{% extends "reggie_base.html" %}
+
+{% block reggie_content %}
+<div class="moves-layout">
+    <!-- Main Content: Move Player -->
+    <div class="moves-main">
+        <!-- Now Playing Card -->
+        <div class="reggie-card now-playing-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <span>Now Playing</span>
+                <span class="reggie-card-badge" id="playing-badge" style="display: none;">Playing</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="now-playing-content">
+                    <div class="now-playing-info">
+                        <div class="move-name" id="current-move-name">No move selected</div>
+                        <div class="move-dataset" id="current-move-dataset">--</div>
+                    </div>
+                    <div class="player-controls">
+                        <button class="player-btn" id="play-btn" onclick="MovesPage.playSelectedMove()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </button>
+                        <button class="player-btn stop-btn" onclick="MovesPage.stopMove()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="6" y="6" width="12" height="12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dataset Tabs -->
+        <div class="dataset-tabs">
+            <button class="dataset-tab active" data-dataset="dances" onclick="MovesPage.selectDataset('dances')">
+                <span class="tab-icon">💃</span>
+                <span class="tab-name">Dances</span>
+            </button>
+            <button class="dataset-tab" data-dataset="emotions" onclick="MovesPage.selectDataset('emotions')">
+                <span class="tab-icon">😊</span>
+                <span class="tab-name">Emotions</span>
+            </button>
+        </div>
+
+        <!-- Moves Grid -->
+        <div class="reggie-card moves-grid-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+                <span id="moves-title">Dances</span>
+                <span class="move-count" id="move-count">0 moves</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="moves-grid" id="moves-grid">
+                    <div class="moves-loading">Loading moves...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar: Recent & Quick Play -->
+    <div class="moves-sidebar">
+        <!-- Quick Play Card -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polygon points="10 8 16 12 10 16 10 8"/>
+                </svg>
+                <span>Quick Play</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="quick-play-btns">
+                    <button class="quick-play-btn" onclick="MovesPage.quickPlay('wake_up')">
+                        <span class="qp-icon">🌅</span>
+                        <span>Wake Up</span>
+                    </button>
+                    <button class="quick-play-btn" onclick="MovesPage.quickPlay('goto_sleep')">
+                        <span class="qp-icon">🌙</span>
+                        <span>Sleep</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recently Played -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>Recently Played</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="recent-list" id="recent-list">
+                    <div class="recent-empty">No recent moves</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Move Info -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>Move Datasets</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="dataset-info">
+                    <div class="dataset-item">
+                        <span class="dataset-label">Dances</span>
+                        <span class="dataset-value">pollen-robotics/reachy-mini-dances-library</span>
+                    </div>
+                    <div class="dataset-item">
+                        <span class="dataset-label">Emotions</span>
+                        <span class="dataset-value">pollen-robotics/reachy-mini-emotions-library</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Moves Layout */
+.moves-layout {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+}
+
+.moves-main {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Now Playing */
+.now-playing-card {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+}
+
+.now-playing-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.now-playing-info {
+    flex: 1;
+}
+
+.move-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.move-dataset {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.player-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.player-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: var(--bg-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.player-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.player-btn:hover {
+    transform: scale(1.1);
+}
+
+.player-btn.stop-btn {
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.player-btn.stop-btn:hover {
+    border-color: var(--error);
+    color: var(--error);
+}
+
+/* Dataset Tabs */
+.dataset-tabs {
+    display: flex;
+    gap: 8px;
+}
+
+.dataset-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dataset-tab:hover {
+    border-color: var(--accent);
+}
+
+.dataset-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+.tab-icon {
+    font-size: 18px;
+}
+
+/* Moves Grid */
+.moves-grid-card {
+    flex: 1;
+}
+
+.move-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.moves-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.moves-loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+}
+
+.move-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 12px;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.move-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.move-card.selected {
+    border-color: var(--accent);
+    background: rgba(var(--accent-rgb), 0.1);
+}
+
+.move-card.playing {
+    border-color: var(--success);
+    animation: playing-pulse 1.5s infinite;
+}
+
+@keyframes playing-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+}
+
+.move-card-icon {
+    font-size: 28px;
+}
+
+.move-card-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: center;
+    word-break: break-word;
+}
+
+/* Sidebar */
+.moves-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Quick Play */
+.quick-play-btns {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.quick-play-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.quick-play-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.qp-icon {
+    font-size: 20px;
+}
+
+/* Recent List */
+.recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.recent-empty {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.recent-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.recent-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.recent-icon {
+    font-size: 16px;
+}
+
+.recent-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.recent-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recent-time {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Dataset Info */
+.dataset-info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dataset-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dataset-item:last-child {
+    border-bottom: none;
+}
+
+.dataset-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.dataset-value {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    word-break: break-all;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .moves-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .moves-sidebar {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .moves-sidebar > *:last-child {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 600px) {
+    .moves-sidebar {
+        grid-template-columns: 1fr;
+    }
+
+    .moves-sidebar > *:last-child {
+        grid-column: span 1;
+    }
+
+    .moves-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    }
+}
+</style>
+{% endblock %}
+
+{% block reggie_scripts %}
+<script>
+const MovesPage = {
+    currentDataset: 'dances',
+    selectedMove: null,
+    moves: [],
+    recentMoves: JSON.parse(localStorage.getItem('reggie-recent-moves') || '[]'),
+
+    init() {
+        this.loadMoves();
+        this.updateRecentList();
+    },
+
+    selectDataset(dataset) {
+        this.currentDataset = dataset;
+        this.selectedMove = null;
+
+        // Update tabs
+        document.querySelectorAll('.dataset-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.dataset === dataset);
+        });
+
+        // Update title
+        document.getElementById('moves-title').textContent =
+            dataset === 'dances' ? 'Dances' : 'Emotions';
+
+        this.loadMoves();
+    },
+
+    async loadMoves() {
+        const grid = document.getElementById('moves-grid');
+        grid.innerHTML = '<div class="moves-loading">Loading moves...</div>';
+
+        try {
+            const response = await fetch(`/api/reggie/moves/list/${this.currentDataset}`);
+            if (response.ok) {
+                const data = await response.json();
+                this.moves = data.moves || data || [];
+                this.renderMoves();
+            } else {
+                grid.innerHTML = '<div class="moves-loading">Failed to load moves</div>';
+            }
+        } catch (err) {
+            console.error('Failed to load moves:', err);
+            grid.innerHTML = '<div class="moves-loading">Error loading moves</div>';
+        }
+    },
+
+    renderMoves() {
+        const grid = document.getElementById('moves-grid');
+        document.getElementById('move-count').textContent = `${this.moves.length} moves`;
+
+        if (this.moves.length === 0) {
+            grid.innerHTML = '<div class="moves-loading">No moves available</div>';
+            return;
+        }
+
+        const icons = this.currentDataset === 'dances'
+            ? ['💃', '🕺', '🎵', '🎶', '✨', '🌟', '🎭', '🎪']
+            : ['😊', '😢', '😮', '😡', '🥰', '😴', '🤔', '😎'];
+
+        grid.innerHTML = this.moves.map((move, index) => {
+            const name = typeof move === 'string' ? move : move.name;
+            const icon = icons[index % icons.length];
+            const isSelected = this.selectedMove === name;
+
+            return `
+                <div class="move-card ${isSelected ? 'selected' : ''}"
+                     data-move="${name}"
+                     onclick="MovesPage.selectMove('${name}')">
+                    <span class="move-card-icon">${icon}</span>
+                    <span class="move-card-name">${name}</span>
+                </div>
+            `;
+        }).join('');
+    },
+
+    selectMove(name) {
+        this.selectedMove = name;
+
+        // Update UI
+        document.querySelectorAll('.move-card').forEach(card => {
+            card.classList.toggle('selected', card.dataset.move === name);
+        });
+
+        document.getElementById('current-move-name').textContent = name;
+        document.getElementById('current-move-dataset').textContent =
+            this.currentDataset === 'dances' ? 'Dances Library' : 'Emotions Library';
+    },
+
+    async playSelectedMove() {
+        if (!this.selectedMove) return;
+
+        const datasetPath = this.currentDataset === 'dances'
+            ? 'pollen-robotics/reachy-mini-dances-library'
+            : 'pollen-robotics/reachy-mini-emotions-library';
+
+        try {
+            await fetch(`/api/reggie/move/play/recorded-move-dataset/${datasetPath}/${this.selectedMove}`, {
+                method: 'POST'
+            });
+
+            // Update playing state
+            document.getElementById('playing-badge').style.display = 'inline';
+            document.querySelectorAll('.move-card').forEach(card => {
+                card.classList.toggle('playing', card.dataset.move === this.selectedMove);
+            });
+
+            // Add to recent
+            this.addToRecent(this.selectedMove, this.currentDataset);
+
+        } catch (err) {
+            console.error('Failed to play move:', err);
+        }
+    },
+
+    async stopMove() {
+        try {
+            await fetch('/api/reggie/move/stop', { method: 'POST' });
+
+            // Update UI
+            document.getElementById('playing-badge').style.display = 'none';
+            document.querySelectorAll('.move-card').forEach(card => {
+                card.classList.remove('playing');
+            });
+
+        } catch (err) {
+            console.error('Failed to stop move:', err);
+        }
+    },
+
+    async quickPlay(animation) {
+        try {
+            await fetch(`/api/reggie/move/play/${animation}`, { method: 'POST' });
+            document.getElementById('playing-badge').style.display = 'inline';
+
+            // Auto-hide badge after animation (approx)
+            setTimeout(() => {
+                document.getElementById('playing-badge').style.display = 'none';
+            }, 5000);
+
+        } catch (err) {
+            console.error('Failed to play animation:', err);
+        }
+    },
+
+    addToRecent(name, dataset) {
+        // Remove if exists
+        this.recentMoves = this.recentMoves.filter(m => m.name !== name);
+
+        // Add to front
+        this.recentMoves.unshift({
+            name,
+            dataset,
+            time: Date.now()
+        });
+
+        // Keep only last 10
+        this.recentMoves = this.recentMoves.slice(0, 10);
+
+        // Save
+        localStorage.setItem('reggie-recent-moves', JSON.stringify(this.recentMoves));
+
+        this.updateRecentList();
+    },
+
+    updateRecentList() {
+        const list = document.getElementById('recent-list');
+
+        if (this.recentMoves.length === 0) {
+            list.innerHTML = '<div class="recent-empty">No recent moves</div>';
+            return;
+        }
+
+        list.innerHTML = this.recentMoves.map(move => {
+            const icon = move.dataset === 'dances' ? '💃' : '😊';
+            const timeAgo = this.formatTimeAgo(move.time);
+
+            return `
+                <div class="recent-item" onclick="MovesPage.playRecent('${move.name}', '${move.dataset}')">
+                    <span class="recent-icon">${icon}</span>
+                    <div class="recent-info">
+                        <div class="recent-name">${move.name}</div>
+                        <div class="recent-time">${timeAgo}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    async playRecent(name, dataset) {
+        const datasetPath = dataset === 'dances'
+            ? 'pollen-robotics/reachy-mini-dances-library'
+            : 'pollen-robotics/reachy-mini-emotions-library';
+
+        try {
+            await fetch(`/api/reggie/move/play/recorded-move-dataset/${datasetPath}/${name}`, {
+                method: 'POST'
+            });
+
+            this.addToRecent(name, dataset);
+            document.getElementById('playing-badge').style.display = 'inline';
+
+        } catch (err) {
+            console.error('Failed to play move:', err);
+        }
+    },
+
+    formatTimeAgo(timestamp) {
+        const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+        if (seconds < 60) return 'Just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        return `${Math.floor(seconds / 86400)}d ago`;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    MovesPage.init();
+});
+</script>
+{% endblock %}

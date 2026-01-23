@@ -1,0 +1,1214 @@
+{% extends "base.html" %}
+
+{% block title %}Agent Office{% endblock %}
+{% block sidebar_title %}Agent Office{% endblock %}
+{% block page_title %}Agent Office{% endblock %}
+{% block page_subtitle %}8-bit AI agent headquarters{% endblock %}
+
+{% block content %}
+<div class="office-container">
+    <!-- Office Scene -->
+    <div class="office-scene" id="office-scene">
+        <!-- Floor Pattern -->
+        <div class="office-floor"></div>
+
+        <!-- Wall with window -->
+        <div class="office-wall">
+            <div class="wall-window">
+                <div class="window-frame">
+                    <div class="window-pane"></div>
+                    <div class="window-pane"></div>
+                </div>
+            </div>
+            <div class="wall-clock">
+                <div class="clock-face">
+                    <span id="clock-time">12:00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coffee Station -->
+        <div class="coffee-station">
+            <div class="coffee-machine">
+                <div class="coffee-light"></div>
+            </div>
+            <div class="coffee-cups"></div>
+        </div>
+
+        <!-- Plant Decorations -->
+        <div class="plant plant-1">
+            <div class="pot"></div>
+            <div class="leaves">
+                <div class="leaf"></div>
+                <div class="leaf"></div>
+                <div class="leaf"></div>
+            </div>
+        </div>
+        <div class="plant plant-2">
+            <div class="pot"></div>
+            <div class="leaves">
+                <div class="leaf"></div>
+                <div class="leaf"></div>
+                <div class="leaf"></div>
+            </div>
+        </div>
+
+        <!-- Boss Area (User Avatar) -->
+        <div class="boss-area" id="boss-area">
+            <div class="boss-desk">
+                <div class="desk-surface"></div>
+                <div class="desk-monitor">
+                    <div class="monitor-screen"></div>
+                </div>
+            </div>
+            <div class="boss-avatar">
+                <img src="{{ url_for('static', filename='images/8bit/boss_avatar.png') }}" alt="Boss" onerror="this.style.display='none'">
+                <div class="avatar-fallback">
+                    <div class="pixel-boss"></div>
+                </div>
+            </div>
+            <div class="boss-label">The Boss</div>
+        </div>
+
+        <!-- Agent Workstations -->
+        <div class="workstations">
+            <!-- Researcher Agent -->
+            <div class="workstation" id="agent-researcher" data-agent="researcher">
+                <div class="agent-desk">
+                    <div class="desk-surface"></div>
+                    <div class="desk-monitor">
+                        <div class="monitor-screen"></div>
+                    </div>
+                    <div class="desk-items">
+                        <div class="book"></div>
+                        <div class="magnifier"></div>
+                    </div>
+                </div>
+                <div class="agent-sprite researcher">
+                    <div class="agent-body"></div>
+                    <div class="agent-head"></div>
+                    <div class="agent-glasses"></div>
+                </div>
+                <div class="agent-bubble" id="bubble-researcher">
+                    <span class="bubble-text">Idle</span>
+                </div>
+                <div class="agent-nameplate">Researcher</div>
+            </div>
+
+            <!-- Coder Agent -->
+            <div class="workstation" id="agent-coder" data-agent="coder">
+                <div class="agent-desk">
+                    <div class="desk-surface"></div>
+                    <div class="desk-monitor coding">
+                        <div class="monitor-screen">
+                            <div class="code-lines"></div>
+                        </div>
+                    </div>
+                    <div class="desk-items">
+                        <div class="coffee-mug"></div>
+                    </div>
+                </div>
+                <div class="agent-sprite coder">
+                    <div class="agent-body"></div>
+                    <div class="agent-head"></div>
+                    <div class="agent-headphones"></div>
+                </div>
+                <div class="agent-bubble" id="bubble-coder">
+                    <span class="bubble-text">Idle</span>
+                </div>
+                <div class="agent-nameplate">Coder</div>
+            </div>
+
+            <!-- Reviewer Agent -->
+            <div class="workstation" id="agent-reviewer" data-agent="reviewer">
+                <div class="agent-desk">
+                    <div class="desk-surface"></div>
+                    <div class="desk-monitor">
+                        <div class="monitor-screen"></div>
+                    </div>
+                    <div class="desk-items">
+                        <div class="clipboard"></div>
+                        <div class="pen"></div>
+                    </div>
+                </div>
+                <div class="agent-sprite reviewer">
+                    <div class="agent-body"></div>
+                    <div class="agent-head"></div>
+                    <div class="agent-tie"></div>
+                </div>
+                <div class="agent-bubble" id="bubble-reviewer">
+                    <span class="bubble-text">Idle</span>
+                </div>
+                <div class="agent-nameplate">Reviewer</div>
+            </div>
+
+            <!-- Artist Agent -->
+            <div class="workstation" id="agent-artist" data-agent="artist">
+                <div class="agent-desk">
+                    <div class="desk-surface"></div>
+                    <div class="desk-monitor art">
+                        <div class="monitor-screen">
+                            <div class="art-canvas"></div>
+                        </div>
+                    </div>
+                    <div class="desk-items">
+                        <div class="palette"></div>
+                        <div class="brush"></div>
+                    </div>
+                </div>
+                <div class="agent-sprite artist">
+                    <div class="agent-body"></div>
+                    <div class="agent-head"></div>
+                    <div class="agent-beret"></div>
+                </div>
+                <div class="agent-bubble" id="bubble-artist">
+                    <span class="bubble-text">Idle</span>
+                </div>
+                <div class="agent-nameplate">Artist</div>
+            </div>
+        </div>
+
+        <!-- Task Flow Area -->
+        <div class="task-flow">
+            <div class="inbox-tray" id="inbox-tray">
+                <div class="tray-label">Inbox</div>
+                <div class="tray-items" id="inbox-items"></div>
+            </div>
+            <div class="outbox-tray" id="outbox-tray">
+                <div class="tray-label">Outbox</div>
+                <div class="tray-items" id="outbox-items"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Panel -->
+    <div class="status-panel">
+        <div class="panel-header">
+            <h3>Office Status</h3>
+            <button class="refresh-btn" onclick="AgentOffice.refresh()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+            </button>
+        </div>
+        <div class="agent-stats" id="agent-stats">
+            <div class="stat-row">
+                <span class="stat-label">Active Jobs:</span>
+                <span class="stat-value" id="stat-active">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Completed Today:</span>
+                <span class="stat-value" id="stat-completed">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Failed:</span>
+                <span class="stat-value stat-error" id="stat-failed">0</span>
+            </div>
+        </div>
+        <div class="recent-activity" id="recent-activity">
+            <h4>Recent Activity</h4>
+            <div class="activity-list" id="activity-list">
+                <div class="activity-empty">No recent activity</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Office Container */
+.office-container {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    height: calc(100vh - 140px);
+    min-height: 500px;
+}
+
+/* Office Scene */
+.office-scene {
+    background: linear-gradient(180deg, #2a3a4a 0%, #1a2a3a 100%);
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+    image-rendering: pixelated;
+}
+
+/* Floor - Checkered pattern */
+.office-floor {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background:
+        repeating-conic-gradient(#3a4a5a 0% 25%, #4a5a6a 0% 50%)
+        50% / 40px 40px;
+}
+
+/* Wall */
+.office-wall {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background: linear-gradient(180deg, #4a5a6a 0%, #3a4a5a 100%);
+    border-bottom: 4px solid #2a3a4a;
+}
+
+/* Window */
+.wall-window {
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 80px;
+    background: #1a2a4a;
+    border: 4px solid #5a6a7a;
+    box-shadow: inset 0 0 20px rgba(100, 180, 255, 0.3);
+}
+
+.window-frame {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 100%;
+    gap: 2px;
+    padding: 2px;
+}
+
+.window-pane {
+    background: linear-gradient(180deg,
+        rgba(100, 180, 255, 0.4) 0%,
+        rgba(150, 200, 255, 0.2) 100%);
+}
+
+/* Clock */
+.wall-clock {
+    position: absolute;
+    top: 15%;
+    right: 15%;
+    width: 50px;
+    height: 50px;
+    background: #f5f5f5;
+    border: 3px solid #3a4a5a;
+    border-radius: 50%;
+}
+
+.clock-face {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #1a2a3a;
+    font-weight: bold;
+}
+
+/* Coffee Station */
+.coffee-station {
+    position: absolute;
+    top: 45%;
+    right: 8%;
+    width: 50px;
+    height: 60px;
+}
+
+.coffee-machine {
+    width: 40px;
+    height: 50px;
+    background: linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 100%);
+    border-radius: 4px 4px 0 0;
+    position: relative;
+}
+
+.coffee-light {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 6px;
+    height: 6px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.coffee-cups {
+    width: 30px;
+    height: 15px;
+    background: repeating-linear-gradient(
+        90deg,
+        #f5f5f5 0px,
+        #f5f5f5 8px,
+        transparent 8px,
+        transparent 10px
+    );
+    margin-top: 2px;
+}
+
+/* Plants */
+.plant {
+    position: absolute;
+    width: 30px;
+    height: 50px;
+}
+
+.plant-1 {
+    bottom: 42%;
+    left: 5%;
+}
+
+.plant-2 {
+    bottom: 42%;
+    right: 20%;
+}
+
+.pot {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 20px;
+    background: linear-gradient(180deg, #d97706 0%, #92400e 100%);
+    border-radius: 2px 2px 4px 4px;
+}
+
+.leaves {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.leaf {
+    width: 12px;
+    height: 20px;
+    background: #22c55e;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    position: absolute;
+}
+
+.leaf:nth-child(1) { transform: rotate(-30deg); left: -8px; }
+.leaf:nth-child(2) { transform: rotate(0deg); left: -2px; top: -5px; }
+.leaf:nth-child(3) { transform: rotate(30deg); left: 4px; }
+
+/* Boss Area */
+.boss-area {
+    position: absolute;
+    top: 62%;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 10;
+}
+
+.boss-desk {
+    width: 100px;
+    height: 40px;
+    position: relative;
+}
+
+.boss-desk .desk-surface {
+    width: 100%;
+    height: 20px;
+    background: linear-gradient(180deg, #8b5a2b 0%, #6b4423 100%);
+    border-radius: 4px 4px 0 0;
+    position: absolute;
+    bottom: 0;
+}
+
+.boss-desk .desk-monitor {
+    width: 40px;
+    height: 30px;
+    background: #1a1a2e;
+    border: 3px solid #2a2a4e;
+    border-radius: 4px;
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.boss-avatar {
+    position: absolute;
+    bottom: 45px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 50px;
+}
+
+.boss-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+
+.avatar-fallback {
+    display: none;
+}
+
+.boss-avatar img[style*="display: none"] + .avatar-fallback {
+    display: block;
+}
+
+.pixel-boss {
+    width: 40px;
+    height: 50px;
+    background:
+        /* Head */
+        linear-gradient(180deg, #fcd5b5 0%, #f5c6a5 100%);
+    border-radius: 20px 20px 8px 8px;
+    position: relative;
+}
+
+.pixel-boss::before {
+    content: '';
+    position: absolute;
+    top: 40px;
+    left: 5px;
+    width: 30px;
+    height: 20px;
+    background: #3b82f6;
+    border-radius: 4px;
+}
+
+.boss-label {
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: bold;
+    color: #f5f5f5;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* Workstations Grid */
+.workstations {
+    position: absolute;
+    bottom: 8%;
+    left: 10%;
+    right: 10%;
+    display: flex;
+    justify-content: space-around;
+    gap: 20px;
+}
+
+.workstation {
+    position: relative;
+    width: 80px;
+    text-align: center;
+}
+
+/* Agent Desk */
+.agent-desk {
+    width: 70px;
+    height: 45px;
+    position: relative;
+    margin: 0 auto;
+}
+
+.agent-desk .desk-surface {
+    width: 100%;
+    height: 15px;
+    background: linear-gradient(180deg, #a0522d 0%, #8b4513 100%);
+    border-radius: 2px;
+    position: absolute;
+    bottom: 0;
+    box-shadow: 0 3px 0 #6b3410;
+}
+
+.agent-desk .desk-monitor {
+    width: 35px;
+    height: 25px;
+    background: #0a0a1a;
+    border: 2px solid #1a1a2e;
+    border-radius: 3px;
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    overflow: hidden;
+}
+
+.monitor-screen {
+    width: 100%;
+    height: 100%;
+    background: #001a1a;
+}
+
+/* Desk Items */
+.desk-items {
+    position: absolute;
+    bottom: 15px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 4px;
+    box-sizing: border-box;
+}
+
+.book {
+    width: 8px;
+    height: 10px;
+    background: #ef4444;
+}
+
+.magnifier {
+    width: 8px;
+    height: 8px;
+    background: #60a5fa;
+    border-radius: 50%;
+}
+
+.coffee-mug {
+    width: 8px;
+    height: 10px;
+    background: #f5f5f5;
+    border-radius: 0 0 2px 2px;
+}
+
+.clipboard {
+    width: 8px;
+    height: 12px;
+    background: #fbbf24;
+}
+
+.pen {
+    width: 3px;
+    height: 12px;
+    background: #1e40af;
+}
+
+.palette {
+    width: 12px;
+    height: 8px;
+    background: linear-gradient(90deg, #ef4444 25%, #fbbf24 25%, #fbbf24 50%, #22c55e 50%, #22c55e 75%, #3b82f6 75%);
+    border-radius: 50%;
+}
+
+.brush {
+    width: 3px;
+    height: 12px;
+    background: linear-gradient(180deg, #92400e 70%, #fbbf24 70%);
+}
+
+/* Code animation on monitor */
+.desk-monitor.coding .monitor-screen {
+    background: #0f172a;
+}
+
+.code-lines {
+    animation: codeScroll 3s linear infinite;
+}
+
+.code-lines::before {
+    content: '';
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: #22c55e;
+    margin: 2px;
+    animation: typeCode 0.5s steps(10) infinite;
+}
+
+@keyframes codeScroll {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-10px); }
+}
+
+@keyframes typeCode {
+    0% { width: 5px; }
+    100% { width: 25px; }
+}
+
+/* Art animation on monitor */
+.desk-monitor.art .monitor-screen {
+    background: #fef3c7;
+}
+
+.art-canvas {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg,
+        #ef4444 0%, #ef4444 25%,
+        #fbbf24 25%, #fbbf24 50%,
+        #22c55e 50%, #22c55e 75%,
+        #3b82f6 75%);
+    animation: artPaint 4s ease-in-out infinite;
+}
+
+@keyframes artPaint {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+}
+
+/* Agent Sprites */
+.agent-sprite {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 40px;
+}
+
+.agent-body {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 4px 4px 0 0;
+}
+
+.agent-head {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 18px;
+    background: #fcd5b5;
+    border-radius: 8px 8px 4px 4px;
+}
+
+/* Agent Accessories */
+.researcher .agent-body { background: #3b82f6; }
+.researcher .agent-glasses {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 4px;
+    background: transparent;
+    border: 2px solid #1e3a5f;
+    border-radius: 2px;
+}
+
+.coder .agent-body { background: #10b981; }
+.coder .agent-headphones {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 8px;
+    border: 3px solid #374151;
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+}
+
+.reviewer .agent-body { background: #6366f1; }
+.reviewer .agent-tie {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 12px;
+    background: #dc2626;
+    clip-path: polygon(50% 0%, 100% 20%, 80% 100%, 20% 100%, 0% 20%);
+}
+
+.artist .agent-body { background: #ec4899; }
+.artist .agent-beret {
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 8px;
+    background: #7c3aed;
+    border-radius: 50% 50% 20% 20%;
+}
+
+/* Agent Bubbles */
+.agent-bubble {
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #f5f5f5;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 8px;
+    font-weight: bold;
+    color: #1a1a2e;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.agent-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: #f5f5f5;
+}
+
+.agent-bubble.visible {
+    opacity: 1;
+}
+
+.agent-bubble.working {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.agent-bubble.working::after {
+    border-top-color: #fef3c7;
+}
+
+.agent-bubble.success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.agent-bubble.success::after {
+    border-top-color: #dcfce7;
+}
+
+.agent-bubble.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.agent-bubble.error::after {
+    border-top-color: #fee2e2;
+}
+
+/* Agent Nameplates */
+.agent-nameplate {
+    margin-top: 2px;
+    font-size: 9px;
+    font-weight: bold;
+    color: #f5f5f5;
+    text-shadow: 1px 1px 0 #000;
+}
+
+/* Working Animation */
+.workstation.working .agent-sprite {
+    animation: typing 0.3s steps(2) infinite;
+}
+
+@keyframes typing {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-2px); }
+}
+
+/* Task Flow */
+.task-flow {
+    position: absolute;
+    top: 62%;
+    left: 5%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.inbox-tray, .outbox-tray {
+    width: 60px;
+    height: 40px;
+    background: #d4d4d4;
+    border: 2px solid #a3a3a3;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+.tray-label {
+    font-size: 8px;
+    font-weight: bold;
+    color: #525252;
+    text-align: center;
+}
+
+.tray-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+.task-paper {
+    width: 10px;
+    height: 12px;
+    background: #fef3c7;
+    border: 1px solid #fbbf24;
+}
+
+.task-paper.done {
+    background: #dcfce7;
+    border-color: #22c55e;
+}
+
+/* Status Panel */
+.status-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.refresh-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.refresh-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.refresh-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Agent Stats */
+.agent-stats {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.stat-row:not(:last-child) {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stat-label {
+    color: var(--text-muted);
+}
+
+.stat-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.stat-value.stat-error {
+    color: #ef4444;
+}
+
+/* Recent Activity */
+.recent-activity h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.activity-item {
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 12px;
+}
+
+.activity-item .activity-title {
+    color: var(--text-primary);
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.activity-item .activity-time {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.activity-item.success {
+    border-left: 3px solid #22c55e;
+}
+
+.activity-item.error {
+    border-left: 3px solid #ef4444;
+}
+
+.activity-item.running {
+    border-left: 3px solid #f59e0b;
+}
+
+.activity-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+    padding: 12px;
+    text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .office-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+    }
+
+    .office-scene {
+        min-height: 400px;
+    }
+
+    .workstations {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .workstation {
+        width: 70px;
+    }
+}
+</style>
+
+<script>
+const AgentOffice = {
+    agents: ['researcher', 'coder', 'reviewer', 'artist'],
+    jobAgentMap: {
+        'research': 'researcher',
+        'analyze': 'researcher',
+        'code': 'coder',
+        'build': 'coder',
+        'deploy': 'coder',
+        'review': 'reviewer',
+        'check': 'reviewer',
+        'audit': 'reviewer',
+        'generate': 'artist',
+        'create': 'artist',
+        'design': 'artist',
+        'image': 'artist'
+    },
+
+    async init() {
+        this.updateClock();
+        setInterval(() => this.updateClock(), 1000);
+
+        await this.loadAutomationData();
+        setInterval(() => this.loadAutomationData(), 30000);
+
+        // Demo: Show some agent activity
+        this.demoActivity();
+    },
+
+    updateClock() {
+        const now = new Date();
+        const time = now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        document.getElementById('clock-time').textContent = time;
+    },
+
+    async loadAutomationData() {
+        try {
+            // Load job stats
+            const statsResp = await fetch('/api/automation/stats');
+            if (statsResp.ok) {
+                const stats = await statsResp.json();
+                document.getElementById('stat-active').textContent = stats.running || 0;
+                document.getElementById('stat-completed').textContent = stats.completed_today || 0;
+                document.getElementById('stat-failed').textContent = stats.failed_today || 0;
+            }
+
+            // Load recent jobs
+            const jobsResp = await fetch('/api/automation/jobs');
+            if (jobsResp.ok) {
+                const data = await jobsResp.json();
+                this.updateAgentsFromJobs(data.jobs || []);
+                this.updateActivityList(data.jobs || []);
+            }
+        } catch (err) {
+            console.log('Automation data not available:', err);
+        }
+    },
+
+    updateAgentsFromJobs(jobs) {
+        // Reset all agents
+        this.agents.forEach(agent => {
+            this.setAgentStatus(agent, 'idle');
+        });
+
+        // Update inbox
+        const inboxItems = document.getElementById('inbox-items');
+        const outboxItems = document.getElementById('outbox-items');
+        inboxItems.innerHTML = '';
+        outboxItems.innerHTML = '';
+
+        let pendingCount = 0;
+        let completedCount = 0;
+
+        jobs.forEach(job => {
+            const agent = this.getAgentForJob(job.name);
+
+            if (job.status === 'running') {
+                this.setAgentStatus(agent, 'working', job.name);
+            }
+
+            // Add papers to trays (visual effect)
+            if (job.enabled && job.status !== 'running') {
+                pendingCount++;
+            }
+            if (job.last_status === 'success') {
+                completedCount++;
+            }
+        });
+
+        // Add visual task papers
+        for (let i = 0; i < Math.min(pendingCount, 5); i++) {
+            const paper = document.createElement('div');
+            paper.className = 'task-paper';
+            inboxItems.appendChild(paper);
+        }
+        for (let i = 0; i < Math.min(completedCount, 5); i++) {
+            const paper = document.createElement('div');
+            paper.className = 'task-paper done';
+            outboxItems.appendChild(paper);
+        }
+    },
+
+    getAgentForJob(jobName) {
+        const nameLower = jobName.toLowerCase();
+        for (const [keyword, agent] of Object.entries(this.jobAgentMap)) {
+            if (nameLower.includes(keyword)) {
+                return agent;
+            }
+        }
+        // Default to coder for unknown jobs
+        return 'coder';
+    },
+
+    setAgentStatus(agent, status, jobName = '') {
+        const workstation = document.getElementById(`agent-${agent}`);
+        const bubble = document.getElementById(`bubble-${agent}`);
+
+        if (!workstation || !bubble) return;
+
+        workstation.classList.remove('working');
+        bubble.classList.remove('visible', 'working', 'success', 'error');
+
+        if (status === 'working') {
+            workstation.classList.add('working');
+            bubble.classList.add('visible', 'working');
+            bubble.querySelector('.bubble-text').textContent = jobName ? `Working: ${jobName.substring(0, 15)}...` : 'Working...';
+        } else if (status === 'success') {
+            bubble.classList.add('visible', 'success');
+            bubble.querySelector('.bubble-text').textContent = 'Done!';
+            setTimeout(() => bubble.classList.remove('visible'), 3000);
+        } else if (status === 'error') {
+            bubble.classList.add('visible', 'error');
+            bubble.querySelector('.bubble-text').textContent = 'Error!';
+            setTimeout(() => bubble.classList.remove('visible'), 5000);
+        }
+    },
+
+    updateActivityList(jobs) {
+        const list = document.getElementById('activity-list');
+
+        // Get recent runs from jobs
+        const recentJobs = jobs
+            .filter(j => j.last_run)
+            .sort((a, b) => new Date(b.last_run) - new Date(a.last_run))
+            .slice(0, 5);
+
+        if (recentJobs.length === 0) {
+            list.innerHTML = '<div class="activity-empty">No recent activity</div>';
+            return;
+        }
+
+        list.innerHTML = recentJobs.map(job => {
+            const statusClass = job.last_status === 'success' ? 'success' :
+                               job.last_status === 'failed' ? 'error' : 'running';
+            const time = new Date(job.last_run).toLocaleString();
+
+            return `
+                <div class="activity-item ${statusClass}">
+                    <div class="activity-title">${this.escapeHtml(job.name)}</div>
+                    <div class="activity-time">${time}</div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    demoActivity() {
+        // Show some bubbles briefly for demo
+        setTimeout(() => {
+            this.setAgentStatus('researcher', 'working', 'Analyzing data');
+        }, 1000);
+
+        setTimeout(() => {
+            this.setAgentStatus('researcher', 'success');
+        }, 4000);
+
+        setTimeout(() => {
+            this.setAgentStatus('coder', 'working', 'Building project');
+        }, 2000);
+
+        setTimeout(() => {
+            this.setAgentStatus('coder', 'success');
+        }, 6000);
+    },
+
+    async refresh() {
+        await this.loadAutomationData();
+    },
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    AgentOffice.init();
+});
+</script>
+{% endblock %}

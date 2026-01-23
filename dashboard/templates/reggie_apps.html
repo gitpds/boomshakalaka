@@ -1,0 +1,677 @@
+{% extends "reggie_base.html" %}
+
+{% block reggie_content %}
+<div class="apps-layout">
+    <!-- Main Content: Apps Grid -->
+    <div class="apps-main">
+        <!-- Current App Card -->
+        <div class="reggie-card current-app-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <span>Current App</span>
+                <span class="reggie-card-badge running" id="current-app-badge" style="display: none;">Running</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="current-app-content">
+                    <div class="current-app-icon" id="current-app-icon">📱</div>
+                    <div class="current-app-info">
+                        <div class="current-app-name" id="current-app-name">No app running</div>
+                        <div class="current-app-status" id="current-app-status">Select an app to start</div>
+                    </div>
+                    <button class="reggie-btn stop-app-btn" id="stop-app-btn" onclick="AppsPage.stopCurrentApp()" style="display: none;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="6" y="6" width="12" height="12"/>
+                        </svg>
+                        Stop App
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Apps Grid Card -->
+        <div class="reggie-card apps-grid-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+                <span>Available Apps</span>
+                <span class="app-count" id="app-count">0 apps</span>
+                <button class="header-refresh-btn" onclick="AppsPage.loadApps()" title="Refresh">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="reggie-card-body">
+                <div class="apps-grid" id="apps-grid">
+                    <div class="apps-loading">Loading apps...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar: Info & Help -->
+    <div class="apps-sidebar">
+        <!-- App Details -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="16" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>Selected App</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="app-details" id="app-details">
+                    <div class="no-selection">Click an app to see details</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- About Apps -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span>About Apps</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="about-text">
+                    <p>Apps are Hugging Face spaces that can run on the robot. They provide additional functionality like:</p>
+                    <ul>
+                        <li>Voice interaction</li>
+                        <li>Computer vision</li>
+                        <li>Autonomous behaviors</li>
+                        <li>Custom demos</li>
+                    </ul>
+                    <p class="note">Only one app can run at a time. Starting a new app will stop the current one.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                <span>Quick Actions</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="quick-actions">
+                    <button class="reggie-btn" onclick="AppsPage.loadApps()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Refresh Apps
+                    </button>
+                    <button class="reggie-btn" onclick="AppsPage.stopCurrentApp()" id="stop-btn-sidebar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="6" y="6" width="12" height="12"/>
+                        </svg>
+                        Stop Current App
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Apps Layout */
+.apps-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 16px;
+}
+
+.apps-main {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Current App Card */
+.current-app-card {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+}
+
+.current-app-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.current-app-icon {
+    font-size: 48px;
+    width: 64px;
+    text-align: center;
+}
+
+.current-app-info {
+    flex: 1;
+}
+
+.current-app-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.current-app-status {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.stop-app-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.stop-app-btn:hover {
+    background: var(--error);
+    color: #fff;
+}
+
+.stop-app-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.reggie-card-badge.running {
+    background: var(--success);
+}
+
+/* Header */
+.app-count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.header-refresh-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.header-refresh-btn:hover {
+    background: var(--bg-primary);
+    color: var(--accent);
+}
+
+.header-refresh-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Apps Grid */
+.apps-grid-card {
+    flex: 1;
+}
+
+.apps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.apps-loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+}
+
+.app-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 14px;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.app-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.app-card.selected {
+    border-color: var(--accent);
+    background: rgba(var(--accent-rgb), 0.05);
+}
+
+.app-card.running {
+    border-color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.app-card-icon {
+    font-size: 36px;
+}
+
+.app-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: center;
+    word-break: break-word;
+}
+
+.app-card-status {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: var(--success);
+    color: #fff;
+}
+
+/* Sidebar */
+.apps-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* App Details */
+.app-details .no-selection {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.app-detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.app-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.app-detail-icon {
+    font-size: 32px;
+}
+
+.app-detail-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.app-detail-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+}
+
+.detail-label {
+    color: var(--text-muted);
+}
+
+.detail-value {
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.app-detail-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.app-detail-actions .reggie-btn {
+    flex: 1;
+}
+
+/* About Text */
+.about-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.about-text p {
+    margin: 0 0 10px 0;
+}
+
+.about-text ul {
+    margin: 0 0 10px 0;
+    padding-left: 20px;
+}
+
+.about-text li {
+    margin-bottom: 4px;
+}
+
+.about-text .note {
+    padding: 10px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.quick-actions .reggie-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.quick-actions .reggie-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .apps-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .apps-sidebar {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .apps-sidebar > *:last-child {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 600px) {
+    .apps-sidebar {
+        grid-template-columns: 1fr;
+    }
+
+    .apps-sidebar > *:last-child {
+        grid-column: span 1;
+    }
+
+    .apps-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+{% endblock %}
+
+{% block reggie_scripts %}
+<script>
+const AppsPage = {
+    apps: [],
+    currentApp: null,
+    selectedApp: null,
+
+    init() {
+        this.loadApps();
+        this.loadCurrentApp();
+
+        // Refresh periodically
+        setInterval(() => this.loadCurrentApp(), 10000);
+    },
+
+    async loadApps() {
+        const grid = document.getElementById('apps-grid');
+        grid.innerHTML = '<div class="apps-loading">Loading apps...</div>';
+
+        try {
+            const response = await fetch('/api/reggie/proxy/apps/list-available');
+            if (response.ok) {
+                this.apps = await response.json();
+                this.renderApps();
+            } else {
+                grid.innerHTML = '<div class="apps-loading">Failed to load apps</div>';
+            }
+        } catch (err) {
+            console.error('Failed to load apps:', err);
+            grid.innerHTML = '<div class="apps-loading">Error loading apps</div>';
+        }
+    },
+
+    async loadCurrentApp() {
+        try {
+            const response = await fetch('/api/reggie/proxy/apps/current-app-status');
+            if (response.ok) {
+                const data = await response.json();
+                this.currentApp = data.app_name || null;
+                this.updateCurrentAppUI();
+                this.updateAppsGrid();
+            }
+        } catch (err) {
+            console.error('Failed to get current app:', err);
+        }
+    },
+
+    renderApps() {
+        const grid = document.getElementById('apps-grid');
+        document.getElementById('app-count').textContent = `${this.apps.length} apps`;
+
+        if (!this.apps || this.apps.length === 0) {
+            grid.innerHTML = '<div class="apps-loading">No apps installed</div>';
+            return;
+        }
+
+        // App icons based on name patterns
+        const getIcon = (name) => {
+            const lower = name.toLowerCase();
+            if (lower.includes('voice') || lower.includes('speech')) return '🎤';
+            if (lower.includes('vision') || lower.includes('camera')) return '👁️';
+            if (lower.includes('chat') || lower.includes('talk')) return '💬';
+            if (lower.includes('game')) return '🎮';
+            if (lower.includes('music') || lower.includes('dance')) return '🎵';
+            return '📱';
+        };
+
+        grid.innerHTML = this.apps.map(app => {
+            const name = typeof app === 'string' ? app : app.name;
+            const isRunning = name === this.currentApp;
+            const isSelected = name === this.selectedApp;
+            const icon = getIcon(name);
+
+            return `
+                <div class="app-card ${isRunning ? 'running' : ''} ${isSelected ? 'selected' : ''}"
+                     data-app="${name}"
+                     onclick="AppsPage.selectApp('${name}')">
+                    <span class="app-card-icon">${icon}</span>
+                    <span class="app-card-name">${name}</span>
+                    ${isRunning ? '<span class="app-card-status">Running</span>' : ''}
+                </div>
+            `;
+        }).join('');
+    },
+
+    updateAppsGrid() {
+        document.querySelectorAll('.app-card').forEach(card => {
+            const appName = card.dataset.app;
+            const isRunning = appName === this.currentApp;
+            card.classList.toggle('running', isRunning);
+
+            // Update or add running badge
+            let badge = card.querySelector('.app-card-status');
+            if (isRunning && !badge) {
+                badge = document.createElement('span');
+                badge.className = 'app-card-status';
+                badge.textContent = 'Running';
+                card.appendChild(badge);
+            } else if (!isRunning && badge) {
+                badge.remove();
+            }
+        });
+    },
+
+    updateCurrentAppUI() {
+        const nameEl = document.getElementById('current-app-name');
+        const statusEl = document.getElementById('current-app-status');
+        const iconEl = document.getElementById('current-app-icon');
+        const badgeEl = document.getElementById('current-app-badge');
+        const stopBtn = document.getElementById('stop-app-btn');
+
+        if (this.currentApp) {
+            nameEl.textContent = this.currentApp;
+            statusEl.textContent = 'App is running';
+            badgeEl.style.display = 'inline';
+            stopBtn.style.display = 'flex';
+
+            // Set icon based on app name
+            const lower = this.currentApp.toLowerCase();
+            if (lower.includes('voice') || lower.includes('speech')) iconEl.textContent = '🎤';
+            else if (lower.includes('vision') || lower.includes('camera')) iconEl.textContent = '👁️';
+            else if (lower.includes('chat') || lower.includes('talk')) iconEl.textContent = '💬';
+            else iconEl.textContent = '📱';
+        } else {
+            nameEl.textContent = 'No app running';
+            statusEl.textContent = 'Select an app to start';
+            iconEl.textContent = '📱';
+            badgeEl.style.display = 'none';
+            stopBtn.style.display = 'none';
+        }
+    },
+
+    selectApp(name) {
+        this.selectedApp = name;
+
+        // Update grid selection
+        document.querySelectorAll('.app-card').forEach(card => {
+            card.classList.toggle('selected', card.dataset.app === name);
+        });
+
+        // Update details panel
+        this.updateDetailsPanel(name);
+    },
+
+    updateDetailsPanel(name) {
+        const details = document.getElementById('app-details');
+        const isRunning = name === this.currentApp;
+
+        // Get icon
+        const lower = name.toLowerCase();
+        let icon = '📱';
+        if (lower.includes('voice') || lower.includes('speech')) icon = '🎤';
+        else if (lower.includes('vision') || lower.includes('camera')) icon = '👁️';
+        else if (lower.includes('chat') || lower.includes('talk')) icon = '💬';
+
+        details.innerHTML = `
+            <div class="app-detail-content">
+                <div class="app-detail-header">
+                    <span class="app-detail-icon">${icon}</span>
+                    <span class="app-detail-name">${name}</span>
+                </div>
+                <div class="app-detail-info">
+                    <div class="detail-row">
+                        <span class="detail-label">Status</span>
+                        <span class="detail-value">${isRunning ? 'Running' : 'Stopped'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Type</span>
+                        <span class="detail-value">HuggingFace App</span>
+                    </div>
+                </div>
+                <div class="app-detail-actions">
+                    ${isRunning
+                        ? '<button class="reggie-btn" onclick="AppsPage.stopApp(\'' + name + '\')">Stop App</button>'
+                        : '<button class="reggie-btn reggie-btn-primary" onclick="AppsPage.startApp(\'' + name + '\')">Start App</button>'
+                    }
+                </div>
+            </div>
+        `;
+    },
+
+    async startApp(name) {
+        try {
+            await fetch(`/api/reggie/proxy/apps/start-app/${name}`, { method: 'POST' });
+
+            // Optimistic update
+            this.currentApp = name;
+            this.updateCurrentAppUI();
+            this.updateAppsGrid();
+            this.updateDetailsPanel(name);
+
+            // Verify after a moment
+            setTimeout(() => this.loadCurrentApp(), 2000);
+        } catch (err) {
+            console.error('Failed to start app:', err);
+        }
+    },
+
+    async stopApp(name) {
+        await this.stopCurrentApp();
+    },
+
+    async stopCurrentApp() {
+        try {
+            await fetch('/api/reggie/proxy/apps/stop-current-app', { method: 'POST' });
+
+            const previousApp = this.currentApp;
+            this.currentApp = null;
+            this.updateCurrentAppUI();
+            this.updateAppsGrid();
+
+            if (this.selectedApp === previousApp) {
+                this.updateDetailsPanel(this.selectedApp);
+            }
+
+            // Verify after a moment
+            setTimeout(() => this.loadCurrentApp(), 1000);
+        } catch (err) {
+            console.error('Failed to stop app:', err);
+        }
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    AppsPage.init();
+});
+</script>
+{% endblock %}

@@ -15,9 +15,118 @@
                 <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
         </button>
+        <div class="tabs-spacer"></div>
+        <button class="panel-toggle-btn" id="panel-toggle" onclick="ContentViewer.togglePanel()" title="Toggle Content Panel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+        </button>
     </div>
-    <div class="terminal-content">
-        <iframe id="terminal-iframe" src=""></iframe>
+    <div class="terminal-main" id="terminal-main">
+        <div class="terminal-content" id="terminal-content">
+            <!-- Top pane -->
+            <div class="terminal-pane" id="terminal-pane-top" data-pane="top">
+                <iframe id="terminal-iframe" src=""></iframe>
+            </div>
+
+            <!-- Resizable divider -->
+            <div class="pane-divider" id="pane-divider">
+                <div class="divider-grip"></div>
+            </div>
+
+            <!-- Bottom pane -->
+            <div class="terminal-pane" id="terminal-pane-bottom" data-pane="bottom">
+                <iframe id="terminal-iframe-bottom" src=""></iframe>
+            </div>
+        </div>
+        <div class="content-panel" id="content-panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span>File Viewer</span>
+                </div>
+                <div class="panel-input-wrapper" id="panel-input-wrapper">
+                    <input type="text" class="panel-input" id="panel-input"
+                           placeholder="Enter file path..."
+                           spellcheck="false"
+                           autocomplete="off">
+                    <button class="panel-browse-btn" id="panel-browse-btn" onclick="FileBrowser.toggle()" title="Browse files">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </button>
+                    <button class="panel-load-btn" id="panel-load-btn" onclick="ContentViewer.loadFromInput()" title="Load (Enter)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </button>
+                    <!-- File browser dropdown -->
+                    <div class="file-browser-dropdown" id="file-browser-dropdown">
+                        <div class="fb-tabs">
+                            <button class="fb-tab active" data-tab="recent">Recent</button>
+                            <button class="fb-tab" data-tab="browse">Browse</button>
+                            <button class="fb-tab" data-tab="search">Search</button>
+                        </div>
+                        <div class="fb-content">
+                            <!-- Recent tab -->
+                            <div class="fb-panel active" id="fb-recent">
+                                <div class="fb-list" id="fb-recent-list">
+                                    <div class="fb-empty">No recent files</div>
+                                </div>
+                            </div>
+                            <!-- Browse tab -->
+                            <div class="fb-panel" id="fb-browse">
+                                <div class="fb-path-bar">
+                                    <button class="fb-up-btn" onclick="FileBrowser.goUp()" title="Go up">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="15 18 9 12 15 6"/>
+                                        </svg>
+                                    </button>
+                                    <span class="fb-current-path" id="fb-current-path">/home/pds</span>
+                                </div>
+                                <div class="fb-list" id="fb-browse-list">
+                                    <div class="fb-loading">Loading...</div>
+                                </div>
+                            </div>
+                            <!-- Search tab -->
+                            <div class="fb-panel" id="fb-search">
+                                <div class="fb-search-bar">
+                                    <input type="text" class="fb-search-input" id="fb-search-input"
+                                           placeholder="Search files..." spellcheck="false">
+                                </div>
+                                <div class="fb-list" id="fb-search-list">
+                                    <div class="fb-empty">Type to search</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="panel-close-btn" onclick="ContentViewer.clearContent()" title="Clear Content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="panel-content" id="panel-content">
+                <div class="panel-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <p>Browse or enter a file path to view</p>
+                    <div class="placeholder-examples">
+                        <code>/home/pds/boomshakalaka/README.md</code>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -58,6 +167,13 @@
     </div>
 </div>
 
+<!-- Markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<!-- Code syntax highlighting -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
 <style>
 .terminal-container {
     display: flex;
@@ -83,7 +199,7 @@
 
 .terminal-tabs {
     display: flex;
-    flex: 1;
+    flex: 0 1 auto;
     overflow-x: auto;
     scrollbar-width: none;
     cursor: default;
@@ -92,6 +208,10 @@
 
 .terminal-tabs::-webkit-scrollbar {
     display: none;
+}
+
+.tabs-spacer {
+    flex: 1;
 }
 
 /* Individual Tab */
@@ -191,20 +311,651 @@
     height: 16px;
 }
 
-/* Terminal Content - Single iframe */
-/* Terminal always uses dark theme (#060a14) for best readability */
-.terminal-content {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    background: #060a14;
+/* Panel Toggle Button */
+.panel-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin: 2px 8px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
 }
 
-.terminal-content iframe {
+.panel-toggle-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.panel-toggle-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+.panel-toggle-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Split Layout */
+.terminal-main {
+    display: grid;
+    grid-template-columns: 1fr 0;
+    flex: 1;
+    overflow: hidden;
+    transition: grid-template-columns 0.3s ease;
+}
+
+.terminal-main.panel-visible {
+    grid-template-columns: 1fr 1fr;
+}
+
+/* Dual pane layout */
+.terminal-content {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: #122637;
+    min-width: 0;
+}
+
+.terminal-pane {
+    position: relative;
+    overflow: hidden;
+    min-height: 100px;
+}
+
+#terminal-pane-top {
+    flex: 1;
+}
+
+#terminal-pane-bottom {
+    flex: 1;
+}
+
+.terminal-pane iframe {
     width: 100%;
     height: 100%;
     border: none;
-    background: #060a14;
+    background: #122637;
+}
+
+/* Focused pane indicator */
+.terminal-pane.focused {
+    box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* Resizable divider */
+.pane-divider {
+    height: 6px;
+    background: var(--bg-secondary);
+    cursor: row-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pane-divider:hover {
+    background: var(--bg-tertiary);
+}
+
+.divider-grip {
+    width: 40px;
+    height: 4px;
+    background: var(--border-light);
+    border-radius: 2px;
+}
+
+/* Content Panel */
+.content-panel {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    overflow: hidden;
+    min-width: 0;
+}
+
+.terminal-main:not(.panel-visible) .content-panel {
+    display: none;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    flex-shrink: 0;
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.panel-title svg {
+    width: 14px;
+    height: 14px;
+    color: var(--accent);
+}
+
+/* Input wrapper */
+.panel-input-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px;
+    transition: border-color 0.15s ease;
+    position: relative;
+}
+
+.panel-input-wrapper:focus-within {
+    border-color: var(--accent);
+}
+
+.panel-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 4px 8px;
+    outline: none;
+    min-width: 0;
+}
+
+.panel-input::placeholder {
+    color: var(--text-muted);
+}
+
+.panel-load-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--accent);
+    border: none;
+    border-radius: 3px;
+    color: var(--bg-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.panel-load-btn:hover {
+    background: var(--accent-hover);
+}
+
+.panel-load-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.panel-load-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Browse button */
+.panel-browse-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.panel-browse-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.panel-browse-btn.active {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.panel-browse-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* File Browser Dropdown */
+.file-browser-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 100;
+    display: none;
+    overflow: hidden;
+}
+
+.file-browser-dropdown.visible {
+    display: block;
+}
+
+.fb-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fb-tab {
+    flex: 1;
+    padding: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.fb-tab:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.fb-tab.active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: -1px;
+}
+
+.fb-content {
+    max-height: 300px;
+    overflow: hidden;
+}
+
+.fb-panel {
+    display: none;
+    height: 100%;
+}
+
+.fb-panel.active {
+    display: block;
+}
+
+.fb-list {
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.fb-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.fb-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.fb-item-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.fb-item-icon.folder {
+    color: var(--accent);
+}
+
+.fb-item-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fb-item-path {
+    font-size: 11px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+.fb-empty, .fb-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* Path bar */
+.fb-path-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.fb-up-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.fb-up-btn:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.fb-up-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.fb-current-path {
+    flex: 1;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Search bar */
+.fb-search-bar {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fb-search-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+}
+
+.fb-search-input:focus {
+    border-color: var(--accent);
+}
+
+.panel-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.panel-close-btn:hover {
+    background: var(--error);
+    color: white;
+}
+
+.panel-close-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.panel-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    background: var(--bg-primary);
+}
+
+/* Placeholder */
+.panel-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 20px;
+}
+
+.panel-placeholder svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+}
+
+.panel-placeholder p {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+}
+
+.placeholder-examples {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.placeholder-examples code {
+    font-size: 11px;
+    background: var(--bg-tertiary);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.placeholder-examples code:hover {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* Loading state */
+.panel-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+}
+
+.panel-loading::after {
+    content: '';
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Error state */
+.panel-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--error);
+    text-align: center;
+    padding: 20px;
+}
+
+.panel-error svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+}
+
+.panel-error p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Markdown Content */
+.markdown-content {
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.markdown-content h1, .markdown-content h2, .markdown-content h3,
+.markdown-content h4, .markdown-content h5, .markdown-content h6 {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.markdown-content h1 { font-size: 2em; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+.markdown-content h2 { font-size: 1.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+.markdown-content h3 { font-size: 1.25em; }
+
+.markdown-content p {
+    margin-bottom: 16px;
+}
+
+.markdown-content code {
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9em;
+}
+
+.markdown-content pre {
+    background: var(--bg-tertiary);
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+}
+
+.markdown-content pre code {
+    padding: 0;
+    background: none;
+}
+
+.markdown-content ul, .markdown-content ol {
+    margin-bottom: 16px;
+    padding-left: 24px;
+}
+
+.markdown-content li {
+    margin-bottom: 8px;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid var(--accent);
+    padding-left: 16px;
+    margin: 16px 0;
+    color: var(--text-secondary);
+}
+
+.markdown-content a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.markdown-content a:hover {
+    text-decoration: underline;
+}
+
+.markdown-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+}
+
+.markdown-content th, .markdown-content td {
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.markdown-content th {
+    background: var(--bg-tertiary);
+    font-weight: 600;
+}
+
+/* Code Content */
+.code-content {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.code-content pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+}
+
+.code-content code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 /* Context Menu */
@@ -329,32 +1080,608 @@
     .terminal-tab .tab-name {
         max-width: 60px;
     }
+
+    .terminal-main.panel-visible {
+        grid-template-columns: 1fr;
+    }
+
+    .content-panel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 100;
+    }
 }
 </style>
 
 <script>
-// Persistent Terminal Manager - backed by tmux sessions
+// File Browser Manager
+const FileBrowser = {
+    isOpen: false,
+    currentPath: '/home/pds',
+    parentPath: null,
+    recentFiles: [],
+    searchTimeout: null,
+
+    init() {
+        // Load recent files from localStorage
+        this.loadRecent();
+
+        // Setup tab clicks
+        document.querySelectorAll('.fb-tab').forEach(tab => {
+            tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
+        });
+
+        // Setup search input
+        const searchInput = document.getElementById('fb-search-input');
+        searchInput.addEventListener('input', () => {
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(() => this.doSearch(), 300);
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.panel-input-wrapper')) {
+                this.close();
+            }
+        });
+
+        // Render recent files
+        this.renderRecent();
+    },
+
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    },
+
+    open() {
+        this.isOpen = true;
+        document.getElementById('file-browser-dropdown').classList.add('visible');
+        document.getElementById('panel-browse-btn').classList.add('active');
+
+        // Load browse content if on browse tab
+        const activeTab = document.querySelector('.fb-tab.active');
+        if (activeTab && activeTab.dataset.tab === 'browse') {
+            this.loadDirectory(this.currentPath);
+        }
+    },
+
+    close() {
+        this.isOpen = false;
+        document.getElementById('file-browser-dropdown').classList.remove('visible');
+        document.getElementById('panel-browse-btn').classList.remove('active');
+    },
+
+    switchTab(tabName) {
+        // Update tab active states
+        document.querySelectorAll('.fb-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tabName);
+        });
+
+        // Update panel visibility
+        document.querySelectorAll('.fb-panel').forEach(p => {
+            p.classList.toggle('active', p.id === `fb-${tabName}`);
+        });
+
+        // Load content for tab
+        if (tabName === 'browse') {
+            this.loadDirectory(this.currentPath);
+        } else if (tabName === 'recent') {
+            this.renderRecent();
+        }
+    },
+
+    async loadDirectory(path) {
+        const list = document.getElementById('fb-browse-list');
+        list.innerHTML = '<div class="fb-loading">Loading...</div>';
+
+        try {
+            const resp = await fetch(`/api/terminal/files/list?path=${encodeURIComponent(path)}`);
+            const data = await resp.json();
+
+            if (data.error) {
+                list.innerHTML = `<div class="fb-empty">${data.error}</div>`;
+                return;
+            }
+
+            this.currentPath = data.path;
+            this.parentPath = data.parent;
+            document.getElementById('fb-current-path').textContent = data.path;
+
+            if (data.items.length === 0) {
+                list.innerHTML = '<div class="fb-empty">Empty directory</div>';
+                return;
+            }
+
+            list.innerHTML = data.items.map(item => this.renderItem(item)).join('');
+
+            // Attach click handlers
+            list.querySelectorAll('.fb-item').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent dropdown from closing
+                    const path = el.dataset.path;
+                    const isDir = el.dataset.isdir === 'true';
+                    if (isDir) {
+                        this.loadDirectory(path);
+                    } else {
+                        this.selectFile(path);
+                    }
+                });
+            });
+
+        } catch (err) {
+            list.innerHTML = `<div class="fb-empty">Error: ${err.message}</div>`;
+        }
+    },
+
+    goUp() {
+        if (this.parentPath) {
+            this.loadDirectory(this.parentPath);
+        }
+    },
+
+    async doSearch() {
+        const query = document.getElementById('fb-search-input').value.trim();
+        const list = document.getElementById('fb-search-list');
+
+        if (query.length < 2) {
+            list.innerHTML = '<div class="fb-empty">Type at least 2 characters</div>';
+            return;
+        }
+
+        list.innerHTML = '<div class="fb-loading">Searching...</div>';
+
+        try {
+            const resp = await fetch(`/api/terminal/files/search?q=${encodeURIComponent(query)}`);
+            const data = await resp.json();
+
+            if (data.error) {
+                list.innerHTML = `<div class="fb-empty">${data.error}</div>`;
+                return;
+            }
+
+            if (data.results.length === 0) {
+                list.innerHTML = '<div class="fb-empty">No files found</div>';
+                return;
+            }
+
+            list.innerHTML = data.results.map(item => this.renderItem(item, true)).join('');
+
+            // Attach click handlers
+            list.querySelectorAll('.fb-item').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.selectFile(el.dataset.path);
+                });
+            });
+
+        } catch (err) {
+            list.innerHTML = `<div class="fb-empty">Error: ${err.message}</div>`;
+        }
+    },
+
+    selectFile(path) {
+        document.getElementById('panel-input').value = path;
+        this.addToRecent(path);
+        this.close();
+        ContentViewer.loadFromInput();
+    },
+
+    renderItem(item, showPath = false) {
+        const icon = item.is_dir ? `
+            <svg class="fb-item-icon folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+        ` : `
+            <svg class="fb-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
+        `;
+
+        const pathHtml = showPath ? `<span class="fb-item-path">${item.path}</span>` : '';
+
+        return `
+            <div class="fb-item" data-path="${item.path}" data-isdir="${item.is_dir}">
+                ${icon}
+                <span class="fb-item-name">${item.name}</span>
+                ${pathHtml}
+            </div>
+        `;
+    },
+
+    // Recent files management
+    loadRecent() {
+        try {
+            const stored = localStorage.getItem('terminal_recent_files');
+            this.recentFiles = stored ? JSON.parse(stored) : [];
+        } catch (e) {
+            this.recentFiles = [];
+        }
+    },
+
+    saveRecent() {
+        try {
+            localStorage.setItem('terminal_recent_files', JSON.stringify(this.recentFiles));
+        } catch (e) {
+            // Ignore storage errors
+        }
+    },
+
+    addToRecent(path) {
+        // Remove if already exists
+        this.recentFiles = this.recentFiles.filter(f => f !== path);
+        // Add to front
+        this.recentFiles.unshift(path);
+        // Keep only last 10
+        this.recentFiles = this.recentFiles.slice(0, 10);
+        this.saveRecent();
+    },
+
+    renderRecent() {
+        const list = document.getElementById('fb-recent-list');
+
+        if (this.recentFiles.length === 0) {
+            list.innerHTML = '<div class="fb-empty">No recent files</div>';
+            return;
+        }
+
+        list.innerHTML = this.recentFiles.map(path => {
+            const name = path.split('/').pop();
+            return `
+                <div class="fb-item" data-path="${path}" data-isdir="false">
+                    <svg class="fb-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span class="fb-item-name">${name}</span>
+                    <span class="fb-item-path">${path}</span>
+                </div>
+            `;
+        }).join('');
+
+        // Attach click handlers
+        list.querySelectorAll('.fb-item').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.selectFile(el.dataset.path);
+            });
+        });
+    }
+};
+
+// Content Viewer Manager
+const ContentViewer = {
+    panelVisible: false,
+    lastTimestamp: null,
+    pollInterval: null,
+    currentType: null,
+
+    init() {
+        // Start polling for content updates
+        this.startPolling();
+
+        // Setup input field Enter key
+        const input = document.getElementById('panel-input');
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.loadFromInput();
+            }
+        });
+
+        // Setup example clicks in placeholder
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.placeholder-examples code')) {
+                const example = e.target.textContent;
+                input.value = example;
+                input.focus();
+            }
+        });
+    },
+
+    async loadFromInput() {
+        const input = document.getElementById('panel-input');
+        const value = input.value.trim();
+
+        if (!value) return;
+
+        // Show loading state
+        this.showLoading();
+
+        try {
+            const body = { type: 'file', path: value };
+
+            const resp = await fetch('/api/terminal/display', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            const data = await resp.json();
+
+            if (data.error) {
+                this.showError(data.error);
+                return;
+            }
+
+            // Force refresh
+            this.lastTimestamp = null;
+            await this.checkForUpdates();
+
+        } catch (err) {
+            this.showError('Failed to load: ' + err.message);
+        }
+    },
+
+    showLoading() {
+        const panel = document.getElementById('panel-content');
+        panel.innerHTML = '<div class="panel-loading"></div>';
+    },
+
+    showError(message) {
+        const panel = document.getElementById('panel-content');
+        panel.innerHTML = `
+            <div class="panel-error">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p>${this.escapeHtml(message)}</p>
+            </div>
+        `;
+    },
+
+    startPolling() {
+        // Poll every 2 seconds for new content
+        this.pollInterval = setInterval(() => this.checkForUpdates(), 2000);
+        // Also check immediately
+        this.checkForUpdates();
+    },
+
+    async checkForUpdates() {
+        try {
+            const resp = await fetch('/api/terminal/display');
+            const data = await resp.json();
+
+            // Check if content has changed
+            if (data.timestamp && data.timestamp !== this.lastTimestamp) {
+                this.lastTimestamp = data.timestamp;
+                this.updateContent(data);
+            }
+        } catch (err) {
+            console.error('Failed to check for content updates:', err);
+        }
+    },
+
+    updateContent(data) {
+        const panel = document.getElementById('panel-content');
+        const input = document.getElementById('panel-input');
+
+        if (!data.type || !data.content) {
+            // No content - show placeholder
+            panel.innerHTML = `
+                <div class="panel-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <line x1="15" y1="3" x2="15" y2="21"/>
+                    </svg>
+                    <p>Browse or enter a file path to view</p>
+                    <div class="placeholder-examples">
+                        <code>/home/pds/boomshakalaka/README.md</code>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // Show panel if hidden and content received
+        if (!this.panelVisible) {
+            this.showPanel();
+        }
+
+        // Update input with current path/url
+        if (data.path) {
+            input.value = data.path;
+        }
+
+        this.currentType = data.type;
+
+        // Render based on type
+        switch (data.type) {
+            case 'markdown':
+                this.renderMarkdown(data.content);
+                break;
+            case 'code':
+                this.renderCode(data.content, data.language);
+                break;
+            default:
+                panel.innerHTML = `<pre>${this.escapeHtml(data.content)}</pre>`;
+        }
+    },
+
+    renderMarkdown(content) {
+        const panel = document.getElementById('panel-content');
+        try {
+            // Configure marked for security
+            marked.setOptions({
+                breaks: true,
+                gfm: true
+            });
+            const html = marked.parse(content);
+            panel.innerHTML = `<div class="markdown-content">${html}</div>`;
+
+            // Apply syntax highlighting to code blocks
+            panel.querySelectorAll('pre code').forEach(block => {
+                hljs.highlightElement(block);
+            });
+        } catch (err) {
+            panel.innerHTML = `<pre>${this.escapeHtml(content)}</pre>`;
+        }
+    },
+
+    renderCode(content, language) {
+        const panel = document.getElementById('panel-content');
+        const langClass = language ? `language-${language}` : '';
+        panel.innerHTML = `<div class="code-content"><pre><code class="${langClass}">${this.escapeHtml(content)}</code></pre></div>`;
+
+        // Apply syntax highlighting
+        const codeBlock = panel.querySelector('code');
+        if (codeBlock) {
+            hljs.highlightElement(codeBlock);
+        }
+    },
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    },
+
+    togglePanel() {
+        if (this.panelVisible) {
+            this.hidePanel();
+        } else {
+            this.showPanel();
+        }
+    },
+
+    showPanel() {
+        this.panelVisible = true;
+        document.getElementById('terminal-main').classList.add('panel-visible');
+        document.getElementById('panel-toggle').classList.add('active');
+    },
+
+    hidePanel() {
+        this.panelVisible = false;
+        document.getElementById('terminal-main').classList.remove('panel-visible');
+        document.getElementById('panel-toggle').classList.remove('active');
+    },
+
+    async clearContent() {
+        try {
+            await fetch('/api/terminal/display', { method: 'DELETE' });
+            this.lastTimestamp = null;
+            document.getElementById('panel-input').value = '';
+            this.updateContent({});
+        } catch (err) {
+            console.error('Failed to clear content:', err);
+        }
+    }
+};
+
+// Persistent Terminal Manager - backed by paired tmux sessions
 const TerminalManager = {
     windows: [],
     activeWindowId: null,
     contextWindowId: null,
+    splitRatio: 0.5,
+    isDragging: false,
+    focusedPane: 'top',
 
-    getTerminalUrl() {
+    getTerminalUrl(port = 7681) {
         // Direct connection to ttyd
         const host = window.location.hostname;
-        return `http://${host}:7681`;
+        return `http://${host}:${port}`;
     },
 
     async init() {
         // Load existing windows from backend
         await this.loadWindows();
 
-        // Load ttyd directly
-        const iframe = document.getElementById('terminal-iframe');
-        iframe.src = this.getTerminalUrl();
+        // Load BOTH iframes - top (7681) and bottom (7682)
+        document.getElementById('terminal-iframe').src = this.getTerminalUrl(7681);
+        document.getElementById('terminal-iframe-bottom').src = this.getTerminalUrl(7682);
 
+        this.setupPaneResizer();
+        this.loadSplitRatio();
         this.setupKeyboardShortcuts();
         this.setupContextMenu();
+
+        // Initialize content viewer
+        ContentViewer.init();
+    },
+
+    // Pane resize logic
+    setupPaneResizer() {
+        const divider = document.getElementById('pane-divider');
+        const container = document.getElementById('terminal-content');
+
+        divider.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            this.isDragging = true;
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const relativeY = e.clientY - containerRect.top;
+            const ratio = relativeY / containerRect.height;
+
+            // Clamp between 20% and 80%
+            this.setSplitRatio(Math.max(0.2, Math.min(0.8, ratio)));
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (this.isDragging) {
+                this.isDragging = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                this.saveSplitRatio();
+            }
+        });
+    },
+
+    setSplitRatio(ratio) {
+        this.splitRatio = ratio;
+        const topPane = document.getElementById('terminal-pane-top');
+        const bottomPane = document.getElementById('terminal-pane-bottom');
+
+        topPane.style.flex = `${ratio}`;
+        bottomPane.style.flex = `${1 - ratio}`;
+    },
+
+    loadSplitRatio() {
+        try {
+            const stored = localStorage.getItem('terminal_split_ratio');
+            if (stored) {
+                this.setSplitRatio(parseFloat(stored));
+            }
+        } catch (e) {
+            // Ignore storage errors
+        }
+    },
+
+    saveSplitRatio() {
+        try {
+            localStorage.setItem('terminal_split_ratio', this.splitRatio.toString());
+        } catch (e) {
+            // Ignore storage errors
+        }
+    },
+
+    // Toggle focus between top and bottom panes
+    togglePaneFocus() {
+        this.focusedPane = this.focusedPane === 'top' ? 'bottom' : 'top';
+        document.querySelectorAll('.terminal-pane').forEach(p => {
+            p.classList.toggle('focused', p.dataset.pane === this.focusedPane);
+        });
+
+        // Focus the iframe
+        const iframe = this.focusedPane === 'top'
+            ? document.getElementById('terminal-iframe')
+            : document.getElementById('terminal-iframe-bottom');
+        iframe.focus();
     },
 
     async loadWindows() {
@@ -537,8 +1864,11 @@ const TerminalManager = {
     },
 
     reconnect() {
-        const iframe = document.getElementById('terminal-iframe');
-        iframe.src = iframe.src;
+        // Reconnect both iframes
+        const iframeTop = document.getElementById('terminal-iframe');
+        const iframeBottom = document.getElementById('terminal-iframe-bottom');
+        iframeTop.src = iframeTop.src;
+        iframeBottom.src = iframeBottom.src;
         this.hideContextMenu();
     },
 
@@ -600,6 +1930,16 @@ const TerminalManager = {
                 e.preventDefault();
                 this.nextTab();
             }
+            // Ctrl+`: Toggle focus between top/bottom panes
+            if (e.ctrlKey && e.key === '`') {
+                e.preventDefault();
+                this.togglePaneFocus();
+            }
+            // Ctrl+\: Toggle panel
+            if (e.ctrlKey && e.key === '\\') {
+                e.preventDefault();
+                ContentViewer.togglePanel();
+            }
             // Escape: Close modals
             if (e.key === 'Escape') {
                 this.hideRenameModal();
@@ -631,6 +1971,7 @@ const TerminalManager = {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     TerminalManager.init();
+    FileBrowser.init();
 });
 </script>
 {% endblock %}

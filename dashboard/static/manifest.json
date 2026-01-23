@@ -1,0 +1,17 @@
+{
+  "name": "Boomshakalaka",
+  "short_name": "Boom",
+  "description": "Personal workstation dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060a14",
+  "theme_color": "#ff8c00",
+  "icons": [
+    {
+      "src": "/static/images/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
