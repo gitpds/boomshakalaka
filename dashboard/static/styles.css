@@ -267,7 +267,7 @@ button {
 /* Sidebar Collapse Toggle Button */
 .sidebar-collapse-btn {
     position: absolute;
-    bottom: 73px;
+    top: -12px;
     right: 12px;
     width: 24px;
     height: 24px;
@@ -590,6 +590,7 @@ button {
 
 /* Sidebar Footer */
 .sidebar-footer {
+    position: relative;
     padding: 20px;
     border-top: 1px solid var(--border-color);
 }
