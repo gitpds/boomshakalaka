@@ -88,6 +88,8 @@
                                         </svg>
                                     </button>
                                     <span class="fb-current-path" id="fb-current-path">/home/pds</span>
+                                    <button class="fb-upload-btn" onclick="FileBrowser.openUpload()" title="Upload file">&#128228;</button>
+                                    <input type="file" id="fb-file-input" style="display: none" multiple onchange="FileBrowser.handleFileSelect(event)">
                                 </div>
                                 <div class="fb-list" id="fb-browse-list">
                                     <div class="fb-loading">Loading...</div>
@@ -114,6 +116,9 @@
                 </button>
             </div>
             <div class="panel-content" id="panel-content">
+                <div class="drop-overlay" id="drop-overlay">
+                    <span class="drop-overlay-text">Drop files to upload</span>
+                </div>
                 <div class="panel-placeholder">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -739,6 +744,41 @@
     white-space: nowrap;
 }
 
+/* Upload button in file browser */
+.fb-upload-btn {
+    background: var(--accent-gold);
+    color: var(--bg-primary);
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 8px;
+}
+.fb-upload-btn:hover { background: var(--accent-gold-bright); }
+
+/* Drop overlay for file upload */
+.drop-overlay {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(181, 166, 66, 0.2);
+    border: 3px dashed var(--accent-gold);
+    border-radius: 8px;
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+.drop-overlay.active { display: flex; }
+.drop-overlay-text {
+    background: var(--bg-secondary);
+    color: var(--accent-gold);
+    padding: 16px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
 /* Search bar */
 .fb-search-bar {
     padding: 8px 12px;
@@ -987,6 +1027,46 @@
     line-height: 1.5;
 }
 
+/* Image viewer */
+.image-viewer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    height: 100%;
+    overflow: auto;
+}
+.image-viewer img {
+    max-width: 100%;
+    max-height: calc(100% - 40px);
+    object-fit: contain;
+    border-radius: 4px;
+    cursor: zoom-in;
+    transition: transform 0.2s ease;
+}
+.image-viewer img.zoomed {
+    max-width: none;
+    max-height: none;
+    cursor: zoom-out;
+}
+.image-info {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* PDF viewer */
+.pdf-viewer {
+    height: 100%;
+    width: 100%;
+}
+.pdf-viewer iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 4px;
+}
+
 /* Context Menu */
 .tab-context-menu {
     position: fixed;
@@ -1159,6 +1239,9 @@ const FileBrowser = {
 
         // Render recent files
         this.renderRecent();
+
+        // Setup drag and drop
+        this.setupDragDrop();
     },
 
     toggle() {
@@ -1382,6 +1465,67 @@ const FileBrowser = {
                 this.selectFile(el.dataset.path);
             });
         });
+    },
+
+    openUpload() {
+        document.getElementById('fb-file-input').click();
+    },
+
+    async handleFileSelect(event) {
+        const files = event.target.files;
+        if (files.length) await this.uploadFiles(files);
+        event.target.value = '';
+    },
+
+    async uploadFiles(files) {
+        const targetDir = this.currentPath || '/home/pds';
+        for (const file of files) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('target_dir', targetDir);
+                const response = await fetch('/api/terminal/files/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (result.success) {
+                    this.showToast(`Uploaded: ${result.filename}`, 'success');
+                } else {
+                    this.showToast(`Failed: ${result.error}`, 'error');
+                }
+            } catch (e) {
+                this.showToast(`Upload error: ${e.message}`, 'error');
+            }
+        }
+        this.loadDirectory(targetDir);
+    },
+
+    showToast(message, type = 'info') {
+        if (window.showToast) window.showToast(message, type);
+        else console.log(`[${type}] ${message}`);
+    },
+
+    setupDragDrop() {
+        const panel = document.getElementById('panel-content');
+        const overlay = document.getElementById('drop-overlay');
+        if (!panel || !overlay) return;
+
+        panel.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            overlay.classList.add('active');
+        });
+        panel.addEventListener('dragover', (e) => e.preventDefault());
+        panel.addEventListener('dragleave', (e) => {
+            if (e.target === panel || !panel.contains(e.relatedTarget)) {
+                overlay.classList.remove('active');
+            }
+        });
+        panel.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            overlay.classList.remove('active');
+            if (e.dataTransfer.files.length) await this.uploadFiles(e.dataTransfer.files);
+        });
     }
 };
 
@@ -1531,6 +1675,12 @@ const ContentViewer = {
             case 'code':
                 this.renderCode(data.content, data.language);
                 break;
+            case 'image':
+                this.renderImage(data.content, data.path);
+                break;
+            case 'pdf':
+                this.renderPdf(data.content, data.path);
+                break;
             default:
                 panel.innerHTML = `<pre>${this.escapeHtml(data.content)}</pre>`;
         }
@@ -1566,6 +1716,28 @@ const ContentViewer = {
         if (codeBlock) {
             hljs.highlightElement(codeBlock);
         }
+    },
+
+    renderImage(dataUrl, path) {
+        const panel = document.getElementById('panel-content');
+        const filename = path ? path.split('/').pop() : 'image';
+        panel.innerHTML = `
+            <div class="image-viewer">
+                <img src="${dataUrl}" alt="${this.escapeHtml(filename)}"
+                     onclick="this.classList.toggle('zoomed')">
+                <div class="image-info">${this.escapeHtml(filename)}</div>
+            </div>
+        `;
+    },
+
+    renderPdf(dataUrl, path) {
+        const panel = document.getElementById('panel-content');
+        const filename = path ? path.split('/').pop() : 'document.pdf';
+        panel.innerHTML = `
+            <div class="pdf-viewer">
+                <iframe src="${dataUrl}" title="${this.escapeHtml(filename)}"></iframe>
+            </div>
+        `;
     },
 
     escapeHtml(text) {

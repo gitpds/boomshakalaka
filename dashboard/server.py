@@ -21,6 +21,7 @@ import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, Response, stream_with_context
+from werkzeug.utils import secure_filename
 
 # Theme generator for AI-powered theme customization
 try:
@@ -4940,26 +4941,53 @@ def api_terminal_display_set():
             return jsonify({'error': f'Not a file: {path}'}), 400
 
         try:
-            content = file_path.read_text(encoding='utf-8', errors='replace')
-            # Detect language from extension
             ext = file_path.suffix.lower()
-            ext_to_lang = {
-                '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
-                '.jsx': 'jsx', '.tsx': 'tsx', '.json': 'json',
-                '.html': 'html', '.css': 'css', '.scss': 'scss',
-                '.md': 'markdown', '.yaml': 'yaml', '.yml': 'yaml',
-                '.sh': 'bash', '.bash': 'bash', '.zsh': 'zsh',
-                '.sql': 'sql', '.go': 'go', '.rs': 'rust',
-                '.java': 'java', '.c': 'c', '.cpp': 'cpp', '.h': 'c',
-                '.rb': 'ruby', '.php': 'php', '.swift': 'swift',
-                '.kt': 'kotlin', '.r': 'r', '.lua': 'lua',
-                '.toml': 'toml', '.ini': 'ini', '.xml': 'xml',
-            }
-            if ext == '.md':
-                content_type = 'markdown'  # Auto-render markdown files
+
+            # Check for binary file types first
+            image_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'}
+            pdf_exts = {'.pdf'}
+
+            if ext in image_exts:
+                # Return image as base64 data URL
+                import base64
+                mime_types = {
+                    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                    '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+                    '.bmp': 'image/bmp', '.ico': 'image/x-icon'
+                }
+                mime = mime_types.get(ext, 'application/octet-stream')
+                data = base64.b64encode(file_path.read_bytes()).decode('ascii')
+                content = f"data:{mime};base64,{data}"
+                content_type = 'image'
+
+            elif ext in pdf_exts:
+                # Return PDF as base64 data URL
+                import base64
+                data = base64.b64encode(file_path.read_bytes()).decode('ascii')
+                content = f"data:application/pdf;base64,{data}"
+                content_type = 'pdf'
+
             else:
-                language = ext_to_lang.get(ext, 'plaintext')
-                content_type = 'code'
+                # Text file handling
+                content = file_path.read_text(encoding='utf-8', errors='replace')
+                # Detect language from extension
+                ext_to_lang = {
+                    '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+                    '.jsx': 'jsx', '.tsx': 'tsx', '.json': 'json',
+                    '.html': 'html', '.css': 'css', '.scss': 'scss',
+                    '.md': 'markdown', '.yaml': 'yaml', '.yml': 'yaml',
+                    '.sh': 'bash', '.bash': 'bash', '.zsh': 'zsh',
+                    '.sql': 'sql', '.go': 'go', '.rs': 'rust',
+                    '.java': 'java', '.c': 'c', '.cpp': 'cpp', '.h': 'c',
+                    '.rb': 'ruby', '.php': 'php', '.swift': 'swift',
+                    '.kt': 'kotlin', '.r': 'r', '.lua': 'lua',
+                    '.toml': 'toml', '.ini': 'ini', '.xml': 'xml',
+                }
+                if ext == '.md':
+                    content_type = 'markdown'  # Auto-render markdown files
+                else:
+                    language = ext_to_lang.get(ext, 'plaintext')
+                    content_type = 'code'
         except Exception as e:
             return jsonify({'error': f'Failed to read file: {str(e)}'}), 500
 
@@ -5088,6 +5116,49 @@ def api_terminal_files_search():
         return jsonify({'error': str(e)}), 500
 
     return jsonify({'results': results, 'query': query})
+
+
+@app.route('/api/terminal/files/upload', methods=['POST'])
+def terminal_file_upload():
+    """Upload file to specified directory."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    target_dir = request.form.get('target_dir', '/home/pds')
+
+    if not file.filename:
+        return jsonify({'error': 'No filename'}), 400
+
+    if not is_path_allowed(target_dir):
+        return jsonify({'error': 'Directory not allowed'}), 403
+
+    target_path = Path(target_dir)
+    if not target_path.exists() or not target_path.is_dir():
+        return jsonify({'error': 'Invalid directory'}), 400
+
+    filename = secure_filename(file.filename)
+    if not filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+
+    # Handle filename collisions
+    dest_path = target_path / filename
+    if dest_path.exists():
+        base, ext = os.path.splitext(filename)
+        counter = 1
+        while dest_path.exists():
+            filename = f"{base}_{counter}{ext}"
+            dest_path = target_path / filename
+            counter += 1
+
+    file.save(str(dest_path))
+
+    return jsonify({
+        'success': True,
+        'filename': filename,
+        'path': str(dest_path),
+        'size': dest_path.stat().st_size
+    })
 
 
 # ============================================
