@@ -383,6 +383,135 @@ const TerminalModal = {
     toggleLabel: null,
     isExpanded: false,
 
+    // Tab management state
+    tabs: [],
+    selectedTabId: null,
+    isTabPickerOpen: false,
+
+    init() {
+        this.loadTabs();
+    },
+
+    async loadTabs() {
+        try {
+            const response = await fetch('/api/terminal/windows');
+            const data = await response.json();
+            if (data.windows) {
+                this.tabs = data.windows;
+                // Select active tab or first tab
+                const activeTab = this.tabs.find(t => t.active) || this.tabs[0];
+                if (activeTab) {
+                    this.selectedTabId = activeTab.id;
+                }
+                this.updateTabPickerUI();
+                this.updateTerminalSubtitle();
+            }
+        } catch (e) {
+            console.error('Failed to load terminal tabs:', e);
+            // Default fallback
+            this.tabs = [{ id: 1, name: 'Terminal 1', active: true }];
+            this.selectedTabId = 1;
+        }
+    },
+
+    async selectTab(id) {
+        try {
+            const response = await fetch(`/api/terminal/windows/${id}/select`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            if (data.success) {
+                this.selectedTabId = id;
+                // Update active state in local tabs array
+                this.tabs.forEach(t => t.active = (t.id === id));
+                this.updateTabPickerUI();
+                this.updateModalHeader();
+                this.updateTerminalSubtitle();
+                // Reload terminal iframes to show selected tab
+                this.reloadTerminals();
+            }
+        } catch (e) {
+            console.error('Failed to select tab:', e);
+            Toast.error('Failed to select terminal tab');
+        }
+    },
+
+    async createTab() {
+        try {
+            const response = await fetch('/api/terminal/windows', {
+                method: 'POST'
+            });
+            const data = await response.json();
+            if (data.window) {
+                this.tabs.push(data.window);
+                // Select the new tab
+                await this.selectTab(data.window.id);
+                this.closeTabPicker();
+                Toast.success(`Created ${data.window.name}`);
+            }
+        } catch (e) {
+            console.error('Failed to create tab:', e);
+            Toast.error('Failed to create terminal tab');
+        }
+    },
+
+    reloadTerminals() {
+        const baseUrl = window.location.protocol + '//' + window.location.hostname;
+        if (this.terminal1) {
+            this.terminal1.src = baseUrl + ':7681';
+        }
+        if (this.terminal2 && this.isExpanded) {
+            this.terminal2.src = baseUrl + ':7682';
+        }
+    },
+
+    toggleTabPicker() {
+        // Legacy - no longer used since tabs are shown directly on page
+        Haptic.light();
+    },
+
+    closeTabPicker() {
+        // Legacy - no longer used
+    },
+
+    updateTabPickerUI() {
+        // Update the main terminal tabs list on the workshop page
+        const list = document.getElementById('terminal-tabs-list');
+        if (!list) return;
+
+        list.innerHTML = '';
+        this.tabs.forEach(tab => {
+            const item = document.createElement('div');
+            item.className = 'terminal-tab-item' + (tab.id === this.selectedTabId ? ' active' : '');
+            item.innerHTML = `
+                <span class="terminal-tab-icon">&#128187;</span>
+                <span class="terminal-tab-name">${tab.name || 'Terminal ' + tab.id}</span>
+                ${tab.id === this.selectedTabId ? '<span class="terminal-tab-check">&#10003;</span>' : ''}
+            `;
+            item.onclick = () => {
+                this.selectTab(tab.id);
+                this.open();
+            };
+            list.appendChild(item);
+        });
+    },
+
+    updateModalHeader() {
+        const nameEl = document.getElementById('terminal-tab-name');
+        if (nameEl) {
+            const tab = this.tabs.find(t => t.id === this.selectedTabId);
+            nameEl.textContent = tab ? (tab.name || 'Terminal ' + tab.id) : 'Terminal';
+        }
+    },
+
+    updateTerminalSubtitle() {
+        const subtitle = document.getElementById('terminal-subtitle');
+        if (subtitle) {
+            const tab = this.tabs.find(t => t.id === this.selectedTabId);
+            subtitle.textContent = tab ? (tab.name || 'Terminal ' + tab.id) : 'Command Line';
+        }
+    },
+
     open() {
         this.modal = document.getElementById('terminal-modal');
         if (!this.modal) return;
@@ -398,6 +527,9 @@ const TerminalModal = {
             this.terminal1.src = window.location.protocol + '//' + window.location.hostname + ':7681';
         }
 
+        // Update modal header with current tab name
+        this.updateModalHeader();
+
         // Show modal
         this.modal.classList.add('active');
         document.body.style.overflow = 'hidden';
@@ -407,9 +539,8 @@ const TerminalModal = {
     close() {
         if (!this.modal) return;
 
-        // Remove iframes to stop terminals
-        if (this.terminal1) this.terminal1.src = '';
-        if (this.terminal2) this.terminal2.src = '';
+        // Keep iframe connections alive - just hide the modal with CSS
+        // (Previously cleared src which caused reconnect delays)
 
         // Reset expanded state
         if (this.wrapper2) this.wrapper2.classList.remove('expanded');
@@ -443,6 +574,56 @@ const TerminalModal = {
         }
 
         Haptic.light();
+    },
+
+    uploadDir: '/home/pds/boomshakalaka/uploads',
+
+    openUpload() {
+        document.getElementById('mobile-file-input').click();
+    },
+
+    async handleFileSelect(event) {
+        const files = event.target.files;
+        if (!files.length) return;
+        for (const file of files) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('target_dir', this.uploadDir);
+                const response = await fetch('/api/terminal/files/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (result.success) {
+                    this.showUploadSuccess(result.filename, result.path);
+                } else {
+                    Toast.show(`Failed: ${result.error}`, 'error');
+                }
+            } catch (e) {
+                Toast.show(`Upload error: ${e.message}`, 'error');
+            }
+        }
+        event.target.value = '';
+    },
+
+    showUploadSuccess(filename, fullPath) {
+        const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
+        const modal = document.createElement('div');
+        modal.className = 'upload-success-modal';
+        modal.innerHTML = `
+            <div class="upload-success-content">
+                <div class="upload-success-icon">&#10004;</div>
+                <div class="upload-success-title">Upload Complete!</div>
+                <div class="upload-success-file">${filename}</div>
+                <div class="upload-success-path-label">Directory:</div>
+                <div class="upload-success-path">${dir}</div>
+                <button class="upload-copy-btn" onclick="navigator.clipboard.writeText('${dir}'); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy Path', 1500)">Copy Path</button>
+                <button class="upload-dismiss-btn" onclick="this.closest('.upload-success-modal').remove()">Done</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        Haptic.medium();
     }
 };
 
@@ -455,6 +636,21 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.adventure-card.interactive, .btn, .list-item').forEach(el => {
         el.addEventListener('touchstart', () => Haptic.light(), { passive: true });
     });
+
+    // Initialize terminal tab management
+    TerminalModal.init();
+
+    // Eager load terminal iframes for instant display when modal opens
+    const terminal1 = document.getElementById('terminal-1');
+    const terminal2 = document.getElementById('terminal-2');
+    const baseUrl = window.location.protocol + '//' + window.location.hostname;
+
+    if (terminal1 && !terminal1.src) {
+        terminal1.src = baseUrl + ':7681';
+    }
+    if (terminal2 && !terminal2.src) {
+        terminal2.src = baseUrl + ':7682';
+    }
 });
 
 // Export
