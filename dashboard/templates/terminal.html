@@ -30,9 +30,10 @@
                 <iframe id="terminal-iframe" src=""></iframe>
             </div>
 
-            <!-- Resizable divider -->
-            <div class="pane-divider" id="pane-divider">
-                <div class="divider-grip"></div>
+            <!-- Bottom pane header (collapsible) -->
+            <div class="pane-header" id="pane-header" onclick="TerminalManager.toggleBottomPane()">
+                <div class="header-grip"></div>
+                <span class="header-toggle" id="header-toggle">▼</span>
             </div>
 
             <!-- Bottom pane -->
@@ -394,28 +395,56 @@
     box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-/* Resizable divider */
-.pane-divider {
-    height: 6px;
+/* Bottom pane header bar */
+.pane-header {
+    height: 24px;
     background: var(--bg-secondary);
-    cursor: row-resize;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     flex-shrink: 0;
     border-top: 1px solid var(--border-color);
     border-bottom: 1px solid var(--border-color);
+    transition: background 0.2s;
 }
 
-.pane-divider:hover {
+.pane-header:hover {
     background: var(--bg-tertiary);
 }
 
-.divider-grip {
+.header-grip {
     width: 40px;
     height: 4px;
     background: var(--border-light);
     border-radius: 2px;
+}
+
+.header-toggle {
+    color: var(--text-secondary);
+    font-size: 10px;
+    transition: transform 0.3s;
+}
+
+/* Bottom pane transitions */
+#terminal-pane-bottom {
+    transition: flex 0.3s ease;
+    overflow: hidden;
+}
+
+/* Collapsed state */
+.terminal-content.collapsed #terminal-pane-top {
+    flex: 1 !important;
+}
+
+.terminal-content.collapsed #terminal-pane-bottom {
+    flex: 0 !important;
+    min-height: 0;
+}
+
+.terminal-content.collapsed .header-toggle {
+    transform: rotate(180deg);
 }
 
 /* Content Panel */
@@ -1582,8 +1611,7 @@ const TerminalManager = {
     windows: [],
     activeWindowId: null,
     contextWindowId: null,
-    splitRatio: 0.5,
-    isDragging: false,
+    isCollapsed: false,
     focusedPane: 'top',
 
     getTerminalUrl(port = 7681) {
@@ -1600,8 +1628,7 @@ const TerminalManager = {
         document.getElementById('terminal-iframe').src = this.getTerminalUrl(7681);
         document.getElementById('terminal-iframe-bottom').src = this.getTerminalUrl(7682);
 
-        this.setupPaneResizer();
-        this.loadSplitRatio();
+        this.loadCollapsedState();
         this.setupKeyboardShortcuts();
         this.setupContextMenu();
 
@@ -1609,62 +1636,35 @@ const TerminalManager = {
         ContentViewer.init();
     },
 
-    // Pane resize logic
-    setupPaneResizer() {
-        const divider = document.getElementById('pane-divider');
+    // Bottom pane collapse logic
+    toggleBottomPane() {
         const container = document.getElementById('terminal-content');
+        this.isCollapsed = !this.isCollapsed;
 
-        divider.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            this.isDragging = true;
-            document.body.style.cursor = 'row-resize';
-            document.body.style.userSelect = 'none';
-        });
+        if (this.isCollapsed) {
+            container.classList.add('collapsed');
+        } else {
+            container.classList.remove('collapsed');
+        }
 
-        document.addEventListener('mousemove', (e) => {
-            if (!this.isDragging) return;
-
-            const containerRect = container.getBoundingClientRect();
-            const relativeY = e.clientY - containerRect.top;
-            const ratio = relativeY / containerRect.height;
-
-            // Clamp between 20% and 80%
-            this.setSplitRatio(Math.max(0.2, Math.min(0.8, ratio)));
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (this.isDragging) {
-                this.isDragging = false;
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-                this.saveSplitRatio();
-            }
-        });
+        this.saveCollapsedState();
     },
 
-    setSplitRatio(ratio) {
-        this.splitRatio = ratio;
-        const topPane = document.getElementById('terminal-pane-top');
-        const bottomPane = document.getElementById('terminal-pane-bottom');
-
-        topPane.style.flex = `${ratio}`;
-        bottomPane.style.flex = `${1 - ratio}`;
-    },
-
-    loadSplitRatio() {
+    loadCollapsedState() {
         try {
-            const stored = localStorage.getItem('terminal_split_ratio');
-            if (stored) {
-                this.setSplitRatio(parseFloat(stored));
+            const stored = localStorage.getItem('terminal_bottom_collapsed');
+            if (stored === 'true') {
+                this.isCollapsed = true;
+                document.getElementById('terminal-content').classList.add('collapsed');
             }
         } catch (e) {
             // Ignore storage errors
         }
     },
 
-    saveSplitRatio() {
+    saveCollapsedState() {
         try {
-            localStorage.setItem('terminal_split_ratio', this.splitRatio.toString());
+            localStorage.setItem('terminal_bottom_collapsed', this.isCollapsed.toString());
         } catch (e) {
             // Ignore storage errors
         }
