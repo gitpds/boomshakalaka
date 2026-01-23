@@ -123,6 +123,27 @@ async function loadActiveTheme() {
 })();
 
 // ============================================
+// Sidebar Collapse Toggle
+// ============================================
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        localStorage.setItem('sidebarCollapsed', isCollapsed);
+    }
+}
+
+function restoreSidebarState() {
+    const sidebar = document.getElementById('sidebar');
+    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (sidebar && isCollapsed) {
+        sidebar.classList.add('collapsed');
+    }
+}
+
+// ============================================
 // Sidebar Category Toggle
 // ============================================
 
@@ -422,6 +443,9 @@ function refreshPage() {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Restore sidebar collapsed state
+    restoreSidebarState();
+
     // Restore expanded categories
     restoreExpandedCategories();
 

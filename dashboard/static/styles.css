@@ -186,7 +186,117 @@ button {
     left: 0;
     height: 100vh;
     z-index: 100;
-    transition: background-color var(--transition-normal);
+    transition: width 0.3s ease, background-color var(--transition-normal);
+}
+
+/* Collapsed Sidebar State */
+.sidebar.collapsed {
+    width: 68px;
+}
+
+.sidebar.collapsed .sidebar-logo {
+    max-width: 40px;
+}
+
+.sidebar.collapsed .sidebar-header {
+    padding: 12px 8px;
+    text-align: center;
+}
+
+.sidebar.collapsed .active-page-name,
+.sidebar.collapsed .nav-text,
+.sidebar.collapsed .nav-chevron,
+.sidebar.collapsed .status-text {
+    display: none;
+}
+
+.sidebar.collapsed .nav-item,
+.sidebar.collapsed .nav-category-header {
+    justify-content: center;
+    padding: 12px;
+}
+
+.sidebar.collapsed .nav-category-items,
+.sidebar.collapsed .nav-subcategory-items {
+    display: none !important;
+}
+
+.sidebar.collapsed .sidebar-footer {
+    padding: 12px;
+    justify-content: center;
+}
+
+.sidebar.collapsed .system-status {
+    justify-content: center;
+}
+
+/* Tooltips for collapsed sidebar */
+.sidebar.collapsed .nav-item,
+.sidebar.collapsed .nav-category-header {
+    position: relative;
+}
+
+.sidebar.collapsed .nav-item::after,
+.sidebar.collapsed .nav-category-header::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 12px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+}
+
+.sidebar.collapsed .nav-item:hover::after,
+.sidebar.collapsed .nav-category-header:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Sidebar Collapse Toggle Button */
+.sidebar-collapse-btn {
+    position: absolute;
+    top: 50%;
+    right: -12px;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 48px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0 8px 8px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+    z-index: 101;
+}
+
+.sidebar-collapse-btn:hover {
+    background: var(--bg-hover);
+    color: var(--accent);
+}
+
+.sidebar-collapse-btn svg {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed .sidebar-collapse-btn svg {
+    transform: rotate(180deg);
 }
 
 /* Logo Section - Top Center */
@@ -534,7 +644,12 @@ button {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    transition: background-color var(--transition-normal);
+    transition: margin-left 0.3s ease, background-color var(--transition-normal);
+}
+
+/* Collapsed sidebar - expand main content */
+.sidebar.collapsed + .main-content {
+    margin-left: 68px;
 }
 
 /* Header */
@@ -1475,6 +1590,11 @@ button {
     background-size: 20px 20px;
     pointer-events: none;
     z-index: 0;
+    transition: left 0.3s ease;
+}
+
+.sidebar.collapsed + .main-content::before {
+    left: 68px;
 }
 
 .main-content > * {
