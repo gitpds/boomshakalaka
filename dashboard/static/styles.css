@@ -267,32 +267,35 @@ button {
 /* Sidebar Collapse Toggle Button */
 .sidebar-collapse-btn {
     position: absolute;
-    top: 50%;
-    right: -12px;
-    transform: translateY(-50%);
+    bottom: 73px;
+    right: 12px;
     width: 24px;
-    height: 48px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 0 8px 8px 0;
+    height: 24px;
+    background: transparent;
+    border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, right 0.3s ease;
     z-index: 101;
+    padding: 0;
 }
 
 .sidebar-collapse-btn:hover {
-    background: var(--bg-hover);
     color: var(--accent);
 }
 
 .sidebar-collapse-btn svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed .sidebar-collapse-btn {
+    right: 50%;
+    transform: translateX(50%);
 }
 
 .sidebar.collapsed .sidebar-collapse-btn svg {
