@@ -5405,6 +5405,72 @@ def api_dev_port_list():
     return jsonify({'ports': ports, 'range': list(PORT_RANGE)})
 
 
+# ============================================
+# Mobile Routes
+# ============================================
+
+@app.route('/m')
+@app.route('/m/')
+def mobile_home():
+    """Mobile home page"""
+    return render_template('mobile/home.html', active_page='home', **get_common_context())
+
+@app.route('/m/workshop')
+def mobile_workshop():
+    """Mobile workshop hub"""
+    return render_template('mobile/workshop/index.html', active_page='workshop', active_category='workshop', **get_common_context())
+
+@app.route('/m/workshop/kanban')
+def mobile_workshop_kanban():
+    """Mobile kanban board"""
+    return render_template('mobile/workshop/kanban.html', active_page='kanban', active_category='workshop', **get_common_context())
+
+@app.route('/m/workshop/agents')
+def mobile_workshop_agents():
+    """Mobile agent office"""
+    return render_template('mobile/workshop/agents.html', active_page='agents', active_category='workshop', **get_common_context())
+
+@app.route('/m/workshop/vibecraft')
+def mobile_workshop_vibecraft():
+    """Mobile vibecraft studio"""
+    return render_template('mobile/workshop/vibecraft.html', active_page='vibecraft', active_category='workshop', **get_common_context())
+
+@app.route('/m/automation')
+def mobile_automation():
+    """Mobile automation hub"""
+    return render_template('mobile/automation/index.html', active_page='automation', **get_common_context())
+
+@app.route('/m/reggie')
+def mobile_reggie():
+    """Mobile reggie overview"""
+    return render_template('mobile/reggie/index.html', active_page='reggie', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/control')
+def mobile_reggie_control():
+    """Mobile reggie control panel"""
+    return render_template('mobile/reggie/control.html', active_page='control', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/camera')
+def mobile_reggie_camera():
+    """Mobile reggie camera feed"""
+    return render_template('mobile/reggie/camera.html', active_page='camera', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/moves')
+def mobile_reggie_moves():
+    """Mobile reggie moves and emotions"""
+    return render_template('mobile/reggie/moves.html', active_page='moves', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/apps')
+def mobile_reggie_apps():
+    """Mobile reggie huggingface apps"""
+    return render_template('mobile/reggie/apps.html', active_page='apps', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/settings')
+def mobile_reggie_settings():
+    """Mobile reggie settings"""
+    return render_template('mobile/reggie/settings.html', active_page='settings', active_category='reggie', **get_common_context())
+
+
 def main():
     """Run the dashboard server"""
     print("Starting Boomshakalaka Management Dashboard...")

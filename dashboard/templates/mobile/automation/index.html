@@ -1,0 +1,118 @@
+{% extends "mobile/base.html" %}
+{% block title %}Automation{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Automation Hub</h2>
+
+<div class="quick-grid mb-4">
+    <div class="adventure-card" style="padding: 12px;"><div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Total Jobs</div><div class="text-gold" style="font-size: 1.5rem; font-weight: 600;" id="total-jobs">-</div></div>
+    <div class="adventure-card" style="padding: 12px;"><div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Active</div><div class="text-success" style="font-size: 1.5rem; font-weight: 600;" id="active-jobs">-</div></div>
+    <div class="adventure-card" style="padding: 12px;"><div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Success Rate</div><div class="text-gold" style="font-size: 1.5rem; font-weight: 600;" id="success-rate">-</div></div>
+    <div class="adventure-card" style="padding: 12px;"><div class="text-muted" style="font-size: 0.7rem; text-transform: uppercase;">Failed</div><div class="text-error" style="font-size: 1.5rem; font-weight: 600;" id="failed-jobs">-</div></div>
+</div>
+
+<div class="tab-bar mb-3">
+    <button class="tab-item active" data-filter="all">All</button>
+    <button class="tab-item" data-filter="active">Active</button>
+    <button class="tab-item" data-filter="disabled">Disabled</button>
+</div>
+
+<div class="list-group" id="job-list">
+    <div class="skeleton" style="height: 80px;"></div>
+    <div class="skeleton" style="height: 80px;"></div>
+</div>
+
+<p class="text-muted text-center mt-3" style="font-size: 0.75rem;">Swipe right to trigger &#8226; Swipe left to toggle</p>
+
+<div class="bottom-sheet" id="job-detail-sheet">
+    <div class="bottom-sheet-handle"></div>
+    <div class="bottom-sheet-content">
+        <h3 class="page-title" style="font-size: 1.1rem;" id="detail-job-name">Job Details</h3>
+        <div class="adventure-card mb-3">
+            <div class="flex justify-between mb-2"><span class="text-secondary">Schedule</span><span id="detail-schedule">-</span></div>
+            <div class="flex justify-between mb-2"><span class="text-secondary">Last Run</span><span id="detail-last-run">-</span></div>
+            <div class="flex justify-between"><span class="text-secondary">Status</span><span id="detail-status"></span></div>
+        </div>
+        <div class="adventure-card">
+            <div class="card-header"><span class="card-title">Recent Log</span></div>
+            <pre id="detail-log" style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; background: var(--m-bg-primary); padding: 12px; border-radius: var(--radius-md); overflow-x: auto; max-height: 200px; margin: 0; color: var(--text-secondary);">Loading...</pre>
+        </div>
+        <div class="flex gap-3 mt-4">
+            <button class="btn btn-secondary" style="flex: 1;" onclick="toggleJob()" id="detail-toggle-btn">Toggle</button>
+            <button class="btn btn-primary" style="flex: 1;" onclick="triggerJob()">Run Now</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/automation.js') }}"></script>
+<script>
+let jobs = [], currentFilter = 'all', selectedJob = null;
+
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadJobs();
+    initFilters();
+    PullToRefresh.init({ onRefresh: async () => { await loadJobs(); PullToRefresh.complete(); } });
+});
+
+async function loadJobs() {
+    jobs = await AutomationModule.loadJobs();
+    const stats = AutomationModule.getStats();
+    document.getElementById('total-jobs').textContent = stats.total;
+    document.getElementById('active-jobs').textContent = stats.active;
+    document.getElementById('success-rate').textContent = stats.successRate + '%';
+    document.getElementById('failed-jobs').textContent = stats.failed;
+    renderJobs();
+}
+
+function renderJobs() {
+    const filtered = AutomationModule.getFiltered(currentFilter);
+    const container = document.getElementById('job-list');
+    if (!filtered.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9881;</div><div class="empty-title">No Jobs Found</div></div>'; return; }
+    container.innerHTML = filtered.map(j => `
+        <div class="swipe-container" data-job-name="${j.name}">
+            <div class="swipe-actions left" style="position: absolute; top: 0; bottom: 0; left: 0; padding-left: 16px; background: linear-gradient(90deg, var(--success), transparent); display: flex; align-items: center;"><span style="color: white; font-weight: 600;">&#9654; RUN</span></div>
+            <div class="swipe-actions right" style="position: absolute; top: 0; bottom: 0; right: 0; padding-right: 16px; background: linear-gradient(-90deg, var(--warning), transparent); display: flex; align-items: center;"><span style="color: white; font-weight: 600;">TOGGLE</span></div>
+            <div class="swipe-content">
+                <div class="adventure-card job-card" onclick="showJobDetail('${j.name}')" style="margin-bottom: 0;">
+                    <div class="job-header"><span class="job-name">${j.display_name || j.name}</span><span class="badge ${j.enabled !== false ? 'badge-success' : 'badge-warning'}">${j.enabled !== false ? 'Active' : 'Disabled'}</span></div>
+                    <div class="job-schedule">${j.schedule || j.cron || 'Manual'}</div>
+                    <div class="job-stats"><span class="job-stat">&#128337; ${j.last_run ? Utils.timeAgo(j.last_run) : 'Never'}</span></div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    SwipeableList.init(container, {
+        onSwipeRight: async (item) => { Toast.info('Running job...'); try { await MobileAPI.triggerJob(item.dataset.jobName); Toast.success('Job triggered!'); } catch { Toast.error('Failed'); } },
+        onSwipeLeft: async (item) => { try { await MobileAPI.toggleJob(item.dataset.jobName); await loadJobs(); Toast.success('Toggled'); } catch { Toast.error('Failed'); } }
+    });
+}
+
+function initFilters() {
+    document.querySelectorAll('[data-filter]').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('[data-filter]').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            currentFilter = this.dataset.filter;
+            renderJobs();
+        });
+    });
+}
+
+function showJobDetail(name) {
+    selectedJob = jobs.find(j => j.name === name);
+    if (!selectedJob) return;
+    document.getElementById('detail-job-name').textContent = selectedJob.display_name || selectedJob.name;
+    document.getElementById('detail-schedule').textContent = selectedJob.schedule || selectedJob.cron || 'Manual';
+    document.getElementById('detail-last-run').textContent = selectedJob.last_run ? Utils.timeAgo(selectedJob.last_run) : 'Never';
+    document.getElementById('detail-status').innerHTML = selectedJob.enabled !== false ? '<span class="badge badge-success">Enabled</span>' : '<span class="badge badge-warning">Disabled</span>';
+    document.getElementById('detail-log').textContent = 'Loading...';
+    BottomSheet.open('job-detail-sheet');
+    MobileAPI.getJobLogs(selectedJob.name, 50).then(r => { document.getElementById('detail-log').textContent = r.content || r.log || r || 'No logs'; }).catch(() => { document.getElementById('detail-log').textContent = 'Failed to load logs'; });
+}
+
+async function triggerJob() { if (!selectedJob) return; Toast.info('Running...'); try { await MobileAPI.triggerJob(selectedJob.name); Toast.success('Triggered!'); } catch { Toast.error('Failed'); } }
+async function toggleJob() { if (!selectedJob) return; try { await MobileAPI.toggleJob(selectedJob.name); BottomSheet.close(); await loadJobs(); Toast.success('Toggled'); } catch { Toast.error('Failed'); } }
+</script>
+{% endblock %}

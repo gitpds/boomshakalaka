@@ -1,0 +1,65 @@
+{% extends "mobile/base.html" %}
+{% block title %}Reggie{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Reggie Robot</h2>
+
+<div class="status-display" id="reggie-status">
+    <div class="status-radar" id="status-radar"></div>
+    <div class="status-info">
+        <div class="status-label">Connection Status</div>
+        <div class="status-value" id="status-text">Checking...</div>
+    </div>
+</div>
+
+<div class="quick-grid mb-4">
+    <a href="/m/reggie/control" class="adventure-card interactive reticle quick-card"><span class="quick-icon">&#127918;</span><span class="quick-title">Control</span><span class="quick-subtitle">Sliders & Motors</span></a>
+    <a href="/m/reggie/camera" class="adventure-card interactive reticle quick-card"><span class="quick-icon">&#128249;</span><span class="quick-title">Camera</span><span class="quick-subtitle">Live Feed</span></a>
+    <a href="/m/reggie/moves" class="adventure-card interactive reticle quick-card"><span class="quick-icon">&#128131;</span><span class="quick-title">Moves</span><span class="quick-subtitle">Dance & Emotions</span></a>
+    <a href="/m/reggie/apps" class="adventure-card interactive reticle quick-card"><span class="quick-icon">&#129302;</span><span class="quick-title">Apps</span><span class="quick-subtitle">HuggingFace</span></a>
+</div>
+
+<div class="adventure-card">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#9889;</span> Quick Actions</span></div>
+    <div class="preset-grid">
+        <button class="adventure-card preset-btn interactive" onclick="quickAction('wave')"><div class="preset-icon">&#128075;</div>Wave</button>
+        <button class="adventure-card preset-btn interactive" onclick="quickAction('nod')"><div class="preset-icon">&#128522;</div>Nod</button>
+        <button class="adventure-card preset-btn interactive" onclick="quickAction('shake')"><div class="preset-icon">&#128528;</div>Shake</button>
+        <button class="adventure-card preset-btn interactive" onclick="quickAction('happy')"><div class="preset-icon">&#128513;</div>Happy</button>
+        <button class="adventure-card preset-btn interactive" onclick="quickAction('sad')"><div class="preset-icon">&#128546;</div>Sad</button>
+        <button class="adventure-card preset-btn interactive" onclick="quickAction('reset')"><div class="preset-icon">&#128260;</div>Reset</button>
+    </div>
+</div>
+
+<a href="/m/reggie/settings" class="adventure-card mt-4 interactive" style="display: flex; align-items: center; gap: 16px;">
+    <div class="list-item-icon" style="background: var(--m-bg-tertiary);">&#9881;</div>
+    <div class="list-item-content"><div class="list-item-title">Settings</div><div class="list-item-subtitle">Volume, Daemon, Diagnostics</div></div>
+    <span style="color: var(--text-muted);">&#8250;</span>
+</a>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/reggie.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async function() { await checkStatus(); setInterval(checkStatus, 10000); });
+
+async function checkStatus() {
+    const statusEl = document.getElementById('reggie-status');
+    const textEl = document.getElementById('status-text');
+    try {
+        const status = await ReggieModule.getStatus();
+        if (status?.connected) { statusEl.className = 'status-display'; textEl.textContent = 'Connected'; }
+        else { statusEl.className = 'status-display warning'; textEl.textContent = 'Disconnected'; }
+    } catch { statusEl.className = 'status-display error'; textEl.textContent = 'Connection Error'; }
+}
+
+async function quickAction(action) {
+    Haptic.medium(); Toast.info(`Performing ${action}...`);
+    try {
+        if (action === 'reset') await ReggieModule.applyPreset('neutral');
+        else await ReggieModule.playMove(action);
+        Toast.success(`${action} complete!`);
+    } catch { Toast.error(`Failed to ${action}`); }
+}
+</script>
+{% endblock %}

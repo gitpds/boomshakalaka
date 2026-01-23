@@ -1,0 +1,110 @@
+{% extends "mobile/base.html" %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="status-display" id="system-status">
+    <div class="status-radar"></div>
+    <div class="status-info">
+        <div class="status-label">System Status</div>
+        <div class="status-value" id="status-text">Checking...</div>
+    </div>
+</div>
+
+<div class="quick-grid">
+    <a href="/m/workshop" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#128736;</span>
+        <span class="quick-title">Workshop</span>
+        <span class="quick-subtitle" id="task-count">AI &amp; Tasks</span>
+    </a>
+    <a href="/m/automation" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#9881;</span>
+        <span class="quick-title">Automation</span>
+        <span class="quick-subtitle" id="job-count">Cron Jobs</span>
+    </a>
+    <a href="/m/reggie" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#129302;</span>
+        <span class="quick-title">Reggie</span>
+        <span class="quick-subtitle" id="reggie-status">Robot Control</span>
+    </a>
+    <div class="adventure-card interactive reticle quick-card" onclick="BottomSheet.open('quick-actions-sheet')">
+        <span class="quick-icon">&#9889;</span>
+        <span class="quick-title">Quick Actions</span>
+        <span class="quick-subtitle">Fast Access</span>
+    </div>
+</div>
+
+<div class="mt-4">
+    <h3 class="page-title" style="font-size: 1.1rem;">Recent Activity</h3>
+    <div class="list-group" id="recent-activity">
+        <div class="list-item">
+            <div class="list-item-icon">&#128161;</div>
+            <div class="list-item-content">
+                <div class="list-item-title">Welcome to Mobile</div>
+                <div class="list-item-subtitle">Swipe down to refresh</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bottom-sheet" id="quick-actions-sheet">
+    <div class="bottom-sheet-handle"></div>
+    <div class="bottom-sheet-content">
+        <h3 class="page-title" style="font-size: 1.1rem;">Quick Actions</h3>
+        <div class="list-group">
+            <div class="list-item" onclick="triggerAction('refresh')">
+                <div class="list-item-icon">&#128260;</div>
+                <div class="list-item-content">
+                    <div class="list-item-title">Refresh All</div>
+                    <div class="list-item-subtitle">Update all dashboards</div>
+                </div>
+            </div>
+            <div class="list-item" onclick="triggerAction('wave')">
+                <div class="list-item-icon">&#128075;</div>
+                <div class="list-item-content">
+                    <div class="list-item-title">Reggie Wave</div>
+                    <div class="list-item-subtitle">Make Reggie wave hello</div>
+                </div>
+            </div>
+            <a href="/m/reggie/camera" class="list-item">
+                <div class="list-item-icon">&#128249;</div>
+                <div class="list-item-content">
+                    <div class="list-item-title">Open Camera</div>
+                    <div class="list-item-subtitle">View Reggie's camera feed</div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    await Promise.all([loadStatus(), loadCounts()]);
+    PullToRefresh.init({ onRefresh: async () => { await Promise.all([loadStatus(), loadCounts()]); PullToRefresh.complete(); } });
+});
+
+async function loadStatus() {
+    const statusEl = document.getElementById('system-status');
+    const textEl = document.getElementById('status-text');
+    try {
+        const health = await MobileAPI.getHealth();
+        if (health.status === 'healthy') { statusEl.className = 'status-display'; textEl.textContent = 'All Systems Online'; }
+        else if (health.status === 'degraded') { statusEl.className = 'status-display warning'; textEl.textContent = 'Degraded Performance'; }
+        else { statusEl.className = 'status-display error'; textEl.textContent = 'Issues Detected'; }
+    } catch { statusEl.className = 'status-display error'; textEl.textContent = 'Connection Error'; }
+}
+
+async function loadCounts() {
+    try { const tasks = await MobileAPI.getTasks().catch(() => ({ tasks: [] })); document.getElementById('task-count').textContent = `${tasks.tasks?.length || 0} tasks`; } catch {}
+    try { const jobs = await MobileAPI.getJobs().catch(() => []); const arr = jobs.jobs || jobs || []; document.getElementById('job-count').textContent = `${arr.filter(j => j.enabled !== false).length} active`; } catch {}
+    try { const reggie = await MobileAPI.getReggieStatus().catch(() => null); document.getElementById('reggie-status').textContent = reggie?.connected ? 'Connected' : 'Offline'; } catch {}
+}
+
+async function triggerAction(action) {
+    BottomSheet.close(); Haptic.medium();
+    if (action === 'refresh') { Toast.info('Refreshing...'); await loadStatus(); await loadCounts(); Toast.success('Refreshed!'); }
+    else if (action === 'wave') { Toast.info('Waving...'); try { await MobileAPI.playMove('wave'); Toast.success('Reggie is waving!'); } catch { Toast.error('Could not wave'); } }
+}
+</script>
+{% endblock %}

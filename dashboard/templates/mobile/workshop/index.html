@@ -1,0 +1,137 @@
+{% extends "mobile/base.html" %}
+{% block title %}Workshop{% endblock %}
+
+{% block content %}
+<h2 class="page-title">AI Workshop</h2>
+
+<div class="quick-grid mb-4">
+    <a href="/m/workshop/kanban" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#128203;</span>
+        <span class="quick-title">Kanban</span>
+        <span class="quick-subtitle">Task Board</span>
+    </a>
+    <a href="/m/workshop/agents" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#129302;</span>
+        <span class="quick-title">Agents</span>
+        <span class="quick-subtitle">AI Workers</span>
+    </a>
+    <a href="/m/workshop/vibecraft" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#127912;</span>
+        <span class="quick-title">Vibecraft</span>
+        <span class="quick-subtitle">Creative Studio</span>
+    </a>
+    <div class="adventure-card interactive reticle quick-card" onclick="TerminalModal.open()">
+        <span class="quick-icon terminal-icon">&#128187;</span>
+        <span class="quick-title">Terminal</span>
+        <span class="quick-subtitle">Command Line</span>
+    </div>
+    <a href="/ai" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#128300;</span>
+        <span class="quick-title">AI Tools</span>
+        <span class="quick-subtitle">Full Dashboard</span>
+    </a>
+</div>
+
+<div class="adventure-card">
+    <div class="card-header">
+        <span class="card-title"><span class="card-icon">&#128203;</span> Recent Tasks</span>
+        <a href="/m/workshop/kanban" class="badge badge-accent">View All</a>
+    </div>
+    <div class="list-group" id="recent-tasks">
+        <div class="skeleton" style="height: 60px;"></div>
+    </div>
+</div>
+
+<div class="adventure-card mt-4">
+    <div class="card-header">
+        <span class="card-title"><span class="card-icon">&#129302;</span> Agent Status</span>
+        <a href="/m/workshop/agents" class="badge badge-accent">View All</a>
+    </div>
+    <div class="agent-grid" id="agent-status">
+        <div class="skeleton" style="height: 100px;"></div>
+        <div class="skeleton" style="height: 100px;"></div>
+    </div>
+</div>
+
+<!-- Terminal Modal -->
+<div class="terminal-modal" id="terminal-modal">
+    <div class="terminal-modal-header">
+        <span>Terminal</span>
+        <button onclick="TerminalModal.close()">&times;</button>
+    </div>
+    <div class="terminal-container">
+        <iframe id="terminal-1" class="terminal-frame"></iframe>
+        <div class="terminal-2-wrapper" id="terminal-2-wrapper">
+            <iframe id="terminal-2" class="terminal-frame"></iframe>
+        </div>
+    </div>
+    <div class="terminal-toggle-bar" onclick="TerminalModal.toggleSecondTerminal()">
+        <span class="toggle-arrow" id="toggle-arrow">&#9650;</span>
+        <span id="toggle-label">Show Terminal 2</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/workshop.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    await Promise.all([loadRecentTasks(), loadAgentStatus()]);
+});
+
+async function loadRecentTasks() {
+    const container = document.getElementById('recent-tasks');
+    const tasks = await WorkshopModule.kanban.load();
+    container.replaceChildren();
+    if (!tasks.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = '<div class="empty-icon">&#128203;</div><div class="empty-title">No Tasks</div>';
+        container.appendChild(empty);
+        return;
+    }
+    tasks.slice(0, 3).forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        const icon = document.createElement('div');
+        icon.className = 'list-item-icon';
+        icon.textContent = t.priority === 'high' ? '\u{1F534}' : t.priority === 'low' ? '\u{1F7E2}' : '\u{1F7E0}';
+        const content = document.createElement('div');
+        content.className = 'list-item-content';
+        const title = document.createElement('div');
+        title.className = 'list-item-title';
+        title.textContent = t.title;
+        const subtitle = document.createElement('div');
+        subtitle.className = 'list-item-subtitle';
+        subtitle.textContent = t.column || 'To Do';
+        content.append(title, subtitle);
+        item.append(icon, content);
+        container.appendChild(item);
+    });
+}
+
+async function loadAgentStatus() {
+    const container = document.getElementById('agent-status');
+    const agents = await WorkshopModule.agents.load();
+    container.replaceChildren();
+    agents.slice(0, 4).forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'adventure-card agent-card';
+        const avatar = document.createElement('div');
+        avatar.className = 'agent-avatar';
+        avatar.textContent = a.avatar || '\u{1F916}';
+        const name = document.createElement('div');
+        name.className = 'agent-name';
+        name.textContent = a.name;
+        const status = document.createElement('div');
+        status.className = 'agent-status';
+        status.innerHTML = '<div class="status-orb"></div>';
+        const statusText = document.createElement('span');
+        statusText.textContent = a.status || 'Ready';
+        status.appendChild(statusText);
+        card.append(avatar, name, status);
+        container.appendChild(card);
+    });
+}
+</script>
+{% endblock %}

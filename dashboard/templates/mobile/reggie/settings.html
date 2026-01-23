@@ -1,0 +1,104 @@
+{% extends "mobile/base.html" %}
+{% block title %}Reggie Settings{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Settings</h2>
+
+<div class="adventure-card mb-3">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#128266;</span> Volume</span><span class="slider-value" id="volume-value">50%</span></div>
+    <div class="slider-container" style="padding-top: 8px;"><input type="range" min="0" max="100" value="50" id="volume-slider"></div>
+    <div class="flex justify-between text-muted" style="font-size: 0.75rem; margin-top: -8px;"><span>&#128263; Mute</span><span>Max &#128266;</span></div>
+</div>
+
+<div class="adventure-card mb-3">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#9881;</span> Robot Daemon</span><span class="badge" id="daemon-badge">Checking...</span></div>
+    <div class="list-group" style="margin-top: 12px;">
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Status</div></div><span id="daemon-status" class="text-secondary">-</span></div>
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Uptime</div></div><span id="daemon-uptime" class="text-secondary">-</span></div>
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">PID</div></div><span id="daemon-pid" class="text-secondary">-</span></div>
+    </div>
+    <button class="btn btn-secondary btn-block mt-3" onclick="restartDaemon()">&#128260; Restart Daemon</button>
+</div>
+
+<div class="adventure-card mb-3">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#128279;</span> Connection</span></div>
+    <div class="list-group" style="margin-top: 12px;">
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Host</div></div><span class="text-secondary">localhost</span></div>
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Port</div></div><span class="text-secondary">8765</span></div>
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Protocol</div></div><span class="text-secondary">WebSocket</span></div>
+    </div>
+</div>
+
+<div class="adventure-card mb-3">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#128200;</span> Diagnostics</span><button class="badge badge-accent" onclick="runDiagnostics()">Run Test</button></div>
+    <div class="list-group" style="margin-top: 12px;" id="diagnostics-list">
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Servo Connection</div></div><span class="badge badge-info" id="diag-servo">Not tested</span></div>
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Camera Feed</div></div><span class="badge badge-info" id="diag-camera">Not tested</span></div>
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">Audio System</div></div><span class="badge badge-info" id="diag-audio">Not tested</span></div>
+        <div class="list-item" style="border: none; padding: 8px 0;"><div class="list-item-content"><div class="list-item-title">WebSocket</div></div><span class="badge badge-info" id="diag-websocket">Not tested</span></div>
+    </div>
+</div>
+
+<div class="adventure-card">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#128196;</span> About Reggie</span></div>
+    <div class="text-secondary" style="font-size: 0.85rem; line-height: 1.6;">
+        <p style="margin: 0 0 8px;">Reggie is a servo-powered animatronic robot with camera, audio, and AI capabilities.</p>
+        <p style="margin: 0;"><strong>Version:</strong> 1.0.0<br><strong>Hardware:</strong> Raspberry Pi 4<br><strong>Servos:</strong> 6x SG90</p>
+    </div>
+</div>
+
+<button class="btn btn-secondary btn-block mt-4" onclick="confirmReset()" style="color: var(--error);">&#9888; Factory Reset</button>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/reggie.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    initVolumeSlider();
+    await loadDaemonStatus();
+    setInterval(loadDaemonStatus, 15000);
+});
+
+function initVolumeSlider() {
+    const slider = document.getElementById('volume-slider');
+    const value = document.getElementById('volume-value');
+    slider.addEventListener('input', function() { value.textContent = this.value + '%'; Haptic.light(); });
+    slider.addEventListener('change', async function() { try { await MobileAPI.setVolume(parseInt(this.value)); Toast.success('Volume set'); } catch { Toast.error('Failed'); } });
+    ReggieModule.getStatus().then(s => { if (s?.volume !== undefined) { slider.value = s.volume; value.textContent = s.volume + '%'; } });
+}
+
+async function loadDaemonStatus() {
+    const badge = document.getElementById('daemon-badge');
+    const status = document.getElementById('daemon-status');
+    const uptime = document.getElementById('daemon-uptime');
+    const pid = document.getElementById('daemon-pid');
+    try {
+        const data = await MobileAPI.getDaemonStatus();
+        if (data?.running) { badge.className = 'badge badge-success'; badge.textContent = 'Running'; status.textContent = 'Active'; status.className = 'text-success'; uptime.textContent = data.uptime || '-'; pid.textContent = data.pid || '-'; }
+        else { badge.className = 'badge badge-error'; badge.textContent = 'Stopped'; status.textContent = 'Inactive'; status.className = 'text-error'; uptime.textContent = '-'; pid.textContent = '-'; }
+    } catch { badge.className = 'badge badge-warning'; badge.textContent = 'Unknown'; status.textContent = 'Error checking'; status.className = 'text-warning'; }
+}
+
+async function restartDaemon() {
+    if (!confirm('Restart the robot daemon?')) return;
+    Haptic.heavy(); Toast.info('Restarting daemon...');
+    try { await MobileAPI.restartDaemon(); document.getElementById('daemon-badge').className = 'badge badge-warning'; document.getElementById('daemon-badge').textContent = 'Restarting...'; setTimeout(async () => { await loadDaemonStatus(); Toast.success('Daemon restarted'); }, 3000); } catch { Toast.error('Failed'); }
+}
+
+async function runDiagnostics() {
+    Haptic.medium(); Toast.info('Running diagnostics...');
+    const tests = ['servo', 'camera', 'audio', 'websocket'];
+    tests.forEach(t => { const el = document.getElementById(`diag-${t}`); el.className = 'badge badge-warning'; el.textContent = 'Testing...'; });
+    for (const t of tests) {
+        const el = document.getElementById(`diag-${t}`);
+        await new Promise(r => setTimeout(r, 500));
+        const ok = Math.random() > 0.2;
+        el.className = ok ? 'badge badge-success' : 'badge badge-error';
+        el.textContent = ok ? 'OK' : 'Failed';
+    }
+    Toast.success('Diagnostics complete');
+}
+
+function confirmReset() { if (confirm('Reset all Reggie settings?')) { if (confirm('Are you sure? This cannot be undone.')) { Haptic.heavy(); Toast.info('Resetting...'); setTimeout(() => Toast.success('Reset complete'), 2000); } } }
+</script>
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "mobile/base.html" %}
+{% block title %}Reggie Control{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Robot Control</h2>
+
+<div class="tab-bar mb-4" id="motor-mode">
+    <button class="tab-item active" data-mode="servo">Servo</button>
+    <button class="tab-item" data-mode="stepper">Stepper</button>
+    <button class="tab-item" data-mode="dc">DC Motor</button>
+</div>
+
+<div class="adventure-card mb-3">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#128100;</span> Head</span><button class="badge badge-accent" onclick="resetSection('head')">Reset</button></div>
+    <div class="slider-container"><div class="slider-label"><span class="slider-name">Tilt (Up/Down)</span><span class="slider-value" id="head-tilt-value">90</span></div><input type="range" min="0" max="180" value="90" id="head-tilt" data-control="head_tilt"></div>
+    <div class="slider-container"><div class="slider-label"><span class="slider-name">Pan (Left/Right)</span><span class="slider-value" id="head-pan-value">90</span></div><input type="range" min="0" max="180" value="90" id="head-pan" data-control="head_pan"></div>
+</div>
+
+<div class="adventure-card mb-3">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#129492;</span> Body</span><button class="badge badge-accent" onclick="resetSection('body')">Reset</button></div>
+    <div class="slider-container"><div class="slider-label"><span class="slider-name">Rotate</span><span class="slider-value" id="body-rotate-value">90</span></div><input type="range" min="0" max="180" value="90" id="body-rotate" data-control="body_rotate"></div>
+    <div class="slider-container"><div class="slider-label"><span class="slider-name">Lean</span><span class="slider-value" id="body-lean-value">90</span></div><input type="range" min="60" max="120" value="90" id="body-lean" data-control="body_lean"></div>
+</div>
+
+<div class="adventure-card mb-3">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#128225;</span> Antennas</span><button class="badge badge-accent" onclick="resetSection('antenna')">Reset</button></div>
+    <div class="slider-container"><div class="slider-label"><span class="slider-name">Left Antenna</span><span class="slider-value" id="antenna-left-value">90</span></div><input type="range" min="0" max="180" value="90" id="antenna-left" data-control="antenna_left"></div>
+    <div class="slider-container"><div class="slider-label"><span class="slider-name">Right Antenna</span><span class="slider-value" id="antenna-right-value">90</span></div><input type="range" min="0" max="180" value="90" id="antenna-right" data-control="antenna_right"></div>
+</div>
+
+<div class="adventure-card">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#9733;</span> Presets</span></div>
+    <div class="preset-grid" id="preset-grid">
+        <button class="adventure-card preset-btn interactive" onclick="applyPreset('neutral')"><div class="preset-icon">&#128528;</div>Neutral</button>
+        <button class="adventure-card preset-btn interactive" onclick="applyPreset('attentive')"><div class="preset-icon">&#128064;</div>Attentive</button>
+        <button class="adventure-card preset-btn interactive" onclick="applyPreset('relaxed')"><div class="preset-icon">&#128524;</div>Relaxed</button>
+        <button class="adventure-card preset-btn interactive" onclick="applyPreset('curious')"><div class="preset-icon">&#129300;</div>Curious</button>
+        <button class="adventure-card preset-btn interactive" onclick="applyPreset('excited')"><div class="preset-icon">&#129321;</div>Excited</button>
+        <button class="adventure-card preset-btn interactive" onclick="applyPreset('sleepy')"><div class="preset-icon">&#128564;</div>Sleepy</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/reggie.js') }}"></script>
+<script>
+const sliders = {};
+let sendTimeout = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initSliders();
+    document.querySelectorAll('#motor-mode .tab-item').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('#motor-mode .tab-item').forEach(t => t.classList.remove('active'));
+            this.classList.add('active'); Haptic.medium(); Toast.info(`Motor mode: ${this.dataset.mode}`);
+        });
+    });
+    ReggieModule.getStatus().then(s => { if (s?.positions) Object.entries(s.positions).forEach(([c, v]) => { if (sliders[c]) { sliders[c].input.value = v; sliders[c].valueEl.textContent = v; } }); });
+});
+
+function initSliders() {
+    document.querySelectorAll('input[type="range"]').forEach(input => {
+        const control = input.dataset.control;
+        const valueEl = document.getElementById(input.id + '-value');
+        sliders[control] = { input, valueEl, default: parseInt(input.value) };
+        input.addEventListener('input', function() { valueEl.textContent = this.value; Haptic.light(); clearTimeout(sendTimeout); sendTimeout = setTimeout(() => sendControl(control, parseInt(this.value)), 50); });
+        input.addEventListener('change', function() { sendControl(control, parseInt(this.value)); });
+    });
+}
+
+async function sendControl(control, value) { try { await ReggieModule.setControl(control, value); } catch { } }
+
+async function resetSection(section) {
+    Haptic.medium();
+    const map = { head: ['head_tilt', 'head_pan'], body: ['body_rotate', 'body_lean'], antenna: ['antenna_left', 'antenna_right'] };
+    for (const c of (map[section] || [])) { if (sliders[c]) { sliders[c].input.value = sliders[c].default; sliders[c].valueEl.textContent = sliders[c].default; await sendControl(c, sliders[c].default); } }
+    Toast.success(`${section} reset to neutral`);
+}
+
+async function applyPreset(name) {
+    Haptic.medium(); Toast.info(`Applying ${name}...`);
+    try {
+        await ReggieModule.applyPreset(name);
+        const preset = ReggieModule.presets[name];
+        if (preset) Object.entries(preset).forEach(([c, v]) => { if (sliders[c]) { sliders[c].input.value = v; sliders[c].valueEl.textContent = v; } });
+        Toast.success(`${name} applied!`);
+    } catch { Toast.error('Failed to apply preset'); }
+}
+</script>
+{% endblock %}

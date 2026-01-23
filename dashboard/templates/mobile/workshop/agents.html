@@ -1,0 +1,37 @@
+{% extends "mobile/base.html" %}
+{% block title %}Agent Office{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Agent Office</h2>
+
+<div class="agent-grid" id="agent-grid">
+    <div class="skeleton" style="height: 140px;"></div>
+    <div class="skeleton" style="height: 140px;"></div>
+    <div class="skeleton" style="height: 140px;"></div>
+    <div class="skeleton" style="height: 140px;"></div>
+</div>
+
+<div class="adventure-card mt-4">
+    <div class="card-header"><span class="card-title"><span class="card-icon">&#128196;</span> Recent Activity</span></div>
+    <div class="list-group" id="agent-activity">
+        <div class="list-item"><div class="list-item-icon">&#129302;</div><div class="list-item-content"><div class="list-item-title">Claude completed task</div><div class="list-item-subtitle">2 min ago</div></div></div>
+        <div class="list-item"><div class="list-item-icon">&#128187;</div><div class="list-item-content"><div class="list-item-title">Coder reviewed PR</div><div class="list-item-subtitle">15 min ago</div></div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/workshop.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    const agents = await WorkshopModule.agents.load();
+    document.getElementById('agent-grid').innerHTML = agents.map(a => `
+        <div class="adventure-card agent-card interactive">
+            <div class="agent-avatar">${a.avatar || '&#129302;'}</div>
+            <div class="agent-name">${a.name}</div>
+            <div class="agent-status"><div class="status-orb ${a.status === 'error' || a.status === 'offline' ? 'error' : ''}"></div><span>${a.status || 'Ready'}</span></div>
+        </div>
+    `).join('');
+});
+</script>
+{% endblock %}
