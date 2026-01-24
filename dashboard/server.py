@@ -34,6 +34,15 @@ except ImportError:
     THEME_GENERATOR_AVAILABLE = False
     DEFAULT_THEME = None
 
+# Claude Code terminal parser for mobile chat interface
+try:
+    from dashboard.claude_parser import (
+        get_chat_buffer, get_terminal_state, send_to_tmux
+    )
+    CLAUDE_PARSER_AVAILABLE = True
+except ImportError:
+    CLAUDE_PARSER_AVAILABLE = False
+
 # Video model parameters for AI Studio Video generation
 try:
     from dashboard.video_model_params import (
@@ -5015,6 +5024,116 @@ def api_terminal_display_clear():
         'timestamp': None
     }
     return jsonify({'success': True})
+
+
+# =============================================================================
+# TERMINAL CHAT API (Mobile Conversational Interface)
+# =============================================================================
+
+@app.route('/api/terminal/chat/buffer')
+def api_terminal_chat_buffer():
+    """Capture tmux buffer, parse Claude Code output, return structured messages.
+
+    Query params:
+        session: tmux session name (default: 'dashboard-top')
+        lines: number of lines to capture (default: 500)
+
+    Returns:
+        {
+            messages: [{type, content, tool_name, collapsed}, ...],
+            state: 'idle' | 'working' | 'done',
+            error: string | null
+        }
+    """
+    if not CLAUDE_PARSER_AVAILABLE:
+        return jsonify({
+            'messages': [],
+            'state': 'idle',
+            'error': 'Claude parser module not available'
+        }), 500
+
+    session = request.args.get('session', 'dashboard-top')
+    lines = request.args.get('lines', 500, type=int)
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({
+            'messages': [],
+            'state': 'idle',
+            'error': 'Invalid session name'
+        }), 400
+
+    result = get_chat_buffer(session, lines)
+    return jsonify(result)
+
+
+@app.route('/api/terminal/chat/send', methods=['POST'])
+def api_terminal_chat_send():
+    """Send user input to tmux session via send-keys.
+
+    Request body:
+        text: string - the message to send
+        session: string - tmux session name (default: 'dashboard-top')
+
+    Returns:
+        {success: boolean, error: string | null}
+    """
+    if not CLAUDE_PARSER_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Claude parser module not available'
+        }), 500
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'JSON body required'}), 400
+
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({'success': False, 'error': 'text is required'}), 400
+
+    session = data.get('session', 'dashboard-top')
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'success': False, 'error': 'Invalid session name'}), 400
+
+    # Send to tmux
+    success = send_to_tmux(session, text)
+
+    if success:
+        return jsonify({'success': True, 'error': None})
+    else:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to send to session: {session}'
+        }), 500
+
+
+@app.route('/api/terminal/chat/state')
+def api_terminal_chat_state():
+    """Lightweight state check for fast polling.
+
+    Query params:
+        session: tmux session name (default: 'dashboard-top')
+
+    Returns:
+        {state: 'idle' | 'working' | 'done', error: string | null}
+    """
+    if not CLAUDE_PARSER_AVAILABLE:
+        return jsonify({
+            'state': 'idle',
+            'error': 'Claude parser module not available'
+        }), 500
+
+    session = request.args.get('session', 'dashboard-top')
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'state': 'idle', 'error': 'Invalid session name'}), 400
+
+    result = get_terminal_state(session)
+    return jsonify(result)
 
 
 @app.route('/api/terminal/files/list')

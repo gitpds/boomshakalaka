@@ -429,10 +429,31 @@ const TerminalModal = {
                 this.updateTerminalSubtitle();
                 // Reload terminal iframes to show selected tab
                 this.reloadTerminals();
+                // Notify TerminalChat if available
+                this.notifyTerminalChat();
             }
         } catch (e) {
             console.error('Failed to select tab:', e);
             Toast.error('Failed to select terminal tab');
+        }
+    },
+
+    /**
+     * Notify TerminalChat when tab changes so it can refresh
+     */
+    notifyTerminalChat() {
+        if (typeof TerminalChat !== 'undefined' && TerminalChat.fetchBuffer) {
+            // Update session selector if the tab corresponds to a session
+            const sessionSelector = document.getElementById('session-selector');
+            if (sessionSelector) {
+                // Map tab id to session name (tab 0 = dashboard-top, tab 1+ use window index)
+                const sessionName = this.selectedTabId === 1 ? 'dashboard-top' : 'dashboard-bottom';
+                sessionSelector.value = sessionName;
+                TerminalChat.selectedSession = sessionName;
+                TerminalChat.messages = [];
+                TerminalChat.lastBufferHash = '';
+                TerminalChat.fetchBuffer();
+            }
         }
     },
 
@@ -639,6 +660,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize terminal tab management
     TerminalModal.init();
+
+    // Initialize TerminalChat if present on page (workshop pages)
+    if (typeof TerminalChat !== 'undefined' && document.getElementById('terminal-chat-view')) {
+        // TerminalChat may be initialized by page-specific script, but ensure it's ready
+        if (!TerminalChat.isPolling) {
+            TerminalChat.init();
+        }
+    }
 
     // Eager load terminal iframes for instant display when modal opens
     const terminal1 = document.getElementById('terminal-1');

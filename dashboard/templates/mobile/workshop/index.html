@@ -4,7 +4,50 @@
 {% block content %}
 <h2 class="page-title">AI Workshop</h2>
 
-<!-- Terminal Section - Primary -->
+<!-- Terminal Chat View - Conversational Interface -->
+<div id="terminal-chat-view" class="terminal-chat-container mb-4">
+    <!-- Chat Header with session dropdown + expand button -->
+    <div class="chat-header">
+        <div class="chat-header-left">
+            <span class="chat-header-title">Claude</span>
+            <select id="session-selector">
+                <option value="dashboard-top">Terminal 1</option>
+                <option value="dashboard-bottom">Terminal 2</option>
+            </select>
+        </div>
+        <button class="chat-header-btn" onclick="TerminalChat.toggleRawTerminal()" title="Show raw terminal">
+            &#9633;
+        </button>
+    </div>
+
+    <!-- Conversation history (scrollable) -->
+    <div class="chat-messages" id="chat-messages">
+        <div class="chat-loading">
+            <div class="chat-loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Working indicator (hidden by default) -->
+    <div class="working-indicator hidden" id="working-indicator">
+        <div class="working-dots">
+            <span class="working-dot"></span>
+            <span class="working-dot"></span>
+            <span class="working-dot"></span>
+        </div>
+        <span class="working-text">Claude is working</span>
+        <span class="working-elapsed">0s</span>
+    </div>
+
+    <!-- Input area -->
+    <div class="chat-input-area">
+        <div class="chat-input-wrapper">
+            <textarea id="chat-input" placeholder="Message Claude..." rows="1"></textarea>
+        </div>
+        <button id="send-btn" title="Send message">&#10148;</button>
+    </div>
+</div>
+
+<!-- Terminal Section - Tab List for Raw Terminal Access -->
 <div class="terminal-section mb-4">
     <div class="terminal-tabs-header">
         <span class="terminal-tabs-title">&#128187; Terminals</span>
@@ -87,9 +130,15 @@
 {% endblock %}
 
 {% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='mobile/terminal-chat.css') }}">
 <script src="{{ url_for('static', filename='mobile/pages/workshop.js') }}"></script>
+<script src="{{ url_for('static', filename='mobile/terminal-chat.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async function() {
+    // Initialize Terminal Chat
+    TerminalChat.init();
+
+    // Load other content
     await Promise.all([loadRecentTasks(), loadAgentStatus()]);
 });
 
