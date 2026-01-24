@@ -15,8 +15,8 @@ const TerminalChat = {
 
     // Polling
     pollInterval: null,
-    pollRate: 3000, // Base poll rate (idle)
-    fastPollRate: 500, // Fast poll rate (working)
+    pollRate: 15000, // Base poll rate when idle (15 seconds)
+    fastPollRate: 1000, // Fast poll rate when working (1 second)
     isPolling: false,
 
     // Working timer
@@ -235,7 +235,7 @@ const TerminalChat = {
     },
 
     /**
-     * Check terminal state (lightweight endpoint)
+     * Check terminal state and fetch buffer
      * Always uses dashboard-top session - window switching is handled separately
      */
     async checkState() {
@@ -246,17 +246,14 @@ const TerminalChat = {
             const data = await response.json();
             const newState = data.state;
 
-            // State changed
+            // Update state if changed
             if (newState !== this.currentState) {
                 this.currentState = newState;
                 this.updateWorkingIndicator();
-
-                // Fetch full buffer on state change
-                await this.fetchBuffer();
-            } else if (newState === 'working') {
-                // Still working, fetch buffer to get updates
-                await this.fetchBuffer();
             }
+
+            // Always fetch buffer to catch any updates
+            await this.fetchBuffer();
         } catch (error) {
             console.error('State check failed:', error);
         }
