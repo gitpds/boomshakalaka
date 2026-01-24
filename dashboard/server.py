@@ -4790,6 +4790,13 @@ def api_terminal_create():
             subprocess.run(['tmux', 'select-window', '-t', f'dashboard-bottom:{window_id}'],
                           capture_output=True, timeout=5)
 
+            # Initialize the new window with conda env and claude
+            subprocess.run(
+                ['tmux', 'send-keys', '-t', f'dashboard-top:{window_id}',
+                 'conda activate mcai_env && claude --dangerously-skip-permissions', 'Enter'],
+                capture_output=True, timeout=5
+            )
+
             # Save metadata
             sessions = get_terminal_sessions()
             sessions.setdefault('windows', {})[window_id] = {'name': name}
