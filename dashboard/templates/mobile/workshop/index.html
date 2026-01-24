@@ -13,11 +13,22 @@
             <select id="window-selector">
                 <!-- Populated by JS from /api/terminal/windows -->
             </select>
+            <button id="new-window-btn" class="chat-header-btn" title="New terminal window" onclick="TerminalChat.createWindow()">
+                <span>+</span>
+            </button>
         </div>
-        <button id="summary-filter-btn" class="chat-header-btn" title="Show summaries only">
-            <span class="filter-icon">&#128203;</span>
-        </button>
+        <div class="chat-header-right">
+            <button id="upload-btn" class="chat-header-btn" title="Upload file" onclick="TerminalChat.openUpload()">
+                <span>&#128228;</span>
+            </button>
+            <button id="summary-filter-btn" class="chat-header-btn" title="Show summaries only">
+                <span class="filter-icon">&#128203;</span>
+            </button>
+        </div>
     </div>
+
+    <!-- Hidden file input for uploads -->
+    <input type="file" id="chat-file-input" style="display: none" multiple onchange="TerminalChat.handleFileUpload(event)">
 
     <!-- Conversation history (scrollable) -->
     <div class="chat-messages" id="chat-messages">
@@ -35,6 +46,17 @@
         </div>
         <span class="working-text">Claude is working</span>
         <span class="working-elapsed">0s</span>
+    </div>
+
+    <!-- Control bar with mode toggle and suggestion -->
+    <div class="chat-control-bar" id="chat-control-bar">
+        <button class="control-mode-btn" id="mode-toggle-btn" onclick="TerminalChat.cycleMode()" title="Cycle mode (Shift+Tab)">
+            <span class="mode-icon">&#8644;</span>
+            <span class="mode-text" id="mode-text">default</span>
+        </button>
+        <button class="control-suggestion-btn" id="suggestion-btn" onclick="TerminalChat.applySuggestion()" title="Apply suggestion">
+            <span class="suggestion-text" id="suggestion-text">No suggestion</span>
+        </button>
     </div>
 
     <!-- Input area -->

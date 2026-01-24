@@ -5110,6 +5110,50 @@ def api_terminal_chat_send():
         }), 500
 
 
+@app.route('/api/terminal/keys', methods=['POST'])
+def api_terminal_send_keys():
+    """Send special key sequences to tmux session.
+
+    JSON body:
+        key: Key to send (e.g., 'S-Tab', 'Tab', 'Escape', 'Enter')
+        session: tmux session name (default: 'dashboard-top')
+
+    Returns:
+        {success: bool, error: string | null}
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'JSON body required'}), 400
+
+    key = data.get('key', '').strip()
+    if not key:
+        return jsonify({'success': False, 'error': 'key is required'}), 400
+
+    # Whitelist allowed keys for security
+    ALLOWED_KEYS = {'S-Tab', 'Tab', 'Escape', 'Enter', 'Up', 'Down'}
+    if key not in ALLOWED_KEYS:
+        return jsonify({'success': False, 'error': f'Key not allowed: {key}'}), 400
+
+    # Map user-friendly key names to tmux key names
+    TMUX_KEY_MAP = {
+        'S-Tab': 'BTab',  # Shift+Tab = Back Tab in tmux
+    }
+    tmux_key = TMUX_KEY_MAP.get(key, key)
+
+    session = data.get('session', 'dashboard-top')
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'success': False, 'error': 'Invalid session name'}), 400
+
+    try:
+        result = subprocess.run(
+            ['tmux', 'send-keys', '-t', session, tmux_key],
+            capture_output=True, timeout=5
+        )
+        return jsonify({'success': result.returncode == 0, 'error': None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/terminal/chat/state')
 def api_terminal_chat_state():
     """Lightweight state check for fast polling.

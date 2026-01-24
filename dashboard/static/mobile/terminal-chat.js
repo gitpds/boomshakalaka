@@ -12,6 +12,8 @@ const TerminalChat = {
     selectedWindowId: null, // Active tmux window id
     windows: [], // Terminal windows from API
     showOnlySummaries: false, // Filter mode: show only summaries
+    currentMode: null, // Current Claude Code mode (e.g., "bypass permissions on")
+    currentSuggestion: null, // Current auto-complete suggestion
 
     // Polling
     pollInterval: null,
@@ -44,7 +46,12 @@ const TerminalChat = {
             sendBtn: document.getElementById('send-btn'),
             windowSelector: document.getElementById('window-selector'),
             workingIndicator: document.getElementById('working-indicator'),
-            workingElapsed: document.querySelector('.working-elapsed')
+            workingElapsed: document.querySelector('.working-elapsed'),
+            // Control bar elements
+            controlBar: document.getElementById('chat-control-bar'),
+            modeText: document.getElementById('mode-text'),
+            suggestionBtn: document.getElementById('suggestion-btn'),
+            suggestionText: document.getElementById('suggestion-text')
         };
 
         // Validate required elements
@@ -289,9 +296,12 @@ const TerminalChat = {
             this.lastBufferHash = bufferHash;
             this.messages = data.messages;
             this.currentState = data.state;
+            this.currentMode = data.mode;
+            this.currentSuggestion = data.suggestion;
 
             this.renderMessages();
             this.updateWorkingIndicator();
+            this.updateControlBar();
 
         } catch (error) {
             console.error('Buffer fetch failed:', error);
@@ -673,6 +683,92 @@ const TerminalChat = {
     },
 
     /**
+     * Update control bar with mode and suggestion
+     */
+    updateControlBar() {
+        if (!this.elements.controlBar) return;
+
+        // Hide control bar when Claude is working
+        this.elements.controlBar.classList.toggle('hidden', this.currentState === 'working');
+
+        // Update mode indicator
+        if (this.elements.modeText) {
+            this.elements.modeText.textContent = this.currentMode || 'default';
+        }
+
+        // Update suggestion button
+        if (this.elements.suggestionBtn && this.elements.suggestionText) {
+            if (this.currentSuggestion) {
+                this.elements.suggestionText.textContent = this.currentSuggestion;
+                this.elements.suggestionBtn.classList.add('has-suggestion');
+            } else {
+                this.elements.suggestionText.textContent = 'No suggestion';
+                this.elements.suggestionBtn.classList.remove('has-suggestion');
+            }
+        }
+    },
+
+    /**
+     * Cycle Claude Code mode by sending Shift+Tab
+     */
+    async cycleMode() {
+        try {
+            const response = await fetch('/api/terminal/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'S-Tab', session: 'dashboard-top' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                if (typeof Haptic !== 'undefined') Haptic.light();
+                // Fetch buffer after a short delay to see the mode change
+                setTimeout(() => this.fetchBuffer(), 200);
+            } else {
+                console.error('Mode cycle failed:', data.error);
+            }
+        } catch (e) {
+            console.error('Mode cycle failed:', e);
+        }
+    },
+
+    /**
+     * Apply the current auto-complete suggestion
+     */
+    async applySuggestion() {
+        if (!this.currentSuggestion) {
+            if (typeof Toast !== 'undefined') Toast.info('No suggestion available');
+            return;
+        }
+        if (this.isSending) return;
+        this.isSending = true;
+
+        try {
+            const response = await fetch('/api/terminal/chat/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: this.currentSuggestion, session: 'dashboard-top' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                if (typeof Haptic !== 'undefined') Haptic.medium();
+                // Set working state and refresh
+                this.currentState = 'working';
+                this.updateWorkingIndicator();
+                this.updateControlBar();
+                setTimeout(() => this.fetchBuffer(), 100);
+            } else {
+                console.error('Apply suggestion failed:', data.error);
+                if (typeof Toast !== 'undefined') Toast.error('Failed to apply suggestion');
+            }
+        } catch (e) {
+            console.error('Apply suggestion failed:', e);
+            if (typeof Toast !== 'undefined') Toast.error('Failed to apply suggestion');
+        } finally {
+            setTimeout(() => { this.isSending = false; }, 300);
+        }
+    },
+
+    /**
      * Start the working elapsed time display
      */
     startWorkingTimer() {
@@ -763,6 +859,92 @@ const TerminalChat = {
         if (typeof Haptic !== 'undefined') {
             Haptic.light();
         }
+    },
+
+    /**
+     * Create a new terminal window
+     */
+    async createWindow() {
+        const name = `Terminal ${this.windows.length + 1}`;
+
+        try {
+            const response = await fetch('/api/terminal/windows', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+
+            const data = await response.json();
+
+            if (data.id) {
+                // Reload windows and select the new one
+                await this.loadWindows();
+                this.selectWindow(data.id);
+
+                if (typeof Toast !== 'undefined') {
+                    Toast.success(`Created ${name}`);
+                }
+                if (typeof Haptic !== 'undefined') {
+                    Haptic.medium();
+                }
+            }
+        } catch (error) {
+            console.error('Failed to create window:', error);
+            if (typeof Toast !== 'undefined') {
+                Toast.error('Failed to create terminal');
+            }
+        }
+    },
+
+    /**
+     * Open file upload dialog
+     */
+    openUpload() {
+        const input = document.getElementById('chat-file-input');
+        if (input) input.click();
+    },
+
+    /**
+     * Handle file upload
+     */
+    async handleFileUpload(event) {
+        const files = event.target.files;
+        if (!files.length) return;
+
+        for (const file of files) {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('target_dir', '/home/pds/boomshakalaka/uploads');
+
+                const response = await fetch('/api/terminal/files/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (typeof Toast !== 'undefined') {
+                        Toast.success(`Uploaded: ${result.filename}`);
+                    }
+                    if (typeof Haptic !== 'undefined') {
+                        Haptic.medium();
+                    }
+                } else {
+                    if (typeof Toast !== 'undefined') {
+                        Toast.error(`Failed: ${result.error}`);
+                    }
+                }
+            } catch (e) {
+                if (typeof Toast !== 'undefined') {
+                    Toast.error(`Upload error: ${e.message}`);
+                }
+            }
+        }
+
+        // Clear input for future uploads
+        event.target.value = '';
     },
 
     /**

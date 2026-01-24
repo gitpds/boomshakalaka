@@ -402,6 +402,24 @@
     margin: 8px 0;
 }
 
+/* Chat header right section */
+.chat-header-right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* New window button */
+#new-window-btn {
+    font-size: 18px;
+    font-weight: bold;
+    padding: 4px 10px;
+}
+
+#new-window-btn:active {
+    transform: scale(0.95);
+}
+
 /* Summary filter button */
 #summary-filter-btn {
     display: flex;
@@ -481,6 +499,89 @@
     font-size: 12px;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------- */
+/* CONTROL BAR                   */
+/* ----------------------------- */
+.chat-control-bar {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--m-bg-tertiary);
+    border-top: 1px solid var(--glass-border);
+}
+
+.chat-control-bar.hidden { display: none; }
+
+/* Mode toggle button */
+.control-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.control-mode-btn:active {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+.mode-icon { font-size: 14px; color: var(--gold); }
+.mode-text {
+    font-size: 12px;
+    font-weight: 500;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Suggestion button */
+.control-suggestion-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.control-suggestion-btn:active {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+}
+
+.control-suggestion-btn.has-suggestion {
+    color: var(--text-primary);
+    border-color: var(--brass-glow);
+}
+
+.suggestion-text {
+    font-size: 13px;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.control-suggestion-btn.has-suggestion .suggestion-text {
+    font-style: normal;
+    color: var(--brass);
 }
 
 /* ----------------------------- */

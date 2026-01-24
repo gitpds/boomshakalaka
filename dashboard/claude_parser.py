@@ -93,12 +93,55 @@ NOISE_PATTERNS = [
 # Key: NO space allowed between word and parenthesis
 TOOL_INVOCATION_PATTERN = re.compile(r'^([A-Z][a-zA-Z]*)\(')
 
+# Mode detection pattern - captures mode text from hint lines
+# Matches: ⏵⏵ bypass permissions on (shift+Tab to cycle)
+# Also handles lines like: -- INSERT -- ⏵⏵ bypass permissions on (shift+Tab to cycle)
+MODE_HINT_PATTERN = re.compile(r'⏵⏵\s*(.+?)\s*\(shift\+Tab', re.IGNORECASE)
+
+# ANSI codes for gray/dim text (suggestions appear in gray)
+GRAY_TEXT_ANSI = re.compile(r'\x1b\[(?:90|2|38;5;8)m([^\x1b]+)')
+
 
 def strip_ansi(text: str) -> str:
     """Remove ANSI escape codes and control characters from text."""
     text = ANSI_ESCAPE.sub('', text)
     text = CONTROL_CHARS.sub('', text)
     return text
+
+
+def extract_mode_and_suggestion(raw_buffer: str) -> Tuple[Optional[str], Optional[str]]:
+    """Extract mode and suggestion from raw buffer BEFORE ANSI stripping.
+
+    Args:
+        raw_buffer: Raw terminal buffer with ANSI codes
+
+    Returns:
+        Tuple of (mode, suggestion) - both may be None if not found
+    """
+    mode = None
+    suggestion = None
+
+    for line in reversed(raw_buffer.split('\n')):
+        clean_line = strip_ansi(line).strip()
+
+        # Find mode hint (e.g., "⏵⏵ bypass permissions on (shift+Tab...")
+        if mode is None:
+            mode_match = MODE_HINT_PATTERN.search(clean_line)
+            if mode_match:
+                mode = mode_match.group(1).strip()
+
+        # Find suggestion (gray text after prompt)
+        if suggestion is None and '❯' in line:
+            prompt_idx = line.find('❯')
+            after_prompt = line[prompt_idx + 1:]
+            gray_match = GRAY_TEXT_ANSI.search(after_prompt)
+            if gray_match:
+                suggestion = gray_match.group(1).strip()
+
+        if mode is not None and suggestion is not None:
+            break
+
+    return mode, suggestion
 
 
 def is_noise_line(line: str) -> bool:
@@ -471,7 +514,7 @@ def get_chat_buffer(session: str, lines: int = 500) -> Dict:
         lines: Number of lines to capture
 
     Returns:
-        Dict with 'messages', 'state', 'error', and 'raw_has_prompt' fields
+        Dict with 'messages', 'state', 'error', 'raw_has_prompt', 'mode', 'suggestion' fields
     """
     raw_buffer = capture_tmux_buffer(session, lines)
 
@@ -480,8 +523,13 @@ def get_chat_buffer(session: str, lines: int = 500) -> Dict:
             'messages': [],
             'state': TerminalState.IDLE.value,
             'error': f'Failed to capture buffer from session: {session}',
-            'raw_has_prompt': False
+            'raw_has_prompt': False,
+            'mode': None,
+            'suggestion': None
         }
+
+    # Extract mode and suggestion BEFORE stripping ANSI codes
+    mode, suggestion = extract_mode_and_suggestion(raw_buffer)
 
     messages, state = parse_buffer(raw_buffer)
 
@@ -493,7 +541,9 @@ def get_chat_buffer(session: str, lines: int = 500) -> Dict:
         'messages': [m.to_dict() for m in messages],
         'state': state.value,
         'error': None,
-        'raw_has_prompt': has_prompt
+        'raw_has_prompt': has_prompt,
+        'mode': mode,
+        'suggestion': suggestion
     }
 
 
