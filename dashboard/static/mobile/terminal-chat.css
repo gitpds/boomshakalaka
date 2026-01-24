@@ -502,12 +502,64 @@
 .raw-terminal-body {
     flex: 1;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
-.raw-terminal-body iframe {
+.raw-terminal-frame {
     width: 100%;
-    height: 100%;
+    flex: 1;
     border: none;
+    min-height: 0;
+}
+
+/* Terminal 2 wrapper - collapsed by default */
+.raw-terminal-2-wrapper {
+    height: 0;
+    overflow: hidden;
+    transition: height 0.3s ease-out;
+    border-top: 1px solid var(--glass-border);
+}
+
+.raw-terminal-2-wrapper.expanded {
+    height: 50%;
+    flex: 1;
+}
+
+.raw-terminal-2-wrapper .raw-terminal-frame {
+    height: 100%;
+}
+
+/* Toggle bar for Terminal 2 */
+.raw-terminal-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--glass-bg);
+    border-top: 1px solid var(--glass-border);
+    cursor: pointer;
+    user-select: none;
+}
+
+.raw-terminal-toggle:active {
+    background: var(--m-bg-tertiary);
+}
+
+.raw-toggle-arrow {
+    font-size: 12px;
+    color: var(--gold);
+    transition: transform 0.3s ease;
+}
+
+.raw-toggle-arrow.rotated {
+    transform: rotate(180deg);
+}
+
+#raw-toggle-label {
+    font-size: 14px;
+    color: var(--text-secondary);
 }
 
 /* ----------------------------- */

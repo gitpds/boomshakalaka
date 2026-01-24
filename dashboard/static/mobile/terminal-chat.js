@@ -583,6 +583,9 @@ const TerminalChat = {
         }
     },
 
+    // Raw terminal state
+    isTerminal2Expanded: false,
+
     /**
      * Toggle raw terminal overlay
      */
@@ -599,9 +602,11 @@ const TerminalChat = {
             overlay.classList.remove('visible');
         } else {
             overlay.classList.add('visible');
-            // Load terminal iframe if needed
-            if (this.elements.rawTerminalFrame && !this.elements.rawTerminalFrame.src) {
-                this.elements.rawTerminalFrame.src = 'http://localhost:7681/';
+            // Load terminal 1 iframe if needed
+            const frame1 = overlay.querySelector('#raw-terminal-frame-1');
+            if (frame1 && !frame1.src) {
+                const baseUrl = window.location.protocol + '//' + window.location.hostname;
+                frame1.src = baseUrl + ':7681/';
             }
         }
 
@@ -611,7 +616,38 @@ const TerminalChat = {
     },
 
     /**
-     * Create raw terminal overlay
+     * Toggle Terminal 2 visibility in raw terminal overlay
+     */
+    toggleTerminal2() {
+        this.isTerminal2Expanded = !this.isTerminal2Expanded;
+
+        const wrapper = document.getElementById('raw-terminal-2-wrapper');
+        const arrow = document.getElementById('raw-toggle-arrow');
+        const label = document.getElementById('raw-toggle-label');
+
+        if (this.isTerminal2Expanded) {
+            // Load Terminal 2 iframe if needed
+            const frame2 = document.getElementById('raw-terminal-frame-2');
+            if (frame2 && !frame2.src) {
+                const baseUrl = window.location.protocol + '//' + window.location.hostname;
+                frame2.src = baseUrl + ':7682/';
+            }
+            wrapper.classList.add('expanded');
+            arrow.classList.add('rotated');
+            label.textContent = 'Hide Terminal 2';
+        } else {
+            wrapper.classList.remove('expanded');
+            arrow.classList.remove('rotated');
+            label.textContent = 'Show Terminal 2';
+        }
+
+        if (typeof Haptic !== 'undefined') {
+            Haptic.light();
+        }
+    },
+
+    /**
+     * Create raw terminal overlay with both terminals
      */
     createRawTerminalOverlay() {
         const overlay = document.createElement('div');
@@ -623,14 +659,20 @@ const TerminalChat = {
                 <button class="raw-terminal-close" onclick="TerminalChat.toggleRawTerminal()">✕</button>
             </div>
             <div class="raw-terminal-body">
-                <iframe id="raw-terminal-frame" src="" frameborder="0"></iframe>
+                <iframe id="raw-terminal-frame-1" class="raw-terminal-frame" src="" frameborder="0"></iframe>
+                <div id="raw-terminal-2-wrapper" class="raw-terminal-2-wrapper">
+                    <iframe id="raw-terminal-frame-2" class="raw-terminal-frame" src="" frameborder="0"></iframe>
+                </div>
+            </div>
+            <div class="raw-terminal-toggle" onclick="TerminalChat.toggleTerminal2()">
+                <span class="raw-toggle-arrow" id="raw-toggle-arrow">▲</span>
+                <span id="raw-toggle-label">Show Terminal 2</span>
             </div>
         `;
 
         document.body.appendChild(overlay);
 
         this.elements.rawTerminalOverlay = overlay;
-        this.elements.rawTerminalFrame = overlay.querySelector('#raw-terminal-frame');
     },
 
     /**
