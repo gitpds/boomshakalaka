@@ -9,8 +9,8 @@ const TerminalChat = {
     // State
     messages: [],
     currentState: 'idle', // 'idle', 'working', 'done'
-    selectedSession: 'dashboard-top',
-    sessions: [],
+    selectedWindowId: null, // Active tmux window id
+    windows: [], // Terminal windows from API
 
     // Polling
     pollInterval: null,
@@ -38,7 +38,7 @@ const TerminalChat = {
             messages: document.getElementById('chat-messages'),
             input: document.getElementById('chat-input'),
             sendBtn: document.getElementById('send-btn'),
-            sessionSelector: document.getElementById('session-selector'),
+            windowSelector: document.getElementById('window-selector'),
             workingIndicator: document.getElementById('working-indicator'),
             workingElapsed: document.querySelector('.working-elapsed'),
             rawTerminalOverlay: document.getElementById('raw-terminal-overlay'),
@@ -54,8 +54,8 @@ const TerminalChat = {
         // Set up event listeners
         this.setupEventListeners();
 
-        // Load available sessions
-        this.loadSessions();
+        // Load available terminal windows
+        this.loadWindows();
 
         // Start polling
         this.startPolling();
@@ -91,14 +91,10 @@ const TerminalChat = {
             });
         }
 
-        // Session selector change
-        if (this.elements.sessionSelector) {
-            this.elements.sessionSelector.addEventListener('change', (e) => {
-                this.selectedSession = e.target.value;
-                this.messages = [];
-                this.lastBufferHash = '';
-                this.renderMessages();
-                this.fetchBuffer();
+        // Window selector change - switch tmux window (syncs both sessions)
+        if (this.elements.windowSelector) {
+            this.elements.windowSelector.addEventListener('change', (e) => {
+                this.selectWindow(e.target.value);
             });
         }
     },
@@ -118,38 +114,81 @@ const TerminalChat = {
     },
 
     /**
-     * Load available terminal sessions
+     * Load available terminal windows from API
      */
-    async loadSessions() {
+    async loadWindows() {
         try {
             const response = await fetch('/api/terminal/windows');
             if (response.ok) {
                 const data = await response.json();
-                this.sessions = data.windows || [];
-                this.updateSessionSelector();
+                this.windows = data.windows || [];
+
+                // Find the active window or default to first
+                const activeWindow = this.windows.find(w => w.active) || this.windows[0];
+                if (activeWindow) {
+                    this.selectedWindowId = activeWindow.id;
+                }
+
+                this.updateWindowSelector();
+                this.fetchBuffer(); // Initial fetch after windows loaded
             }
         } catch (error) {
-            console.error('Failed to load sessions:', error);
+            console.error('Failed to load terminal windows:', error);
         }
     },
 
     /**
-     * Update session selector dropdown
+     * Update window selector dropdown with actual terminal windows
      */
-    updateSessionSelector() {
-        if (!this.elements.sessionSelector) return;
+    updateWindowSelector() {
+        if (!this.elements.windowSelector) return;
 
-        // Always include default sessions
-        const defaultSessions = [
-            { id: 'dashboard-top', name: 'Terminal 1' },
-            { id: 'dashboard-bottom', name: 'Terminal 2' }
-        ];
+        if (this.windows.length === 0) {
+            this.elements.windowSelector.innerHTML = '<option value="">No terminals</option>';
+            return;
+        }
 
-        const html = defaultSessions.map(s =>
-            `<option value="${s.id}" ${s.id === this.selectedSession ? 'selected' : ''}>${s.name}</option>`
+        const html = this.windows.map(w =>
+            `<option value="${w.id}" ${w.id === this.selectedWindowId ? 'selected' : ''}>${w.name}</option>`
         ).join('');
 
-        this.elements.sessionSelector.innerHTML = html;
+        this.elements.windowSelector.innerHTML = html;
+    },
+
+    /**
+     * Select a terminal window - switches both dashboard-top and dashboard-bottom
+     */
+    async selectWindow(windowId) {
+        try {
+            const response = await fetch(`/api/terminal/windows/${windowId}/select`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                this.selectedWindowId = windowId;
+
+                // Update active state in local windows array
+                this.windows.forEach(w => w.active = (w.id === windowId));
+                this.updateWindowSelector();
+
+                // Clear and refresh messages for new window
+                this.messages = [];
+                this.lastBufferHash = '';
+                this.renderMessages();
+                this.fetchBuffer();
+
+                // Haptic feedback
+                if (typeof Haptic !== 'undefined') {
+                    Haptic.light();
+                }
+            }
+        } catch (error) {
+            console.error('Failed to select window:', error);
+            if (typeof Toast !== 'undefined') {
+                Toast.error('Failed to switch terminal');
+            }
+        }
     },
 
     /**
@@ -189,10 +228,11 @@ const TerminalChat = {
 
     /**
      * Check terminal state (lightweight endpoint)
+     * Always uses dashboard-top session - window switching is handled separately
      */
     async checkState() {
         try {
-            const response = await fetch(`/api/terminal/chat/state?session=${encodeURIComponent(this.selectedSession)}`);
+            const response = await fetch('/api/terminal/chat/state?session=dashboard-top');
             if (!response.ok) return;
 
             const data = await response.json();
@@ -216,11 +256,12 @@ const TerminalChat = {
 
     /**
      * Fetch and parse terminal buffer
+     * Always uses dashboard-top session - window switching is handled separately
      */
     async fetchBuffer() {
         try {
             const response = await fetch(
-                `/api/terminal/chat/buffer?session=${encodeURIComponent(this.selectedSession)}&lines=500`
+                '/api/terminal/chat/buffer?session=dashboard-top&lines=500'
             );
 
             if (!response.ok) {
@@ -281,12 +322,13 @@ const TerminalChat = {
         }
 
         try {
+            // Always send to dashboard-top - window switching is handled separately
             const response = await fetch('/api/terminal/chat/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     text: text,
-                    session: this.selectedSession
+                    session: 'dashboard-top'
                 })
             });
 

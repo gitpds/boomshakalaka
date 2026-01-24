@@ -443,13 +443,11 @@ const TerminalModal = {
      */
     notifyTerminalChat() {
         if (typeof TerminalChat !== 'undefined' && TerminalChat.fetchBuffer) {
-            // Update session selector if the tab corresponds to a session
-            const sessionSelector = document.getElementById('session-selector');
-            if (sessionSelector) {
-                // Map tab id to session name (tab 0 = dashboard-top, tab 1+ use window index)
-                const sessionName = this.selectedTabId === 1 ? 'dashboard-top' : 'dashboard-bottom';
-                sessionSelector.value = sessionName;
-                TerminalChat.selectedSession = sessionName;
+            // Update window selector to match the selected tab
+            const windowSelector = document.getElementById('window-selector');
+            if (windowSelector) {
+                windowSelector.value = this.selectedTabId;
+                TerminalChat.selectedWindowId = this.selectedTabId;
                 TerminalChat.messages = [];
                 TerminalChat.lastBufferHash = '';
                 TerminalChat.fetchBuffer();
