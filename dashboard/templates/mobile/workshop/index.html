@@ -6,7 +6,7 @@
 
 <!-- Terminal Chat View - Conversational Interface -->
 <div id="terminal-chat-view" class="terminal-chat-container mb-4">
-    <!-- Chat Header with window dropdown + expand button -->
+    <!-- Chat Header with window dropdown -->
     <div class="chat-header">
         <div class="chat-header-left">
             <span class="chat-header-title">Claude</span>
@@ -14,9 +14,6 @@
                 <!-- Populated by JS from /api/terminal/windows -->
             </select>
         </div>
-        <button class="chat-header-btn" onclick="TerminalChat.toggleRawTerminal()" title="Show raw terminal">
-            &#9633;
-        </button>
     </div>
 
     <!-- Conversation history (scrollable) -->
@@ -43,6 +40,28 @@
             <textarea id="chat-input" placeholder="Message Claude..." rows="1"></textarea>
         </div>
         <button id="send-btn" title="Send message">&#10148;</button>
+    </div>
+
+    <!-- Inline Terminal 1 expand section -->
+    <div class="terminal-expand-section">
+        <div class="terminal-expand-bar" onclick="TerminalChat.toggleTerminal1Inline()">
+            <span class="terminal-expand-arrow" id="terminal1-arrow">&#9660;</span>
+            <span id="terminal1-label">Expand Terminal 1</span>
+        </div>
+        <div class="terminal-inline-wrapper" id="terminal1-inline-wrapper">
+            <iframe id="terminal1-inline-frame" src="" frameborder="0"></iframe>
+        </div>
+    </div>
+
+    <!-- Inline Terminal 2 expand section -->
+    <div class="terminal-expand-section">
+        <div class="terminal-expand-bar" onclick="TerminalChat.toggleTerminal2Inline()">
+            <span class="terminal-expand-arrow" id="terminal2-arrow">&#9660;</span>
+            <span id="terminal2-label">Expand Terminal 2</span>
+        </div>
+        <div class="terminal-inline-wrapper" id="terminal2-inline-wrapper">
+            <iframe id="terminal2-inline-frame" src="" frameborder="0"></iframe>
+        </div>
     </div>
 </div>
 

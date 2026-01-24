@@ -453,6 +453,64 @@
 }
 
 /* ----------------------------- */
+/* SHARED TERMINAL EXPAND STYLES */
+/* ----------------------------- */
+.terminal-expand-section {
+    border-top: 1px solid var(--glass-border);
+}
+
+.terminal-expand-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--m-bg-tertiary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.terminal-expand-bar:active {
+    background: var(--gold-dim);
+}
+
+.terminal-expand-arrow {
+    font-size: 12px;
+    color: var(--gold);
+    transition: transform 0.3s ease;
+}
+
+.terminal-expand-arrow.rotated {
+    transform: rotate(180deg);
+}
+
+#terminal1-label,
+#terminal2-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.terminal-inline-wrapper {
+    height: 0;
+    overflow: hidden;
+    transition: height 0.3s ease;
+}
+
+.terminal-inline-wrapper.expanded {
+    height: 300px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.terminal-inline-wrapper iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    /* Allow touch scrolling to pass through to iframe */
+    touch-action: auto;
+}
+
+/* ----------------------------- */
 /* RAW TERMINAL OVERLAY          */
 /* ----------------------------- */
 .raw-terminal-overlay {

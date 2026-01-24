@@ -47,3 +47,10 @@ tmp/
 temp/
 *.tmp
 skills/slack_notification/.env
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Test artifacts
+test-results/
