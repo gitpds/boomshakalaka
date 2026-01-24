@@ -17,6 +17,7 @@ class MessageType(Enum):
     ASSISTANT = "assistant"
     TOOL = "tool"
     TOOL_OUTPUT = "tool_output"
+    SUMMARY = "summary"       # Claude's human-friendly summary messages
     TASK = "task"
     ERROR = "error"
     SYSTEM = "system"
@@ -59,13 +60,19 @@ CONTROL_CHARS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
 # Claude Code markers
 MARKERS = {
     'prompt': '❯',           # User input prompt
-    'tool': '●',             # Tool invocation
+    'tool': '●',             # Tool invocation OR summary
     'tool_output': '⎿',      # Tool output / continuation
     'continuation': '…',     # Continuation marker
     'task_complete': '✔',    # Task completion
     'task_pending': '☐',     # Pending task
     'error': '✘',            # Error marker
 }
+
+# Pattern to detect tool invocations: Word immediately followed by (
+# Matches: Bash(, Read(, Write(, etc.
+# Does NOT match: Done., "Done (files updated)", prose sentences
+# Key: NO space allowed between word and parenthesis
+TOOL_INVOCATION_PATTERN = re.compile(r'^([A-Z][a-zA-Z]*)\(')
 
 
 def strip_ansi(text: str) -> str:
@@ -242,7 +249,7 @@ def parse_buffer(raw_buffer: str) -> Tuple[List[ParsedMessage], TerminalState]:
                 current_content = []
             continue
 
-        # Check for tool invocation
+        # Check for bullet marker (tool invocation OR summary)
         if stripped.startswith(MARKERS['tool']):
             # Save previous message
             if current_message and current_content:
@@ -250,22 +257,30 @@ def parse_buffer(raw_buffer: str) -> Tuple[List[ParsedMessage], TerminalState]:
                 if current_message.content:
                     messages.append(current_message)
 
-            # Parse tool name and args
-            tool_text = stripped[len(MARKERS['tool']):].strip()
-            tool_name = None
+            # Extract text after bullet marker
+            bullet_text = stripped[len(MARKERS['tool']):].strip()
 
-            # Try to extract tool name (e.g., "Read(file.txt)")
-            match = re.match(r'^(\w+)\s*(?:\(|$)', tool_text)
-            if match:
-                tool_name = match.group(1)
+            # Check if this is a tool invocation (Word followed by parenthesis)
+            tool_match = TOOL_INVOCATION_PATTERN.match(bullet_text)
 
-            current_message = ParsedMessage(
-                type=MessageType.TOOL.value,
-                content=tool_text,
-                tool_name=tool_name,
-                collapsed=True
-            )
-            current_content = [tool_text]
+            if tool_match:
+                # TOOL invocation (e.g., "Bash(git push)")
+                tool_name = tool_match.group(1)
+                current_message = ParsedMessage(
+                    type=MessageType.TOOL.value,
+                    content=bullet_text,
+                    tool_name=tool_name,
+                    collapsed=True
+                )
+            else:
+                # SUMMARY message (e.g., "Done. Committed and pushed.")
+                current_message = ParsedMessage(
+                    type=MessageType.SUMMARY.value,
+                    content=bullet_text,
+                    tool_name=None,
+                    collapsed=False
+                )
+            current_content = [bullet_text]
             continue
 
         # Check for tool output
@@ -274,6 +289,9 @@ def parse_buffer(raw_buffer: str) -> Tuple[List[ParsedMessage], TerminalState]:
 
             if current_message and current_message.type == MessageType.TOOL.value:
                 # Append to current tool
+                current_content.append(output_text)
+            elif current_message and current_message.type == MessageType.SUMMARY.value:
+                # Append to current summary (continuation lines)
                 current_content.append(output_text)
             else:
                 # Save previous and start tool output
@@ -323,8 +341,11 @@ def parse_buffer(raw_buffer: str) -> Tuple[List[ParsedMessage], TerminalState]:
             current_content = []
             continue
 
-        # Plain text - assistant response
-        if current_message and current_message.type == MessageType.TOOL.value:
+        # Plain text - assistant response or summary continuation
+        if current_message and current_message.type == MessageType.SUMMARY.value:
+            # Continue summary message (multi-line summaries)
+            current_content.append(stripped)
+        elif current_message and current_message.type == MessageType.TOOL.value:
             # End of tool, start assistant response
             current_message.content = '\n'.join(current_content).strip()
             if current_message.content:

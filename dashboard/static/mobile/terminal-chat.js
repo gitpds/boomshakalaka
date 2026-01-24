@@ -11,6 +11,7 @@ const TerminalChat = {
     currentState: 'idle', // 'idle', 'working', 'done'
     selectedWindowId: null, // Active tmux window id
     windows: [], // Terminal windows from API
+    showOnlySummaries: false, // Filter mode: show only summaries
 
     // Polling
     pollInterval: null,
@@ -94,6 +95,12 @@ const TerminalChat = {
             this.elements.windowSelector.addEventListener('change', (e) => {
                 this.selectWindow(e.target.value);
             });
+        }
+
+        // Summary filter button
+        const filterBtn = document.getElementById('summary-filter-btn');
+        if (filterBtn) {
+            filterBtn.addEventListener('click', () => this.toggleSummaryFilter());
         }
     },
 
@@ -361,20 +368,27 @@ const TerminalChat = {
     renderMessages() {
         if (!this.elements.messages) return;
 
-        if (this.messages.length === 0) {
+        // Filter messages if summary mode is active
+        let messagesToRender = this.messages;
+        if (this.showOnlySummaries) {
+            messagesToRender = this.messages.filter(msg =>
+                msg.type === 'summary' || msg.type === 'user' || msg.type === 'error'
+            );
+        }
+
+        if (messagesToRender.length === 0) {
             this.elements.messages.innerHTML = `
                 <div class="chat-messages-empty">
                     <div class="chat-messages-empty-icon">🗺️</div>
                     <div class="chat-messages-empty-text">
-                        No conversation yet.<br>
-                        Send a message to begin.
+                        ${this.showOnlySummaries ? 'No summaries yet.<br>Send a message to begin.' : 'No conversation yet.<br>Send a message to begin.'}
                     </div>
                 </div>
             `;
             return;
         }
 
-        const html = this.messages.map((msg, idx) => this.renderMessage(msg, idx)).join('');
+        const html = messagesToRender.map((msg, idx) => this.renderMessage(msg, idx)).join('');
         this.elements.messages.innerHTML = html;
 
         // Scroll to bottom
@@ -433,6 +447,16 @@ const TerminalChat = {
                                 <span class="tool-chevron">▼</span>
                             </div>
                             <div class="tool-content">${this.escapeHtml(msg.content)}</div>
+                        </div>
+                    </div>
+                `;
+
+            case 'summary':
+                return `
+                    <div class="chat-message summary">
+                        <div class="summary-bubble">
+                            <div class="summary-icon">●</div>
+                            <div class="summary-content">${this.formatSummaryMessage(msg.content)}</div>
                         </div>
                     </div>
                 `;
@@ -502,6 +526,58 @@ const TerminalChat = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    },
+
+    /**
+     * Format summary message with basic markdown and table support
+     */
+    formatSummaryMessage(content) {
+        if (!content) return '';
+
+        let text = this.escapeHtml(content);
+
+        // Preserve ASCII tables (box-drawing characters)
+        if (text.includes('┌') || text.includes('│') || text.includes('└') ||
+            text.includes('╭') || text.includes('╰')) {
+            return `<pre class="summary-table">${text}</pre>`;
+        }
+
+        // Convert inline code
+        text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Convert bold
+        text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        // Convert bullet points
+        text = text.replace(/^- (.+)$/gm, '<li>$1</li>');
+        if (text.includes('<li>')) {
+            text = text.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+        }
+
+        // Convert double newlines to paragraphs
+        text = text.replace(/\n\n/g, '</p><p>');
+        if (!text.startsWith('<p>') && !text.startsWith('<ul>') && !text.startsWith('<pre>')) {
+            text = '<p>' + text + '</p>';
+        }
+
+        return text;
+    },
+
+    /**
+     * Toggle summary filter mode
+     */
+    toggleSummaryFilter() {
+        this.showOnlySummaries = !this.showOnlySummaries;
+        this.renderMessages();
+
+        const filterBtn = document.getElementById('summary-filter-btn');
+        if (filterBtn) {
+            filterBtn.classList.toggle('active', this.showOnlySummaries);
+        }
+
+        if (typeof Haptic !== 'undefined') {
+            Haptic.light();
+        }
     },
 
     /**
