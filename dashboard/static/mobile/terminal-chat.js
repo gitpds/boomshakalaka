@@ -692,8 +692,17 @@ const TerminalChat = {
         this.elements.controlBar.classList.toggle('hidden', this.currentState === 'working');
 
         // Update mode indicator
+        const modeBtn = document.getElementById('mode-toggle-btn');
         if (this.elements.modeText) {
-            this.elements.modeText.textContent = this.currentMode || 'default';
+            if (this.currentMode) {
+                // Show the active mode (capitalize first letter of each word)
+                const displayMode = this.currentMode.replace(/\b\w/g, c => c.toUpperCase());
+                this.elements.modeText.textContent = displayMode;
+                if (modeBtn) modeBtn.classList.add('mode-active');
+            } else {
+                this.elements.modeText.textContent = 'Mode';
+                if (modeBtn) modeBtn.classList.remove('mode-active');
+            }
         }
 
         // Update suggestion button

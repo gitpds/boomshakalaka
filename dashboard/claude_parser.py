@@ -93,13 +93,21 @@ NOISE_PATTERNS = [
 # Key: NO space allowed between word and parenthesis
 TOOL_INVOCATION_PATTERN = re.compile(r'^([A-Z][a-zA-Z]*)\(')
 
+# Known Claude Code modes (used for validation)
+KNOWN_MODES = {
+    'bypass permissions on',
+    'accept edits on',
+    'plan mode',
+}
+
 # Mode detection pattern - captures mode text from hint lines
 # Matches: ⏵⏵ bypass permissions on (shift+Tab to cycle)
-# Also handles lines like: -- INSERT -- ⏵⏵ bypass permissions on (shift+Tab to cycle)
 MODE_HINT_PATTERN = re.compile(r'⏵⏵\s*(.+?)\s*\(shift\+Tab', re.IGNORECASE)
 
-# ANSI codes for gray/dim text (suggestions appear in gray)
-GRAY_TEXT_ANSI = re.compile(r'\x1b\[(?:90|2|38;5;8)m([^\x1b]+)')
+# ANSI codes for dim/faint text (auto-complete suggestions appear dim)
+# Matches: ESC[2m or ESC[0;2m followed by optional color codes, then text
+# The dim text may have color resets between the dim code and actual text
+DIM_TEXT_ANSI = re.compile(r'\x1b\[(?:0;)?2m(?:\x1b\[[0-9;]*m)*([^\x1b]+)')
 
 
 def strip_ansi(text: str) -> str:
@@ -125,18 +133,31 @@ def extract_mode_and_suggestion(raw_buffer: str) -> Tuple[Optional[str], Optiona
         clean_line = strip_ansi(line).strip()
 
         # Find mode hint (e.g., "⏵⏵ bypass permissions on (shift+Tab...")
+        # Only accept known Claude Code modes to avoid false positives
         if mode is None:
             mode_match = MODE_HINT_PATTERN.search(clean_line)
             if mode_match:
-                mode = mode_match.group(1).strip()
+                candidate = mode_match.group(1).strip().lower()
+                # Check if it's a known mode
+                if candidate in KNOWN_MODES:
+                    mode = candidate
 
-        # Find suggestion (gray text after prompt)
+        # Find auto-complete suggestion (dim text after prompt on same line)
+        # Format: ❯ <typed_char><dim_completion>
+        # Example: ❯ s[dim]how me the readme[/dim]
         if suggestion is None and '❯' in line:
             prompt_idx = line.find('❯')
             after_prompt = line[prompt_idx + 1:]
-            gray_match = GRAY_TEXT_ANSI.search(after_prompt)
-            if gray_match:
-                suggestion = gray_match.group(1).strip()
+            # Look for dim text (ESC[2m or ESC[0;2m)
+            dim_match = DIM_TEXT_ANSI.search(after_prompt)
+            if dim_match:
+                dim_text = dim_match.group(1).strip()
+                # Get any typed text before the dim suggestion
+                before_dim = after_prompt[:dim_match.start()]
+                typed_text = strip_ansi(before_dim).strip()
+                # Combine typed + completion for full suggestion
+                if dim_text:
+                    suggestion = (typed_text + dim_text).strip()
 
         if mode is not None and suggestion is not None:
             break
@@ -159,20 +180,24 @@ def is_noise_line(line: str) -> bool:
     return False
 
 
-def capture_tmux_buffer(session: str, lines: int = 500) -> Optional[str]:
+def capture_tmux_buffer(session: str, lines: int = 500, include_ansi: bool = False) -> Optional[str]:
     """
     Capture terminal buffer from tmux session.
 
     Args:
         session: tmux session name (e.g., 'dashboard-top')
         lines: Number of lines to capture (default 500)
+        include_ansi: Include ANSI escape codes in output (default False)
 
     Returns:
         Raw terminal buffer content or None on error
     """
     try:
+        cmd = ['tmux', 'capture-pane', '-t', session, '-p', '-S', f'-{lines}']
+        if include_ansi:
+            cmd.append('-e')  # Include escape sequences
         result = subprocess.run(
-            ['tmux', 'capture-pane', '-t', session, '-p', '-S', f'-{lines}'],
+            cmd,
             capture_output=True,
             text=True,
             timeout=5
@@ -516,9 +541,10 @@ def get_chat_buffer(session: str, lines: int = 500) -> Dict:
     Returns:
         Dict with 'messages', 'state', 'error', 'raw_has_prompt', 'mode', 'suggestion' fields
     """
-    raw_buffer = capture_tmux_buffer(session, lines)
+    # Capture with ANSI codes for mode/suggestion detection
+    raw_buffer_ansi = capture_tmux_buffer(session, lines, include_ansi=True)
 
-    if raw_buffer is None:
+    if raw_buffer_ansi is None:
         return {
             'messages': [],
             'state': TerminalState.IDLE.value,
@@ -528,14 +554,16 @@ def get_chat_buffer(session: str, lines: int = 500) -> Dict:
             'suggestion': None
         }
 
-    # Extract mode and suggestion BEFORE stripping ANSI codes
-    mode, suggestion = extract_mode_and_suggestion(raw_buffer)
+    # Extract mode and suggestion from ANSI buffer
+    mode, suggestion = extract_mode_and_suggestion(raw_buffer_ansi)
+
+    # Use stripped buffer for message parsing
+    raw_buffer = strip_ansi(raw_buffer_ansi)
 
     messages, state = parse_buffer(raw_buffer)
 
-    # Check if Claude prompt marker is visible in raw buffer
-    clean_buffer = strip_ansi(raw_buffer)
-    has_prompt = MARKERS['prompt'] in clean_buffer
+    # Check if Claude prompt marker is visible in buffer
+    has_prompt = MARKERS['prompt'] in raw_buffer
 
     return {
         'messages': [m.to_dict() for m in messages],

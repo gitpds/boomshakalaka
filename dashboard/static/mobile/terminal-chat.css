@@ -536,6 +536,15 @@
     color: var(--gold);
 }
 
+.control-mode-btn.mode-active {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+}
+
+.control-mode-btn.mode-active .mode-text {
+    color: var(--gold);
+}
+
 .mode-icon { font-size: 14px; color: var(--gold); }
 .mode-text {
     font-size: 12px;
