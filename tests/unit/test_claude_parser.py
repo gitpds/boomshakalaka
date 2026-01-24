@@ -275,3 +275,158 @@ class TestEdgeCases:
         messages, _ = parse_buffer(buffer)
         assert len(messages) == 1
         assert messages[0].type == MessageType.TASK.value
+
+
+class TestNoiseFiltering:
+    """Test filtering of terminal noise (ASCII logo, shell prompts, vim modes)"""
+
+    def test_filters_ascii_logo_line1(self):
+        """ASCII logo line 1 should be filtered"""
+        buffer = "▐▛███▜▌   Claude Code v2.1.19"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_ascii_logo_line2(self):
+        """ASCII logo line 2 should be filtered"""
+        buffer = "▝▜▜▜▛▘  Claude Opus 4.5"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_shell_prompt(self):
+        """Shell prompt should be filtered"""
+        buffer = "(mcai_env) pds@boomshakalaka:~$ ls"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_doubled_env_shell_prompt(self):
+        """Shell prompt with doubled env should be filtered"""
+        buffer = "(mcai_env) (mcai_env) pds@boomshakalaka:~$"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_vim_mode_insert(self):
+        """Vim INSERT mode indicator should be filtered"""
+        buffer = "-- INSERT --"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_vim_mode_normal(self):
+        """Vim NORMAL mode indicator should be filtered"""
+        buffer = "-- NORMAL --"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_insert_mode_with_trailing(self):
+        """INSERT mode with trailing text should be filtered"""
+        buffer = "-- INSERT -- ⏵⏵ bypass permissions on (shift+Tab to cycle)"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_box_drawing_lines(self):
+        """Box-drawing horizontal lines should be filtered"""
+        buffer = "─────────────────────────────────────────"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_bypass_permissions_anywhere(self):
+        """Bypass permissions text anywhere in line should be filtered"""
+        buffer = "⏵⏵ bypass permissions on (shift+Tab to cycle)"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_thinking_hint(self):
+        """Thinking hint (Esc to interrupt) should be filtered"""
+        buffer = "(Esc to interrupt)"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_working_spinner_orchestrating(self):
+        """Orchestrating spinner should be filtered"""
+        buffer = "✽ Orchestrating…"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_filters_working_spinner_thinking(self):
+        """Thinking spinner should be filtered"""
+        buffer = "✶ Thinking…"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 0
+
+    def test_preserves_user_message(self):
+        """User messages should NOT be filtered"""
+        buffer = "❯ hello world"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 1
+        assert messages[0].type == MessageType.USER.value
+
+    def test_preserves_summary(self):
+        """Summary messages should NOT be filtered"""
+        buffer = "● Done. Task completed successfully."
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 1
+        assert messages[0].type == MessageType.SUMMARY.value
+
+    def test_preserves_tool_invocation(self):
+        """Tool invocations should NOT be filtered"""
+        buffer = "● Bash(git status)"
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 1
+        assert messages[0].type == MessageType.TOOL.value
+
+    def test_mixed_noise_and_content(self):
+        """Noise lines mixed with real content should filter correctly"""
+        buffer = """▐▛███▜▌   Claude Code v2.1.19
+(mcai_env) pds@boomshakalaka:~$ claude
+❯ hello
+✽ Thinking…
+● Done. Said hello."""
+        messages, _ = parse_buffer(buffer)
+        assert len(messages) == 2
+        assert messages[0].type == MessageType.USER.value
+        assert messages[1].type == MessageType.SUMMARY.value
+
+
+class TestWorkingStateDetection:
+    """Test detection of working state from spinners and thinking indicators"""
+
+    def test_detects_orchestrating_spinner(self):
+        """Orchestrating spinner should set WORKING state"""
+        from dashboard.claude_parser import detect_state, TerminalState
+        lines = ["✽ Orchestrating… (Esc to interrupt)"]
+        state = detect_state(lines)
+        assert state == TerminalState.WORKING
+
+    def test_detects_thinking_spinner(self):
+        """Thinking spinner should set WORKING state"""
+        from dashboard.claude_parser import detect_state, TerminalState
+        lines = ["✶ Thinking…"]
+        state = detect_state(lines)
+        assert state == TerminalState.WORKING
+
+    def test_detects_working_from_text(self):
+        """Lines containing 'thinking' should set WORKING state"""
+        from dashboard.claude_parser import detect_state, TerminalState
+        lines = ["Claude is thinking about your request..."]
+        state = detect_state(lines)
+        assert state == TerminalState.WORKING
+
+    def test_detects_idle_at_prompt(self):
+        """Prompt marker at end should set IDLE state"""
+        from dashboard.claude_parser import detect_state, TerminalState
+        lines = ["❯"]
+        state = detect_state(lines)
+        assert state == TerminalState.IDLE
+
+    def test_detects_working_tool_in_progress(self):
+        """Tool marker as last line should set WORKING state"""
+        from dashboard.claude_parser import detect_state, TerminalState
+        lines = ["● Bash(long running command)"]
+        state = detect_state(lines)
+        assert state == TerminalState.WORKING
+
+    def test_empty_lines_idle(self):
+        """Empty lines should default to IDLE"""
+        from dashboard.claude_parser import detect_state, TerminalState
+        lines = []
+        state = detect_state(lines)
+        assert state == TerminalState.IDLE

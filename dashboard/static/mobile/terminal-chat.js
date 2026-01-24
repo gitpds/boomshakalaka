@@ -29,6 +29,9 @@ const TerminalChat = {
     // Last buffer hash to detect changes
     lastBufferHash: '',
 
+    // Prevent double-sends on mobile
+    isSending: false,
+
     /**
      * Initialize the chat component
      */
@@ -309,8 +312,46 @@ const TerminalChat = {
      * Send user message to terminal
      */
     async sendMessage() {
+        // Prevent double-sends (mobile touch events can fire twice)
+        if (this.isSending) return;
+
         const text = this.elements.input?.value?.trim();
         if (!text) return;
+
+        // Set sending flag immediately
+        this.isSending = true;
+
+        // Check terminal state before sending
+        try {
+            const stateResponse = await fetch('/api/terminal/chat/state?session=dashboard-top');
+            const stateData = await stateResponse.json();
+
+            if (stateData.state === 'working') {
+                if (typeof Toast !== 'undefined') {
+                    Toast.warning('Claude is still working. Please wait.');
+                }
+                if (typeof Haptic !== 'undefined') {
+                    Haptic.error();
+                }
+                return;
+            }
+
+            // Check if Claude prompt is visible (not at shell)
+            const bufferResponse = await fetch('/api/terminal/chat/buffer?session=dashboard-top&lines=10');
+            const bufferData = await bufferResponse.json();
+
+            if (!bufferData.raw_has_prompt && stateData.state === 'idle') {
+                if (typeof Toast !== 'undefined') {
+                    Toast.error('Claude is not at prompt. Check terminal.');
+                }
+                if (typeof Haptic !== 'undefined') {
+                    Haptic.error();
+                }
+                return;
+            }
+        } catch (e) {
+            console.warn('State check failed, proceeding anyway:', e);
+        }
 
         // Clear input
         this.elements.input.value = '';
@@ -359,6 +400,10 @@ const TerminalChat = {
             if (this.elements.sendBtn) {
                 this.elements.sendBtn.disabled = false;
             }
+            // Reset sending flag after a short delay to prevent rapid re-sends
+            setTimeout(() => {
+                this.isSending = false;
+            }, 300);
         }
     },
 

@@ -68,6 +68,25 @@ MARKERS = {
     'error': '✘',            # Error marker
 }
 
+# Working/thinking indicators (should be filtered from output)
+WORKING_MARKERS = {'✽', '✶', '⋮', '◐', '◑', '◒', '◓'}
+
+# Patterns to filter out (terminal noise)
+NOISE_PATTERNS = [
+    re.compile(r'^▐▛'),                   # ASCII logo line 1
+    re.compile(r'^▝▜'),                   # ASCII logo line 2
+    re.compile(r'^\s*▘▘\s*▝▝'),           # ASCII logo line 3
+    re.compile(r'^(\([^)]+\)\s*)+\w+@\w+:'), # Shell prompt: (env) user@host: or (env) (env) user@host:
+    re.compile(r'^\w+@\w+:'),             # Shell prompt without env: user@host:
+    re.compile(r'^─+$'),                  # Box-drawing horizontal lines (separator)
+    re.compile(r'^--\s*\w+\s*--'),        # Vim mode: -- INSERT -- (with optional trailing text)
+    re.compile(r'^⏵'),                    # Permission hint arrows (Claude Code UI)
+    re.compile(r'bypass permissions'),    # Permission bypass (anywhere in line)
+    re.compile(r'^\(Esc to interrupt'),   # Thinking hint
+    re.compile(r'^Tips for getting'),     # Tips header
+    re.compile(r'^\s*$'),                 # Empty lines
+]
+
 # Pattern to detect tool invocations: Word immediately followed by (
 # Matches: Bash(, Read(, Write(, etc.
 # Does NOT match: Done., "Done (files updated)", prose sentences
@@ -80,6 +99,21 @@ def strip_ansi(text: str) -> str:
     text = ANSI_ESCAPE.sub('', text)
     text = CONTROL_CHARS.sub('', text)
     return text
+
+
+def is_noise_line(line: str) -> bool:
+    """Check if line is terminal noise that should be filtered."""
+    stripped = line.strip()
+    if not stripped:
+        return True
+    # Check working markers
+    if any(stripped.startswith(m) for m in WORKING_MARKERS):
+        return True
+    # Check noise patterns
+    for pattern in NOISE_PATTERNS:
+        if pattern.match(stripped):
+            return True
+    return False
 
 
 def capture_tmux_buffer(session: str, lines: int = 500) -> Optional[str]:
@@ -119,9 +153,18 @@ def send_to_tmux(session: str, text: str) -> bool:
         True if successful, False otherwise
     """
     try:
-        # Send the text followed by Enter
+        # Send the text first
         result = subprocess.run(
-            ['tmux', 'send-keys', '-t', session, text, 'Enter'],
+            ['tmux', 'send-keys', '-t', session, text],
+            capture_output=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return False
+
+        # Send Enter separately (combining in one command doesn't work reliably)
+        result = subprocess.run(
+            ['tmux', 'send-keys', '-t', session, 'Enter'],
             capture_output=True,
             timeout=5
         )
@@ -136,6 +179,7 @@ def detect_state(lines: List[str]) -> TerminalState:
 
     State detection logic (work backwards from buffer end):
     - Line ends with `❯` alone → idle
+    - Line starts with working spinner (✽, ✶, etc.) → working
     - Line starts with `●` → working
     - Line starts with `⎿` or `…` → working (tool output continuing)
     - Plain text after tool outputs → done/response complete
@@ -160,6 +204,15 @@ def detect_state(lines: List[str]) -> TerminalState:
     # Check for idle state - prompt visible
     if last_line.endswith(MARKERS['prompt']) or last_line == MARKERS['prompt']:
         return TerminalState.IDLE
+
+    # Check for working spinners in recent lines (highest priority)
+    for line in recent_lines[:5]:
+        stripped = line.strip()
+        # Check for working/thinking markers
+        if any(stripped.startswith(m) for m in WORKING_MARKERS):
+            return TerminalState.WORKING
+        if 'thinking' in stripped.lower() or 'orchestrating' in stripped.lower():
+            return TerminalState.WORKING
 
     # Check for working state - tool in progress
     for line in recent_lines[:5]:
@@ -218,6 +271,12 @@ def parse_buffer(raw_buffer: str) -> Tuple[List[ParsedMessage], TerminalState]:
 
     for line in lines:
         stripped = line.strip()
+
+        # Skip noise lines (terminal chrome, spinners, etc.)
+        # But preserve empty lines for assistant message formatting
+        if stripped and is_noise_line(stripped):
+            continue
+
         if not stripped:
             # Empty line - might be paragraph break in assistant response
             if current_message and current_message.type == MessageType.ASSISTANT.value:
@@ -412,7 +471,7 @@ def get_chat_buffer(session: str, lines: int = 500) -> Dict:
         lines: Number of lines to capture
 
     Returns:
-        Dict with 'messages', 'state', and 'error' fields
+        Dict with 'messages', 'state', 'error', and 'raw_has_prompt' fields
     """
     raw_buffer = capture_tmux_buffer(session, lines)
 
@@ -420,15 +479,21 @@ def get_chat_buffer(session: str, lines: int = 500) -> Dict:
         return {
             'messages': [],
             'state': TerminalState.IDLE.value,
-            'error': f'Failed to capture buffer from session: {session}'
+            'error': f'Failed to capture buffer from session: {session}',
+            'raw_has_prompt': False
         }
 
     messages, state = parse_buffer(raw_buffer)
 
+    # Check if Claude prompt marker is visible in raw buffer
+    clean_buffer = strip_ansi(raw_buffer)
+    has_prompt = MARKERS['prompt'] in clean_buffer
+
     return {
         'messages': [m.to_dict() for m in messages],
         'state': state.value,
-        'error': None
+        'error': None,
+        'raw_has_prompt': has_prompt
     }
 
 
