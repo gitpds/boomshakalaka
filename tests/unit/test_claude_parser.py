@@ -1,5 +1,4 @@
 """Unit Tests for Claude Parser - Summary Message Detection"""
-import pytest
 import sys
 import os
 
@@ -294,13 +293,13 @@ class TestNoiseFiltering:
 
     def test_filters_shell_prompt(self):
         """Shell prompt should be filtered"""
-        buffer = "(mcai_env) pds@boomshakalaka:~$ ls"
+        buffer = "(boom_env) pds@boomshakalaka:~$ ls"
         messages, _ = parse_buffer(buffer)
         assert len(messages) == 0
 
     def test_filters_doubled_env_shell_prompt(self):
         """Shell prompt with doubled env should be filtered"""
-        buffer = "(mcai_env) (mcai_env) pds@boomshakalaka:~$"
+        buffer = "(boom_env) (boom_env) pds@boomshakalaka:~$"
         messages, _ = parse_buffer(buffer)
         assert len(messages) == 0
 
@@ -376,7 +375,7 @@ class TestNoiseFiltering:
     def test_mixed_noise_and_content(self):
         """Noise lines mixed with real content should filter correctly"""
         buffer = """▐▛███▜▌   Claude Code v2.1.19
-(mcai_env) pds@boomshakalaka:~$ claude
+(boom_env) pds@boomshakalaka:~$ claude
 ❯ hello
 ✽ Thinking…
 ● Done. Said hello."""

@@ -20,7 +20,7 @@ import sqlite3
 import requests
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, Response, stream_with_context
+from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file
 from werkzeug.utils import secure_filename
 
 # Theme generator for AI-powered theme customization
@@ -345,7 +345,7 @@ def check_api_health():
         import httpx
         api_key = os.getenv('ODDS_API_KEY')
         response = httpx.get(
-            f'https://api.the-odds-api.com/v4/sports/',
+            'https://api.the-odds-api.com/v4/sports/',
             params={'apiKey': api_key},
             timeout=10
         )
@@ -667,7 +667,6 @@ def calculate_running_profit(games, lower_bound=15, upper_bound=17, bet_size=100
     }
 
 
-import re
 
 # YouTube Data API v3 key
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
@@ -3922,7 +3921,7 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
     if crf is None:
         crf = 19
 
-    logger.info(f"Building LTX video workflow (native nodes):")
+    logger.info("Building LTX video workflow (native nodes):")
     logger.info(f"  prompt: {prompt[:100]}...")
     logger.info(f"  input_image: {input_image}")
     logger.info(f"  video_model: {video_model}")
@@ -4793,7 +4792,7 @@ def api_terminal_create():
             # Initialize the new window with conda env and claude
             subprocess.run(
                 ['tmux', 'send-keys', '-t', f'dashboard-top:{window_id}',
-                 'conda activate mcai_env && claude --dangerously-skip-permissions', 'Enter'],
+                 'conda activate boom_env && claude --dangerously-skip-permissions', 'Enter'],
                 capture_output=True, timeout=5
             )
 
