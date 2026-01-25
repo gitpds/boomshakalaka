@@ -1,0 +1,15 @@
+[Unit]
+Description=Boomshakalaka Dashboard Control - Restart button on port 3004
+After=network.target
+
+[Service]
+Type=simple
+User=pds
+WorkingDirectory=/home/pds/boomshakalaka
+Environment="HOME=/home/pds"
+ExecStart=/home/pds/boomshakalaka/scripts/start_dashboard_ctl_server.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
