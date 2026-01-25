@@ -741,6 +741,50 @@ const TerminalChat = {
     },
 
     /**
+     * Send Ctrl+C to interrupt current process
+     */
+    async sendCtrlC() {
+        try {
+            const response = await fetch('/api/terminal/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'C-c', session: 'dashboard-top' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                if (typeof Haptic !== 'undefined') Haptic.medium();
+                setTimeout(() => this.fetchBuffer(), 200);
+            } else {
+                console.error('Ctrl+C failed:', data.error);
+            }
+        } catch (e) {
+            console.error('Ctrl+C failed:', e);
+        }
+    },
+
+    /**
+     * Send Escape key
+     */
+    async sendEsc() {
+        try {
+            const response = await fetch('/api/terminal/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'Escape', session: 'dashboard-top' })
+            });
+            const data = await response.json();
+            if (data.success) {
+                if (typeof Haptic !== 'undefined') Haptic.light();
+                setTimeout(() => this.fetchBuffer(), 200);
+            } else {
+                console.error('Escape failed:', data.error);
+            }
+        } catch (e) {
+            console.error('Escape failed:', e);
+        }
+    },
+
+    /**
      * Apply the current auto-complete suggestion
      */
     async applySuggestion() {

@@ -555,6 +555,45 @@
     white-space: nowrap;
 }
 
+/* Control key buttons (Ctrl+C, Esc) */
+.control-key-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 10px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-width: 44px;
+}
+
+.control-key-btn:active {
+    transform: scale(0.95);
+}
+
+#ctrl-c-btn:active {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+#esc-btn:active {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: #f59e0b;
+    color: #f59e0b;
+}
+
+.key-icon {
+    font-size: 11px;
+    letter-spacing: -0.5px;
+}
+
 /* Suggestion button */
 .control-suggestion-btn {
     flex: 1;

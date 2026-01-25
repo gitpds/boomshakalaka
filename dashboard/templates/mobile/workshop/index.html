@@ -48,8 +48,14 @@
         <span class="working-elapsed">0s</span>
     </div>
 
-    <!-- Control bar with mode toggle and suggestion -->
+    <!-- Control bar with interrupt, escape, mode toggle, and suggestion -->
     <div class="chat-control-bar" id="chat-control-bar">
+        <button class="control-key-btn" id="ctrl-c-btn" onclick="TerminalChat.sendCtrlC()" title="Send Ctrl+C (Interrupt)">
+            <span class="key-icon">^C</span>
+        </button>
+        <button class="control-key-btn" id="esc-btn" onclick="TerminalChat.sendEsc()" title="Send Escape">
+            <span class="key-icon">Esc</span>
+        </button>
         <button class="control-mode-btn" id="mode-toggle-btn" onclick="TerminalChat.cycleMode()" title="Cycle mode (Shift+Tab)">
             <span class="mode-icon">&#8644;</span>
             <span class="mode-text" id="mode-text">Mode</span>
