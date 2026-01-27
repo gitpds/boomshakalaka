@@ -5705,58 +5705,91 @@ def api_dev_port_list():
 def api_dev_port_active():
     """List active dev servers with process info."""
     import subprocess
-    import socket
+    import re
 
     PORT_RANGE = (4000, 4019)
     active = []
 
-    for port in range(PORT_RANGE[0], PORT_RANGE[1] + 1):
-        # Check if port is in use
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(('localhost', port)) != 0:
+    # Use ss to get all listening ports with PIDs (works for IPv4 and IPv6)
+    try:
+        result = subprocess.run(
+            ['ss', '-tlnp'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            return jsonify({'active': [], 'range': list(PORT_RANGE), 'error': 'ss command failed'})
+
+        # Parse ss output to find ports in our range
+        # Format: LISTEN 0 511 127.0.0.1:4010 0.0.0.0:* users:(("node",pid=1474380,fd=22))
+        # Or:     LISTEN 0 511 *:4000 *:* users:(("next-server",pid=3139079,fd=22))
+        for line in result.stdout.split('\n'):
+            if 'LISTEN' not in line:
                 continue
 
-        # Get process info using lsof
-        try:
-            result = subprocess.run(
-                ['lsof', '-i', f':{port}', '-t'],
-                capture_output=True, text=True, timeout=2
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                pid = result.stdout.strip().split('\n')[0]
+            # Extract port from local address (4th column)
+            parts = line.split()
+            if len(parts) < 5:
+                continue
 
-                # Get working directory
-                cwd_result = subprocess.run(
-                    ['readlink', '-f', f'/proc/{pid}/cwd'],
-                    capture_output=True, text=True, timeout=2
-                )
-                cwd = cwd_result.stdout.strip() if cwd_result.returncode == 0 else ''
+            local_addr = parts[3]
+            # Handle formats: 127.0.0.1:4010, *:4000, [::]:4000, 0.0.0.0:4000
+            if ':' in local_addr:
+                port_str = local_addr.rsplit(':', 1)[-1]
+                try:
+                    port = int(port_str)
+                except ValueError:
+                    continue
 
-                # Get command
-                cmd_result = subprocess.run(
-                    ['ps', '-p', pid, '-o', 'args='],
-                    capture_output=True, text=True, timeout=2
-                )
-                cmd = cmd_result.stdout.strip() if cmd_result.returncode == 0 else ''
+                if not (PORT_RANGE[0] <= port <= PORT_RANGE[1]):
+                    continue
 
-                # Extract project name from cwd
-                project = cwd.split('/')[-1] if cwd else f'Port {port}'
+                # Extract PID from users:(("name",pid=XXXX,fd=YY))
+                pid_match = re.search(r'pid=(\d+)', line)
+                pid = pid_match.group(1) if pid_match else ''
 
-                active.append({
-                    'port': port,
-                    'project': project,
-                    'cwd': cwd,
-                    'command': cmd[:100],  # Truncate long commands
-                    'pid': pid
-                })
-        except Exception:
-            active.append({
-                'port': port,
-                'project': f'Port {port}',
-                'cwd': '',
-                'command': '',
-                'pid': ''
-            })
+                if pid:
+                    # Get working directory
+                    cwd = ''
+                    try:
+                        cwd_result = subprocess.run(
+                            ['readlink', '-f', f'/proc/{pid}/cwd'],
+                            capture_output=True, text=True, timeout=2
+                        )
+                        if cwd_result.returncode == 0:
+                            cwd = cwd_result.stdout.strip()
+                    except Exception:
+                        pass
+
+                    # Get command
+                    cmd = ''
+                    try:
+                        cmd_result = subprocess.run(
+                            ['ps', '-p', pid, '-o', 'args='],
+                            capture_output=True, text=True, timeout=2
+                        )
+                        if cmd_result.returncode == 0:
+                            cmd = cmd_result.stdout.strip()
+                    except Exception:
+                        pass
+
+                    # Extract project name from cwd
+                    project = cwd.split('/')[-1] if cwd else f'Port {port}'
+
+                    # Avoid duplicates (IPv4 and IPv6 might both show)
+                    if not any(s['port'] == port for s in active):
+                        active.append({
+                            'port': port,
+                            'project': project,
+                            'cwd': cwd,
+                            'command': cmd[:100],  # Truncate long commands
+                            'pid': pid
+                        })
+
+    except Exception as e:
+        return jsonify({'active': [], 'range': list(PORT_RANGE), 'error': str(e)})
+
+    # Sort by port number
+    active.sort(key=lambda x: x['port'])
 
     return jsonify({'active': active, 'range': list(PORT_RANGE)})
 
