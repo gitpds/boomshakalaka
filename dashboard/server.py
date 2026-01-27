@@ -5701,6 +5701,66 @@ def api_dev_port_list():
     return jsonify({'ports': ports, 'range': list(PORT_RANGE)})
 
 
+@app.route('/api/dev-port/active')
+def api_dev_port_active():
+    """List active dev servers with process info."""
+    import subprocess
+    import socket
+
+    PORT_RANGE = (4000, 4019)
+    active = []
+
+    for port in range(PORT_RANGE[0], PORT_RANGE[1] + 1):
+        # Check if port is in use
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('localhost', port)) != 0:
+                continue
+
+        # Get process info using lsof
+        try:
+            result = subprocess.run(
+                ['lsof', '-i', f':{port}', '-t'],
+                capture_output=True, text=True, timeout=2
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                pid = result.stdout.strip().split('\n')[0]
+
+                # Get working directory
+                cwd_result = subprocess.run(
+                    ['readlink', '-f', f'/proc/{pid}/cwd'],
+                    capture_output=True, text=True, timeout=2
+                )
+                cwd = cwd_result.stdout.strip() if cwd_result.returncode == 0 else ''
+
+                # Get command
+                cmd_result = subprocess.run(
+                    ['ps', '-p', pid, '-o', 'args='],
+                    capture_output=True, text=True, timeout=2
+                )
+                cmd = cmd_result.stdout.strip() if cmd_result.returncode == 0 else ''
+
+                # Extract project name from cwd
+                project = cwd.split('/')[-1] if cwd else f'Port {port}'
+
+                active.append({
+                    'port': port,
+                    'project': project,
+                    'cwd': cwd,
+                    'command': cmd[:100],  # Truncate long commands
+                    'pid': pid
+                })
+        except Exception:
+            active.append({
+                'port': port,
+                'project': f'Port {port}',
+                'cwd': '',
+                'command': '',
+                'pid': ''
+            })
+
+    return jsonify({'active': active, 'range': list(PORT_RANGE)})
+
+
 # ============================================
 # Mobile Routes
 # ============================================
