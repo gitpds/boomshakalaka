@@ -200,7 +200,7 @@ button {
 
 .sidebar.collapsed .sidebar-header {
     padding: 12px 8px;
-    text-align: center;
+    justify-content: center;
 }
 
 .sidebar.collapsed .active-page-name,
@@ -266,9 +266,6 @@ button {
 
 /* Sidebar Collapse Toggle Button */
 .sidebar-collapse-btn {
-    position: absolute;
-    top: -36px;
-    right: 12px;
     width: 24px;
     height: 24px;
     background: transparent;
@@ -278,9 +275,9 @@ button {
     align-items: center;
     justify-content: center;
     color: var(--text-muted);
-    transition: color 0.2s ease, right 0.3s ease;
-    z-index: 101;
+    transition: color 0.2s ease;
     padding: 0;
+    flex-shrink: 0;
 }
 
 .sidebar-collapse-btn:hover {
@@ -291,11 +288,6 @@ button {
     width: 16px;
     height: 16px;
     transition: transform 0.3s ease;
-}
-
-.sidebar.collapsed .sidebar-collapse-btn {
-    right: 50%;
-    transform: translateX(50%);
 }
 
 .sidebar.collapsed .sidebar-collapse-btn svg {
@@ -328,6 +320,9 @@ button {
 .sidebar-header {
     padding: 16px 24px;
     border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .active-page-name {

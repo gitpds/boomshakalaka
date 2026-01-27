@@ -32,6 +32,11 @@
         <!-- Active Page Name -->
         <div class="sidebar-header">
             <span class="active-page-name" id="active-page-name">{% block sidebar_title %}Dashboard{% endblock %}</span>
+            <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Toggle sidebar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                </svg>
+            </button>
         </div>
 
         <nav class="sidebar-nav">
@@ -225,12 +230,6 @@
 
         <!-- Sidebar Footer -->
         <div class="sidebar-footer">
-            <!-- Collapse Toggle Button -->
-            <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Toggle sidebar">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="15 18 9 12 15 6"/>
-                </svg>
-            </button>
             <div class="system-status">
                 <span class="status-dot online"></span>
                 <span class="status-text">System Online</span>
