@@ -345,12 +345,24 @@ async function loadDevServers() {
     }
 }
 
-// Load count on page load
-fetch('/api/dev-port/active')
-    .then(r => r.json())
-    .then(data => {
-        document.getElementById('dev-server-count').textContent = data.active.length;
-    })
-    .catch(() => {});
+// Load count on page load and poll every 10 seconds
+function updateDevServerCount() {
+    fetch('/api/dev-port/active')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('dev-server-count').textContent = data.active.length;
+            // If expanded, also refresh the list
+            if (devServersExpanded) {
+                loadDevServers();
+            }
+        })
+        .catch(() => {});
+}
+
+// Initial load
+updateDevServerCount();
+
+// Poll every 10 seconds
+setInterval(updateDevServerCount, 10000);
 </script>
 {% endblock %}
