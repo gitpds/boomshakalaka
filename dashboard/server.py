@@ -5160,6 +5160,65 @@ def api_terminal_send_keys():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/terminal/scroll', methods=['POST'])
+def api_terminal_scroll():
+    """Scroll terminal via tmux copy-mode.
+
+    This enters tmux copy-mode and scrolls. The terminal stays in copy-mode
+    so the user can see the scrolled content. User can press 'q' or 'Escape'
+    to exit copy-mode and return to normal terminal operation.
+
+    If already in copy-mode, additional scroll commands just scroll further.
+
+    JSON body:
+        session: tmux session name (e.g., 'dashboard-top', 'dashboard-bottom')
+        direction: 'up' or 'down'
+
+    Returns:
+        {success: bool, error: string | null}
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'JSON body required'}), 400
+
+    session = data.get('session', '').strip()
+    direction = data.get('direction', '').strip()
+
+    if not session:
+        return jsonify({'success': False, 'error': 'session is required'}), 400
+
+    if direction not in ('up', 'down'):
+        return jsonify({'success': False, 'error': 'direction must be "up" or "down"'}), 400
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'success': False, 'error': 'Invalid session name'}), 400
+
+    # tmux Page Up = PPage, Page Down = NPage
+    tmux_key = 'PPage' if direction == 'up' else 'NPage'
+
+    try:
+        # Enter copy-mode directly (not via send-keys)
+        subprocess.run(
+            ['tmux', 'copy-mode', '-t', session],
+            capture_output=True, timeout=2
+        )
+        time.sleep(0.05)
+
+        # Send page up/down to scroll within copy-mode
+        result = subprocess.run(
+            ['tmux', 'send-keys', '-t', session, tmux_key],
+            capture_output=True, timeout=2
+        )
+
+        # Don't exit copy-mode - let user see the scrolled content
+        # User can press 'q' or 'Escape' to exit copy-mode manually
+
+        return jsonify({'success': result.returncode == 0, 'error': None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/terminal/chat/state')
 def api_terminal_chat_state():
     """Lightweight state check for fast polling.
@@ -5203,9 +5262,6 @@ def api_terminal_files_list():
     items = []
     try:
         for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-            # Skip hidden files
-            if item.name.startswith('.'):
-                continue
             items.append({
                 'name': item.name,
                 'path': str(item),
