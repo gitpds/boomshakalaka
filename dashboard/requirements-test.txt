@@ -1,0 +1,17 @@
+# Test dependencies for Reggie Dashboard
+
+# Core testing
+pytest>=7.0.0
+pytest-html>=3.0.0
+
+# WebSocket testing
+websocket-client>=1.0.0
+
+# HTTP testing
+requests>=2.28.0
+
+# UI testing (Playwright)
+pytest-playwright>=0.4.0
+
+# Install playwright browsers with:
+# playwright install chromium

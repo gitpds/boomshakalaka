@@ -18,6 +18,12 @@
             </svg>
             <span>Overview</span>
         </a>
+        <a href="{{ url_for('reggie_control_center') }}" class="reggie-nav-item {% if reggie_page == 'center' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            <span>Center</span>
+        </a>
         <a href="{{ url_for('reggie_control') }}" class="reggie-nav-item {% if reggie_page == 'control' %}active{% endif %}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"/>

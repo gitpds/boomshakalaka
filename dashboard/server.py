@@ -106,9 +106,8 @@ app = Flask(__name__,
 
 # Configuration
 PROJECT_ROOT = Path('/home/pds/boomshakalaka')
-# Keep pointing to old location for logs during migration
-LEGACY_POLYMARKET_DIR = Path('/home/pds/money_printing/polymarket')
-POLYMARKET_DIR = LEGACY_POLYMARKET_DIR  # Alias for backwards compatibility
+# Updated 2026-01-27: money_printing moved into boomshakalaka
+POLYMARKET_DIR = Path('/home/pds/boomshakalaka/money_printing/polymarket')
 
 # AI Studio Configuration (100% local - no external calls)
 COMFY_HOST = '127.0.0.1'  # Localhost only - never exposed
@@ -1970,6 +1969,16 @@ def reggie_apps():
                          active_page='reggie',
                          reggie_page='apps',
                          page_name='Apps',
+                         **get_common_context())
+
+
+@app.route('/reggie/center')
+def reggie_control_center():
+    """Reggie unified control center - all controls in one page"""
+    return render_template('reggie_control_center.html',
+                         active_page='reggie',
+                         reggie_page='center',
+                         page_name='Control Center',
                          **get_common_context())
 
 
