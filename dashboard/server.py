@@ -90,6 +90,27 @@ except ImportError as e:
     print(f"Automation import failed: {e}")
     AUTOMATION_AVAILABLE = False
 
+# Project Management database
+try:
+    from dashboard.projects_db import (
+        init_database as init_projects_db,
+        import_areas_from_directory, import_projects_from_directory,
+        get_all_areas, get_area, get_area_by_name,
+        create_area, update_area, delete_area,
+        get_all_projects, get_projects_by_area, get_project, get_project_by_name,
+        create_project, update_project, delete_project,
+        get_tasks_by_project, get_all_tasks, get_task,
+        create_task, update_task, delete_task, reorder_tasks,
+        get_all_lists, get_list, create_list, update_list, delete_list,
+        add_list_item, update_list_item, delete_list_item,
+        get_stats as get_pm_stats,
+        AVAILABLE_ICONS, DEFAULT_COLORS
+    )
+    PROJECTS_AVAILABLE = True
+except ImportError as e:
+    print(f"Projects import failed: {e}")
+    PROJECTS_AVAILABLE = False
+
 # Setup logging for AI Studio debugging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -104,6 +125,10 @@ app = Flask(__name__,
             template_folder=os.path.join(os.path.dirname(__file__), 'templates'),
             static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 
+# Enable template hot reload without full debug mode
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
+
 # Configuration
 PROJECT_ROOT = Path('/home/pds/boomshakalaka')
 # Updated 2026-01-27: money_printing moved into boomshakalaka
@@ -117,6 +142,18 @@ MODELS_DIR = PROJECT_ROOT / 'models'  # Symlink to ComfyUI models
 GENERATIONS_DIR = PROJECT_ROOT / 'data' / 'generations'
 DATABASES_DIR = PROJECT_ROOT / 'data' / 'databases'
 THEMES_FILE = PROJECT_ROOT / 'data' / 'themes.json'
+
+# Dev server port ranges to monitor
+# Each tuple: (start, end, category_name)
+DEV_PORT_RANGES = [
+    (3000, 3010, 'Node.js'),
+    (4000, 4019, 'Allocated'),
+    (5000, 5010, 'Flask'),
+    (8000, 8010, 'Django/FastAPI'),
+]
+
+# System ports to exclude even if in range
+EXCLUDED_PORTS = {3003, 3004}  # Dashboard, dashboard-ctl
 
 # Module Registry
 MODULES = {
@@ -389,8 +426,11 @@ def get_log_data():
 
 def get_common_context():
     """Get common context for all pages"""
+    # Check for admin mode via cookie
+    is_admin = request.cookies.get('admin_mode', '0') == '1'
     return {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'is_admin': is_admin,
     }
 
 
@@ -1883,6 +1923,29 @@ def settings():
                          active_page='settings',
                          total_modules=total_modules,
                          total_categories=total_categories,
+                         **get_common_context())
+
+
+@app.route('/api/admin-mode', methods=['POST'])
+def api_admin_mode():
+    """Toggle admin mode on/off"""
+    data = request.get_json() or {}
+    enabled = data.get('enabled', False)
+
+    response = jsonify({'success': True, 'enabled': enabled})
+    if enabled:
+        response.set_cookie('admin_mode', '1', max_age=60*60*24*365)  # 1 year
+    else:
+        response.set_cookie('admin_mode', '0', max_age=0)  # Delete cookie
+    return response
+
+
+@app.route('/pfs')
+def pfs():
+    """Precision Fleet Support - Admin only business management section"""
+    return render_template('pfs.html',
+                         active_page='pfs',
+                         active_category='pfs',
                          **get_common_context())
 
 
@@ -5678,6 +5741,518 @@ def api_kanban_reorder_tasks():
 
 
 # =============================================================================
+# Project Management Routes
+# =============================================================================
+
+@app.route('/projects')
+def projects():
+    """Main projects overview page"""
+    if not PROJECTS_AVAILABLE:
+        return render_template('projects.html',
+                             active_page='projects',
+                             error='Project management not available',
+                             areas=[], stats={},
+                             available_icons=[], default_colors=[],
+                             **get_common_context())
+
+    # Get areas (user-created, no auto-sync)
+    areas = get_all_areas()
+
+    # Get projects for each area
+    for area in areas:
+        area['projects'] = get_projects_by_area(area['id'])
+
+    stats = get_pm_stats()
+
+    return render_template('projects.html',
+                         active_page='projects',
+                         areas=areas,
+                         stats=stats,
+                         available_icons=AVAILABLE_ICONS,
+                         default_colors=DEFAULT_COLORS,
+                         **get_common_context())
+
+
+@app.route('/projects/<area_name>')
+def projects_area(area_name):
+    """Area detail page showing all projects"""
+    if not PROJECTS_AVAILABLE:
+        return redirect(url_for('projects'))
+
+    area = get_area_by_name(area_name)
+    if not area:
+        return redirect(url_for('projects'))
+
+    # Get projects (user-created, no auto-sync)
+    projects_list = get_projects_by_area(area['id'])
+
+    return render_template('projects.html',
+                         active_page='projects',
+                         current_area=area,
+                         projects=projects_list,
+                         areas=get_all_areas(),
+                         stats=get_pm_stats(),
+                         available_icons=AVAILABLE_ICONS,
+                         default_colors=DEFAULT_COLORS,
+                         **get_common_context())
+
+
+@app.route('/projects/<area_name>/<project_name>')
+def project_detail(area_name, project_name):
+    """Project detail page with kanban board"""
+    if not PROJECTS_AVAILABLE:
+        return redirect(url_for('projects'))
+
+    project = get_project_by_name(project_name, area_name)
+    if not project:
+        return redirect(url_for('projects'))
+
+    tasks = get_tasks_by_project(project['id'])
+
+    # Group tasks by status for kanban
+    task_columns = {
+        'backlog': [t for t in tasks if t['status'] == 'backlog'],
+        'todo': [t for t in tasks if t['status'] == 'todo'],
+        'in_progress': [t for t in tasks if t['status'] == 'in_progress'],
+        'done': [t for t in tasks if t['status'] == 'done']
+    }
+
+    return render_template('project_detail.html',
+                         active_page='projects',
+                         project=project,
+                         task_columns=task_columns,
+                         **get_common_context())
+
+
+@app.route('/lists')
+def lists():
+    """Personal lists page"""
+    if not PROJECTS_AVAILABLE:
+        return render_template('lists.html',
+                             active_page='lists',
+                             error='Lists not available',
+                             lists=[],
+                             **get_common_context())
+
+    all_lists = get_all_lists()
+    # Get items for each list
+    lists_with_items = []
+    for lst in all_lists:
+        full_list = get_list(lst['id'])
+        if full_list:
+            lists_with_items.append(full_list)
+
+    return render_template('lists.html',
+                         active_page='lists',
+                         lists=lists_with_items,
+                         **get_common_context())
+
+
+# =============================================================================
+# Project Management API
+# =============================================================================
+
+@app.route('/api/pm/areas')
+def api_pm_areas():
+    """Get all areas with stats"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+    return jsonify(get_all_areas())
+
+
+@app.route('/api/pm/areas', methods=['POST'])
+def api_pm_create_area():
+    """Create a new area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('name'):
+        return jsonify({'error': 'name is required'}), 400
+
+    area = create_area(
+        name=data['name'],
+        icon=data.get('icon', 'folder'),
+        color=data.get('color', '#6b7280'),
+        path=data.get('path')
+    )
+    return jsonify(area), 201
+
+
+@app.route('/api/pm/areas/<area_id>', methods=['GET'])
+def api_pm_get_area(area_id):
+    """Get a single area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    area = get_area(area_id)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+    return jsonify(area)
+
+
+@app.route('/api/pm/areas/<area_id>', methods=['PUT'])
+def api_pm_update_area(area_id):
+    """Update an area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    area = update_area(area_id, **data)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+    return jsonify(area)
+
+
+@app.route('/api/pm/areas/<area_id>', methods=['DELETE'])
+def api_pm_delete_area(area_id):
+    """Delete an area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_area(area_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Area not found'}), 404
+
+
+@app.route('/api/pm/import', methods=['POST'])
+def api_pm_import():
+    """Import areas and projects from filesystem (optional convenience feature)"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    directory_names = data.get('directories')
+
+    # Import areas from directories
+    areas = import_areas_from_directory(directory_names)
+
+    # Optionally import projects for areas with paths
+    if data.get('include_projects', True):
+        for area in areas:
+            if area.get('path'):
+                import_projects_from_directory(area['id'])
+
+    return jsonify({'success': True, 'imported_areas': len(areas)})
+
+
+@app.route('/api/pm/areas/<area_id>/import-projects', methods=['POST'])
+def api_pm_import_area_projects(area_id):
+    """Import projects from an area's linked directory"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    area = get_area(area_id)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+
+    if not area.get('path'):
+        return jsonify({'error': 'Area has no linked directory'}), 400
+
+    projects = import_projects_from_directory(area_id)
+    return jsonify({'success': True, 'imported_projects': len(projects)})
+
+
+@app.route('/api/pm/projects')
+def api_pm_projects():
+    """Get all projects"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    area_id = request.args.get('area_id')
+    if area_id:
+        return jsonify(get_projects_by_area(area_id))
+    return jsonify(get_all_projects())
+
+
+@app.route('/api/pm/projects', methods=['POST'])
+def api_pm_create_project():
+    """Create a new project"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('name') or not data.get('area_id'):
+        return jsonify({'error': 'name and area_id required'}), 400
+
+    project = create_project(
+        area_id=data['area_id'],
+        name=data['name'],
+        description=data.get('description', ''),
+        path=data.get('path')
+    )
+    return jsonify(project), 201
+
+
+@app.route('/api/pm/projects/<project_id>', methods=['PUT'])
+def api_pm_update_project(project_id):
+    """Update a project"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    project = update_project(project_id, **data)
+    if not project:
+        return jsonify({'error': 'Project not found'}), 404
+    return jsonify(project)
+
+
+@app.route('/api/pm/projects/<project_id>', methods=['DELETE'])
+def api_pm_delete_project(project_id):
+    """Delete a project"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_project(project_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Project not found'}), 404
+
+
+@app.route('/api/pm/tasks')
+def api_pm_tasks():
+    """Get all tasks, optionally filtered"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    project_id = request.args.get('project_id')
+    status = request.args.get('status')
+    priority = request.args.get('priority')
+
+    if project_id:
+        return jsonify(get_tasks_by_project(project_id))
+    return jsonify(get_all_tasks(status=status, priority=priority))
+
+
+@app.route('/api/pm/tasks', methods=['POST'])
+def api_pm_create_task():
+    """Create a new task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('title') or not data.get('project_id'):
+        return jsonify({'error': 'title and project_id required'}), 400
+
+    task = create_task(
+        project_id=data['project_id'],
+        title=data['title'],
+        notes=data.get('notes', ''),
+        status=data.get('status', 'backlog'),
+        priority=data.get('priority', 'medium')
+    )
+    return jsonify(task), 201
+
+
+@app.route('/api/pm/tasks/<task_id>')
+def api_pm_get_task(task_id):
+    """Get a single task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    task = get_task(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    return jsonify(task)
+
+
+@app.route('/api/pm/tasks/<task_id>', methods=['PUT'])
+def api_pm_update_task(task_id):
+    """Update a task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    task = update_task(task_id, **data)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    return jsonify(task)
+
+
+@app.route('/api/pm/tasks/<task_id>', methods=['DELETE'])
+def api_pm_delete_task(task_id):
+    """Delete a task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_task(task_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Task not found'}), 404
+
+
+@app.route('/api/pm/tasks/reorder', methods=['POST'])
+def api_pm_reorder_tasks():
+    """Reorder tasks"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    task_orders = data.get('tasks', [])
+
+    if reorder_tasks(task_orders):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Failed to reorder'}), 500
+
+
+@app.route('/api/pm/browse-directories')
+def api_pm_browse_directories():
+    """Browse directories for linking to projects/areas"""
+    import os
+    from pathlib import Path
+
+    path = request.args.get('path', '/home/pds')
+
+    # Security: Only allow browsing within /home/pds
+    try:
+        requested = Path(path).resolve()
+        allowed_base = Path('/home/pds').resolve()
+        if not str(requested).startswith(str(allowed_base)):
+            return jsonify({'error': 'Access denied'}), 403
+    except Exception:
+        return jsonify({'error': 'Invalid path'}), 400
+
+    if not requested.exists():
+        return jsonify({'error': 'Path does not exist'}), 404
+
+    if not requested.is_dir():
+        return jsonify({'error': 'Not a directory'}), 400
+
+    # Get directory contents
+    entries = []
+    try:
+        for entry in sorted(requested.iterdir()):
+            # Skip hidden files and common non-project directories
+            if entry.name.startswith('.'):
+                continue
+            if entry.name in ('node_modules', '__pycache__', '.venv', 'venv', '.git'):
+                continue
+
+            if entry.is_dir():
+                entries.append({
+                    'name': entry.name,
+                    'path': str(entry),
+                    'type': 'directory'
+                })
+    except PermissionError:
+        return jsonify({'error': 'Permission denied'}), 403
+
+    # Get parent path for navigation
+    parent = str(requested.parent) if requested != allowed_base else None
+
+    return jsonify({
+        'current': str(requested),
+        'parent': parent,
+        'entries': entries
+    })
+
+
+@app.route('/api/pm/lists')
+def api_pm_lists():
+    """Get all lists"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+    return jsonify(get_all_lists())
+
+
+@app.route('/api/pm/lists', methods=['POST'])
+def api_pm_create_list():
+    """Create a new list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('name'):
+        return jsonify({'error': 'name required'}), 400
+
+    lst = create_list(
+        name=data['name'],
+        icon=data.get('icon', 'list')
+    )
+    return jsonify(lst), 201
+
+
+@app.route('/api/pm/lists/<list_id>')
+def api_pm_get_list(list_id):
+    """Get a list with its items"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    lst = get_list(list_id)
+    if not lst:
+        return jsonify({'error': 'List not found'}), 404
+    return jsonify(lst)
+
+
+@app.route('/api/pm/lists/<list_id>', methods=['PUT'])
+def api_pm_update_list(list_id):
+    """Update a list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    lst = update_list(list_id, **data)
+    if not lst:
+        return jsonify({'error': 'List not found'}), 404
+    return jsonify(lst)
+
+
+@app.route('/api/pm/lists/<list_id>', methods=['DELETE'])
+def api_pm_delete_list(list_id):
+    """Delete a list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_list(list_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'List not found'}), 404
+
+
+@app.route('/api/pm/lists/<list_id>/items', methods=['POST'])
+def api_pm_add_list_item(list_id):
+    """Add an item to a list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('content'):
+        return jsonify({'error': 'content required'}), 400
+
+    item = add_list_item(list_id, data['content'])
+    return jsonify(item), 201
+
+
+@app.route('/api/pm/lists/<list_id>/items/<item_id>', methods=['PUT'])
+def api_pm_update_list_item(list_id, item_id):
+    """Update a list item"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    item = update_list_item(item_id, **data)
+    if not item:
+        return jsonify({'error': 'Item not found'}), 404
+    return jsonify(item)
+
+
+@app.route('/api/pm/lists/<list_id>/items/<item_id>', methods=['DELETE'])
+def api_pm_delete_list_item(list_id, item_id):
+    """Delete a list item"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_list_item(item_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Item not found'}), 404
+
+
+@app.route('/api/pm/stats')
+def api_pm_stats():
+    """Get project management statistics"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+    return jsonify(get_pm_stats())
+
+
+# =============================================================================
 # Dev Port Manager API
 # =============================================================================
 
@@ -5710,14 +6285,33 @@ def api_dev_port_list():
     return jsonify({'ports': ports, 'range': list(PORT_RANGE)})
 
 
+def get_pm2_pids() -> set[int]:
+    """Get set of PIDs managed by PM2."""
+    try:
+        result = subprocess.run(['pm2', 'jlist'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            pm2_list = json.loads(result.stdout)
+            return {proc['pid'] for proc in pm2_list if proc.get('pid')}
+    except Exception:
+        pass
+    return set()
+
+
+def is_dev_port(port: int) -> tuple[bool, str | None]:
+    """Check if port is in any monitored dev range."""
+    if port in EXCLUDED_PORTS:
+        return False, None
+    for start, end, category in DEV_PORT_RANGES:
+        if start <= port <= end:
+            return True, category
+    return False, None
+
+
 @app.route('/api/dev-port/active')
 def api_dev_port_active():
-    """List active dev servers with process info."""
-    import subprocess
-    import re
-
-    PORT_RANGE = (4000, 4019)
+    """List active dev servers with process info across all monitored port ranges."""
     active = []
+    pm2_pids = get_pm2_pids()
 
     # Use ss to get all listening ports with PIDs (works for IPv4 and IPv6)
     try:
@@ -5726,9 +6320,13 @@ def api_dev_port_active():
             capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
-            return jsonify({'active': [], 'range': list(PORT_RANGE), 'error': 'ss command failed'})
+            return jsonify({
+                'active': [],
+                'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES],
+                'error': 'ss command failed'
+            })
 
-        # Parse ss output to find ports in our range
+        # Parse ss output to find ports in our ranges
         # Format: LISTEN 0 511 127.0.0.1:4010 0.0.0.0:* users:(("node",pid=1474380,fd=22))
         # Or:     LISTEN 0 511 *:4000 *:* users:(("next-server",pid=3139079,fd=22))
         for line in result.stdout.split('\n'):
@@ -5749,7 +6347,9 @@ def api_dev_port_active():
                 except ValueError:
                     continue
 
-                if not (PORT_RANGE[0] <= port <= PORT_RANGE[1]):
+                # Check if port is in any monitored range
+                is_monitored, category = is_dev_port(port)
+                if not is_monitored:
                     continue
 
                 # Extract PID from users:(("name",pid=XXXX,fd=YY))
@@ -5757,6 +6357,9 @@ def api_dev_port_active():
                 pid = pid_match.group(1) if pid_match else ''
 
                 if pid:
+                    pid_int = int(pid)
+                    is_managed = pid_int in pm2_pids
+
                     # Get working directory
                     cwd = ''
                     try:
@@ -5781,8 +6384,21 @@ def api_dev_port_active():
                     except Exception:
                         pass
 
-                    # Extract project name from cwd
+                    # Extract project name from cwd or command
                     project = cwd.split('/')[-1] if cwd else f'Port {port}'
+                    # Try to get a better name from pm2 or command
+                    if is_managed:
+                        # Try to find pm2 name
+                        try:
+                            pm2_result = subprocess.run(['pm2', 'jlist'], capture_output=True, text=True, timeout=5)
+                            if pm2_result.returncode == 0:
+                                pm2_list = json.loads(pm2_result.stdout)
+                                for proc in pm2_list:
+                                    if proc.get('pid') == pid_int:
+                                        project = proc.get('name', project)
+                                        break
+                        except Exception:
+                            pass
 
                     # Avoid duplicates (IPv4 and IPv6 might both show)
                     if not any(s['port'] == port for s in active):
@@ -5791,16 +6407,25 @@ def api_dev_port_active():
                             'project': project,
                             'cwd': cwd,
                             'command': cmd[:100],  # Truncate long commands
-                            'pid': pid
+                            'pid': pid,
+                            'category': category,
+                            'managed': is_managed
                         })
 
     except Exception as e:
-        return jsonify({'active': [], 'range': list(PORT_RANGE), 'error': str(e)})
+        return jsonify({
+            'active': [],
+            'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES],
+            'error': str(e)
+        })
 
     # Sort by port number
     active.sort(key=lambda x: x['port'])
 
-    return jsonify({'active': active, 'range': list(PORT_RANGE)})
+    return jsonify({
+        'active': active,
+        'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES]
+    })
 
 
 # ============================================

@@ -13,6 +13,14 @@ The Reggie dashboard is a web-based control interface for the Reachy Mini robot 
 - **API Port:** 8000
 - **Camera Port:** 8443 (WebRTC via GStreamer)
 - **WebSocket:** ws://192.168.0.11:8000/api/state/ws/full
+- **SSH:** `ssh reggie` (key-based auth, user: pollen)
+
+### MacBook ("Reggie's Brain")
+- **IP:** 192.168.0.168
+- **SSH:** `ssh reggiembp` (key-based auth, user: reggie)
+- **Homebase Dashboard:** http://192.168.0.168:3008
+- **Homebase API:** http://192.168.0.168:3001
+- **Code Location:** `~/Reggie/reggie-homebase/`
 
 ---
 
@@ -618,9 +626,118 @@ def api_reggie_custom():
 
 ---
 
+---
+
+## SSH Access
+
+SSH access to all Reggie systems is configured for autonomous operation using the `automation_key`.
+
+### SSH Configuration (`~/.ssh/config`)
+
+```
+Host reggiembp reggie-brain
+    HostName 192.168.0.168
+    User reggie
+    IdentityFile ~/.ssh/automation_key
+    IdentitiesOnly yes
+    StrictHostKeyChecking no
+
+Host reggie reggie-robot
+    HostName 192.168.0.11
+    User pollen
+    IdentityFile ~/.ssh/automation_key
+    IdentitiesOnly yes
+    StrictHostKeyChecking no
+
+Host dofbot
+    HostName 192.168.0.52
+    User jetson
+    IdentityFile ~/.ssh/jetson_key
+    IdentitiesOnly yes
+```
+
+### Common SSH Commands
+
+```bash
+# Robot commands
+ssh reggie 'hostname'                                    # Test connection
+ssh reggie 'systemctl status reachy-mini-daemon'        # Check daemon
+ssh reggie 'sudo systemctl restart reachy-mini-daemon'  # Restart daemon
+ssh reggie 'cat ~/reggie-audio-bridge/audio_bridge.py'  # View audio bridge
+
+# MacBook commands
+ssh reggiembp 'hostname'                                 # Test connection
+ssh reggiembp 'ls ~/Reggie/reggie-homebase/'            # List homebase files
+ssh reggiembp 'cd ~/Reggie/reggie-homebase && npm run dev'  # Start frontend
+
+# Robot custom code
+ssh reggie 'cat ~/reggie-audio-bridge/.env'             # Audio bridge config
+```
+
+### Network Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Boomshakalaka Server (206.55.184.182 / localhost)          │
+│  - Main Dashboard: port 3003                                │
+│  - Proxies to Reggie Robot API                              │
+└───────────────────────┬─────────────────────────────────────┘
+                        │ SSH / HTTP
+        ┌───────────────┼───────────────┐
+        │               │               │
+        ▼               ▼               ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│ Reggie Robot  │ │ Reggie Brain  │ │ DofBot Arm    │
+│ 192.168.0.11  │ │ 192.168.0.168 │ │ 192.168.0.52  │
+│ User: pollen  │ │ User: reggie  │ │ User: jetson  │
+│               │ │ (MacBook Pro) │ │               │
+│ - Robot API   │ │ - ~/Reggie/   │ │ - Robotics    │
+│   port 8000   │ │   homebase    │ │   control     │
+│ - Camera 8443 │ │   port 3008   │ │               │
+│ - Audio Bridge│ │ - API 3001    │ │               │
+└───────────────┘ └───────────────┘ └───────────────┘
+```
+
+---
+
+## MacBook Homebase (`~/Reggie/reggie-homebase/`)
+
+The MacBook runs a React/TypeScript homebase application that handles:
+- Twilio SMS/voice webhooks
+- Robot audio bridge via WebSocket
+- Memory/conversation management
+- Real-time diagnostics
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `server/src/index.ts` | Express server with WebSocket support |
+| `src/App.tsx` | Main React application |
+| `src/pages/*.tsx` | Dashboard, Settings, Chat, Camera, etc. |
+| `src/services/*.ts` | Robot API, audio, TTS, memory services |
+| `CLAUDE.md` | Claude memory file with quick commands |
+
+### Starting Homebase Services
+
+```bash
+# Terminal 1: Backend (port 3001)
+ssh reggiembp 'cd ~/Reggie/reggie-homebase/server && npm run dev'
+
+# Terminal 2: Frontend (port 3008)
+ssh reggiembp 'cd ~/Reggie/reggie-homebase && npm run dev'
+
+# Terminal 3: ngrok (for Twilio webhooks)
+ssh reggiembp 'ngrok http 3001 --domain=uncontrovertedly-dynastic-imelda.ngrok-free.dev'
+```
+
+---
+
 ## Related Files
 
 - `/home/pds/boomshakalaka/dashboard/server.py` - Flask server with routes
 - `/home/pds/boomshakalaka/dashboard/templates/base.html` - Main site template
 - `/home/pds/boomshakalaka/dashboard/static/styles.css` - Global styles
 - `/home/pds/boomshakalaka/dashboard/static/app.js` - Global JavaScript
+- `/home/pds/.ssh/config` - SSH host configuration
+- `/home/pds/.ssh/automation_key` - Passphrase-less SSH key for automation

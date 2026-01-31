@@ -7,7 +7,7 @@ import shutil
 import json
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 

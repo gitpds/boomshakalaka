@@ -1,0 +1,1574 @@
+{% extends "base.html" %}
+
+{% block title %}Projects{% endblock %}
+{% block sidebar_title %}Projects{% endblock %}
+{% block page_title %}Projects{% endblock %}
+{% block page_subtitle %}Manage your work across all areas{% endblock %}
+
+{% block content %}
+<div class="projects-container">
+    <!-- Header Actions -->
+    <div class="pm-header-actions">
+        <button class="btn btn-primary" onclick="Projects.showAreaModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Area
+        </button>
+        <button class="btn btn-secondary" onclick="Projects.showProjectModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Project
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="pm-stats-grid">
+        <div class="pm-stat-card">
+            <div class="pm-stat-value">{{ stats.tasks.total - stats.tasks.done if stats.tasks else 0 }}</div>
+            <div class="pm-stat-label">Open Tasks</div>
+        </div>
+        <div class="pm-stat-card">
+            <div class="pm-stat-value">{{ stats.tasks.todo if stats.tasks else 0 }}</div>
+            <div class="pm-stat-label">To Do</div>
+        </div>
+        <div class="pm-stat-card">
+            <div class="pm-stat-value">{{ stats.tasks.in_progress if stats.tasks else 0 }}</div>
+            <div class="pm-stat-label">In Progress</div>
+        </div>
+        <div class="pm-stat-card pm-stat-highlight">
+            <div class="pm-stat-value">{{ stats.tasks.high_priority if stats.tasks else 0 }}</div>
+            <div class="pm-stat-label">High Priority</div>
+        </div>
+    </div>
+
+    <!-- Quick Add Task -->
+    <div class="pm-quick-add">
+        <form id="quick-add-form" onsubmit="Projects.quickAddTask(event)">
+            <input type="text" id="quick-task-title" placeholder="Quick add task..." autocomplete="off">
+            <select id="quick-task-project">
+                <option value="">Select project...</option>
+                {% for area in areas %}
+                {% for project in area.projects %}
+                <option value="{{ project.id }}">{{ area.name }}/{{ project.name }}</option>
+                {% endfor %}
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add
+            </button>
+        </form>
+    </div>
+
+    <!-- Areas List -->
+    <div class="pm-areas-list" id="areas-list">
+        {% for area in areas %}
+        <div class="pm-area" data-area-id="{{ area.id }}">
+            <div class="pm-area-header" onclick="Projects.toggleArea(this)">
+                <div class="pm-area-icon" style="background: {{ area.color }}20; color: {{ area.color }};">
+                    {% if area.icon == 'briefcase' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                    </svg>
+                    {% elif area.icon == 'cpu' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+                        <rect x="9" y="9" width="6" height="6"/>
+                        <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+                        <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+                        <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
+                        <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+                    </svg>
+                    {% elif area.icon == 'zap' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                    {% elif area.icon == 'brain' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                        <path d="M12 5v13"/>
+                    </svg>
+                    {% elif area.icon == 'server' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                        <line x1="6" y1="6" x2="6.01" y2="6"/>
+                        <line x1="6" y1="18" x2="6.01" y2="18"/>
+                    </svg>
+                    {% else %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    {% endif %}
+                </div>
+                <div class="pm-area-info">
+                    <span class="pm-area-name">{{ area.name }}</span>
+                    <span class="pm-area-stats">{{ area.project_count }} projects, {{ area.task_count }} tasks</span>
+                </div>
+                <button class="pm-area-edit" onclick="event.stopPropagation(); Projects.editArea('{{ area.id }}', '{{ area.name }}', '{{ area.icon }}', '{{ area.color }}', '{{ area.path or '' }}')" title="Edit area">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                    </svg>
+                </button>
+                <svg class="pm-area-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <div class="pm-area-content">
+                {% if area.projects %}
+                <div class="pm-projects-grid">
+                    {% for project in area.projects %}
+                    <div class="pm-project-card">
+                        <a href="{{ url_for('project_detail', area_name=area.name, project_name=project.name) }}" class="pm-project-link">
+                            <div class="pm-project-header">
+                                <span class="pm-project-name">{{ project.name }}</span>
+                                <div class="pm-project-priority-dots">
+                                    {% if project.in_progress_count > 0 %}
+                                    <span class="pm-priority-dot active" title="In Progress"></span>
+                                    {% endif %}
+                                    {% if project.todo_count > 0 %}
+                                    <span class="pm-priority-dot todo" title="To Do"></span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="pm-project-stats">
+                                <span class="pm-task-count">{{ project.task_count - project.done_count }} open</span>
+                                {% if project.done_count > 0 %}
+                                <span class="pm-done-count">{{ project.done_count }} done</span>
+                                {% endif %}
+                            </div>
+                        </a>
+                        <button class="pm-project-edit" onclick="Projects.editProject('{{ project.id }}', '{{ project.name }}', '{{ area.id }}', '{{ project.description or '' }}', '{{ project.path or '' }}')" title="Edit project">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="pm-empty-area">
+                    <p>No projects in this area yet</p>
+                    <button class="btn btn-primary btn-sm" onclick="Projects.showProjectModal('{{ area.id }}')">
+                        Add Project
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if not areas %}
+    <div class="pm-empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <h3>No areas yet</h3>
+        <p>Create areas to organize your life - Work, Personal, Health, Learning, anything you want to track</p>
+        <button class="btn btn-primary" onclick="Projects.showAreaModal()">Create First Area</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Area Modal -->
+<div class="task-modal" id="area-modal">
+    <div class="task-dialog">
+        <div class="modal-header">
+            <h3 id="area-modal-title">New Area</h3>
+            <button class="modal-close" onclick="Projects.hideAreaModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <form id="area-form" onsubmit="Projects.saveArea(event)">
+            <input type="hidden" id="area-id">
+            <div class="form-group">
+                <label for="area-name">Name</label>
+                <input type="text" id="area-name" required placeholder="e.g., Work, Personal, Side Projects...">
+            </div>
+            <div class="form-group">
+                <label>Icon</label>
+                <div class="icon-picker" id="area-icon-picker">
+                    {% for icon in available_icons %}
+                    <button type="button" class="icon-option{% if icon == 'folder' %} selected{% endif %}" data-icon="{{ icon }}" onclick="Projects.selectIcon(this)">
+                        {% if icon == 'folder' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        {% elif icon == 'briefcase' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        {% elif icon == 'cpu' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                        {% elif icon == 'zap' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        {% elif icon == 'brain' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/></svg>
+                        {% elif icon == 'server' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                        {% elif icon == 'code' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                        {% elif icon == 'database' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                        {% elif icon == 'globe' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        {% elif icon == 'home' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        {% elif icon == 'star' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        {% elif icon == 'heart' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                        {% elif icon == 'rocket' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+                        {% elif icon == 'tool' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                        {% elif icon == 'terminal' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                        {% elif icon == 'layers' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        {% elif icon == 'box' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                        {% elif icon == 'archive' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                        {% else %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        {% endif %}
+                    </button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="area-icon" value="folder">
+            </div>
+            <div class="form-group">
+                <label>Color</label>
+                <div class="color-picker" id="area-color-picker">
+                    {% for color in default_colors %}
+                    <button type="button" class="color-option{% if loop.first %} selected{% endif %}" data-color="{{ color }}" style="background: {{ color }};" onclick="Projects.selectColor(this)"></button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="area-color" value="{{ default_colors[0] if default_colors else '#10b981' }}">
+            </div>
+            <details class="form-details">
+                <summary>Advanced: Link to folder</summary>
+                <div class="form-group">
+                    <label for="area-path">Folder Path</label>
+                    <div class="path-browser-field">
+                        <input type="text" id="area-path" placeholder="No folder linked" readonly>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.showPathBrowser('area')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            Browse
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="Projects.clearPath('area')" title="Clear">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <small class="form-hint">For code projects - link to a directory on disk</small>
+                </div>
+            </details>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="Projects.hideAreaModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="area-delete-btn" onclick="Projects.deleteArea()" style="display: none;">Delete</button>
+                <button type="submit" class="btn btn-primary">Save Area</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Project Modal -->
+<div class="task-modal" id="project-modal">
+    <div class="task-dialog">
+        <div class="modal-header">
+            <h3 id="project-modal-title">New Project</h3>
+            <button class="modal-close" onclick="Projects.hideProjectModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <form id="project-form" onsubmit="Projects.saveProject(event)">
+            <input type="hidden" id="project-id">
+            <div class="form-group">
+                <label for="project-name">Name</label>
+                <input type="text" id="project-name" required placeholder="Enter project name...">
+            </div>
+            <div class="form-group">
+                <label for="project-area">Area</label>
+                <select id="project-area" required>
+                    <option value="">Select area...</option>
+                    {% for area in areas %}
+                    <option value="{{ area.id }}">{{ area.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="project-description">Description</label>
+                <textarea id="project-description" rows="2" placeholder="Brief description..."></textarea>
+            </div>
+            <details class="form-details">
+                <summary>Advanced: Link to folder</summary>
+                <div class="form-group">
+                    <label for="project-path">Folder Path</label>
+                    <div class="path-browser-field">
+                        <input type="text" id="project-path" placeholder="No folder linked" readonly>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="Projects.showPathBrowser('project')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            Browse
+                        </button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="Projects.clearPath('project')" title="Clear">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <small class="form-hint">For code projects - link to the project directory</small>
+                </div>
+            </details>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="Projects.hideProjectModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="project-delete-btn" onclick="Projects.deleteProject()" style="display: none;">Delete</button>
+                <button type="submit" class="btn btn-primary">Save Project</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Directory Browser Modal -->
+<div class="task-modal" id="path-browser-modal">
+    <div class="task-dialog path-browser-dialog">
+        <div class="modal-header">
+            <h3>Select Folder</h3>
+            <button class="modal-close" onclick="Projects.hidePathBrowser()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="path-browser-content">
+            <div class="path-browser-nav">
+                <button type="button" class="btn btn-ghost btn-sm" id="path-browser-up" onclick="Projects.browseUp()" title="Go up">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </button>
+                <div class="path-browser-current" id="path-browser-current">/home/pds</div>
+            </div>
+            <div class="path-browser-list" id="path-browser-list">
+                <!-- Directory entries will be loaded here -->
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="Projects.hidePathBrowser()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="Projects.selectCurrentPath()">Select This Folder</button>
+        </div>
+    </div>
+</div>
+
+<!-- Task Modal -->
+<div class="task-modal" id="task-modal">
+    <div class="task-dialog">
+        <div class="modal-header">
+            <h3 id="modal-title">Add Task</h3>
+            <button class="modal-close" onclick="Projects.hideTaskModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <form id="task-form" onsubmit="Projects.saveTask(event)">
+            <input type="hidden" id="task-id">
+            <div class="form-group">
+                <label for="task-title">Title</label>
+                <input type="text" id="task-title" required placeholder="Enter task title...">
+            </div>
+            <div class="form-group">
+                <label for="task-project">Project</label>
+                <select id="task-project" required>
+                    <option value="">Select project...</option>
+                    {% for area in areas %}
+                    {% for project in area.projects %}
+                    <option value="{{ project.id }}">{{ area.name }}/{{ project.name }}</option>
+                    {% endfor %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="task-notes">Notes</label>
+                <textarea id="task-notes" rows="3" placeholder="Enter notes..."></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="task-status">Status</label>
+                    <select id="task-status">
+                        <option value="backlog">Backlog</option>
+                        <option value="todo">To Do</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="done">Done</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="task-priority">Priority</label>
+                    <select id="task-priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="Projects.hideTaskModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Task</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.projects-container {
+    max-width: 1200px;
+}
+
+/* Header Actions */
+.pm-header-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.pm-header-actions .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pm-header-actions .btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Stats Grid */
+.pm-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.pm-stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.pm-stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.pm-stat-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.pm-stat-highlight .pm-stat-value {
+    color: var(--error);
+}
+
+/* Quick Add */
+.pm-quick-add {
+    margin-bottom: 24px;
+}
+
+.pm-quick-add form {
+    display: flex;
+    gap: 12px;
+}
+
+.pm-quick-add input[type="text"] {
+    flex: 1;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.pm-quick-add input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.pm-quick-add select {
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    min-width: 200px;
+}
+
+.pm-quick-add .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+}
+
+.pm-quick-add .btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Areas List */
+.pm-areas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pm-area {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.pm-area-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-primary);
+    transition: background 0.15s ease;
+}
+
+.pm-area-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.pm-area-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.pm-area-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.pm-area-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pm-area-name {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.pm-area-stats {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.pm-area-edit {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 6px;
+    opacity: 0;
+    transition: all 0.15s ease;
+}
+
+.pm-area-header:hover .pm-area-edit {
+    opacity: 1;
+}
+
+.pm-area-edit:hover {
+    background: var(--bg-primary);
+    color: var(--accent);
+}
+
+.pm-area-edit svg {
+    width: 16px;
+    height: 16px;
+}
+
+.pm-area-chevron {
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.pm-area.expanded .pm-area-chevron {
+    transform: rotate(180deg);
+}
+
+.pm-area-content {
+    display: none;
+    padding: 0 20px 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.pm-area.expanded .pm-area-content {
+    display: block;
+}
+
+/* Projects Grid */
+.pm-projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    padding-top: 16px;
+}
+
+.pm-project-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    position: relative;
+    transition: all 0.15s ease;
+}
+
+.pm-project-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.pm-project-link {
+    display: block;
+    padding: 16px;
+    text-decoration: none;
+    color: var(--text-primary);
+}
+
+.pm-project-edit {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    padding: 6px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 6px;
+    opacity: 0;
+    transition: all 0.15s ease;
+}
+
+.pm-project-card:hover .pm-project-edit {
+    opacity: 1;
+}
+
+.pm-project-edit:hover {
+    background: var(--bg-tertiary);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.pm-project-edit svg {
+    width: 14px;
+    height: 14px;
+}
+
+.pm-project-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.pm-project-name {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.pm-project-priority-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.pm-priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+}
+
+.pm-priority-dot.active {
+    background: var(--accent);
+}
+
+.pm-priority-dot.todo {
+    background: var(--warning);
+}
+
+.pm-project-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.pm-done-count {
+    color: var(--success);
+}
+
+/* Empty States */
+.pm-empty-area {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.pm-empty-area p {
+    margin-bottom: 12px;
+}
+
+.pm-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.pm-empty-state svg {
+    width: 64px;
+    height: 64px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.pm-empty-state h3 {
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.pm-empty-state p {
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+.pm-empty-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+/* Icon Picker */
+.icon-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.icon-option {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s ease;
+}
+
+.icon-option:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.icon-option.selected {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.icon-option svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Color Picker */
+.color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.color-option {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.color-option:hover {
+    transform: scale(1.1);
+}
+
+.color-option.selected {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 2px var(--bg-secondary);
+}
+
+/* Form Enhancements */
+.optional {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 12px;
+}
+
+.form-hint {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.form-description {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Details/Summary for collapsible sections */
+.form-details {
+    margin-top: 16px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.form-details summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    user-select: none;
+}
+
+.form-details summary:hover {
+    color: var(--text-secondary);
+}
+
+.form-details[open] summary {
+    margin-bottom: 12px;
+}
+
+.form-details .form-group {
+    margin-bottom: 0;
+}
+
+/* Modal Styles (reused from kanban) */
+.task-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.task-modal.visible {
+    display: flex;
+}
+
+.task-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 6px;
+}
+
+.modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.modal-close svg {
+    width: 20px;
+    height: 20px;
+}
+
+#task-form,
+#area-form,
+#project-form {
+    padding: 24px 28px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.btn-sm {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-primary);
+}
+
+/* Path Browser Field */
+.path-browser-field {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.path-browser-field input {
+    flex: 1;
+    cursor: pointer;
+}
+
+.path-browser-field .btn-ghost {
+    background: transparent;
+    border: none;
+    padding: 6px;
+    color: var(--text-muted);
+}
+
+.path-browser-field .btn-ghost:hover {
+    color: var(--error);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Path Browser Modal */
+.path-browser-dialog {
+    max-width: 600px;
+}
+
+.path-browser-content {
+    padding: 0;
+}
+
+.path-browser-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.path-browser-current {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-browser-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.path-browser-entry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.path-browser-entry:hover {
+    background: var(--bg-tertiary);
+}
+
+.path-browser-entry svg {
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.path-browser-entry-name {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.path-browser-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.path-browser-loading {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .pm-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .pm-quick-add form {
+        flex-direction: column;
+    }
+
+    .pm-quick-add select {
+        min-width: auto;
+    }
+
+    .pm-projects-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+const Projects = {
+    editingAreaId: null,
+    editingProjectId: null,
+
+    async init() {
+        // Expand first area by default
+        const firstArea = document.querySelector('.pm-area');
+        if (firstArea) {
+            firstArea.classList.add('expanded');
+        }
+    },
+
+    toggleArea(btn) {
+        const area = btn.closest('.pm-area');
+        area.classList.toggle('expanded');
+    },
+
+    // ===== Area Modal =====
+    showAreaModal() {
+        this.editingAreaId = null;
+        document.getElementById('area-form').reset();
+        document.getElementById('area-id').value = '';
+        document.getElementById('area-icon').value = 'folder';
+        document.getElementById('area-color').value = document.querySelector('.color-option')?.dataset.color || '#10b981';
+
+        // Reset icon/color selection
+        document.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+        document.querySelector('.icon-option[data-icon="folder"]')?.classList.add('selected');
+        document.querySelectorAll('.color-option').forEach((el, i) => {
+            el.classList.toggle('selected', i === 0);
+        });
+
+        // Close the details section for new areas
+        const details = document.querySelector('#area-form .form-details');
+        if (details) details.removeAttribute('open');
+
+        document.getElementById('area-modal-title').textContent = 'New Area';
+        document.getElementById('area-delete-btn').style.display = 'none';
+
+        document.getElementById('area-modal').classList.add('visible');
+        setTimeout(() => document.getElementById('area-name').focus(), 100);
+    },
+
+    editArea(areaId, name, icon, color, path) {
+        this.editingAreaId = areaId;
+        document.getElementById('area-id').value = areaId;
+        document.getElementById('area-name').value = name;
+        document.getElementById('area-path').value = path;
+        document.getElementById('area-icon').value = icon;
+        document.getElementById('area-color').value = color;
+
+        // Set icon selection
+        document.querySelectorAll('.icon-option').forEach(el => {
+            el.classList.toggle('selected', el.dataset.icon === icon);
+        });
+
+        // Set color selection
+        document.querySelectorAll('.color-option').forEach(el => {
+            el.classList.toggle('selected', el.dataset.color === color);
+        });
+
+        // Open the details section if there's a path
+        const details = document.querySelector('#area-form .form-details');
+        if (details && path) details.setAttribute('open', '');
+
+        document.getElementById('area-modal-title').textContent = 'Edit Area';
+        document.getElementById('area-delete-btn').style.display = 'block';
+
+        document.getElementById('area-modal').classList.add('visible');
+        setTimeout(() => document.getElementById('area-name').focus(), 100);
+    },
+
+    hideAreaModal() {
+        document.getElementById('area-modal').classList.remove('visible');
+        this.editingAreaId = null;
+    },
+
+    selectIcon(btn) {
+        document.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('area-icon').value = btn.dataset.icon;
+    },
+
+    selectColor(btn) {
+        document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('area-color').value = btn.dataset.color;
+    },
+
+    async saveArea(e) {
+        e.preventDefault();
+
+        const areaData = {
+            name: document.getElementById('area-name').value,
+            icon: document.getElementById('area-icon').value,
+            color: document.getElementById('area-color').value,
+            path: document.getElementById('area-path').value || null
+        };
+
+        const areaId = document.getElementById('area-id').value;
+
+        try {
+            const resp = await fetch(areaId ? `/api/pm/areas/${areaId}` : '/api/pm/areas', {
+                method: areaId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(areaData)
+            });
+
+            if (resp.ok) {
+                this.hideAreaModal();
+                location.reload();
+            } else {
+                const err = await resp.json();
+                alert(err.error || 'Failed to save area');
+            }
+        } catch (err) {
+            console.error('Failed to save area:', err);
+        }
+    },
+
+    async deleteArea() {
+        const areaId = document.getElementById('area-id').value;
+        if (!areaId) return;
+
+        if (!confirm('Delete this area? Projects in this area will be unlinked but not deleted.')) return;
+
+        try {
+            await fetch(`/api/pm/areas/${areaId}`, { method: 'DELETE' });
+            this.hideAreaModal();
+            location.reload();
+        } catch (err) {
+            console.error('Failed to delete area:', err);
+        }
+    },
+
+    // ===== Project Modal =====
+    showProjectModal(areaId = null) {
+        this.editingProjectId = null;
+        document.getElementById('project-form').reset();
+        document.getElementById('project-id').value = '';
+        document.getElementById('project-delete-btn').style.display = 'none';
+        document.getElementById('project-modal-title').textContent = 'New Project';
+
+        // Close the details section for new projects
+        const details = document.querySelector('#project-form .form-details');
+        if (details) details.removeAttribute('open');
+
+        if (areaId) {
+            document.getElementById('project-area').value = areaId;
+        }
+
+        document.getElementById('project-modal').classList.add('visible');
+        setTimeout(() => document.getElementById('project-name').focus(), 100);
+    },
+
+    editProject(projectId, name, areaId, description, path) {
+        this.editingProjectId = projectId;
+        document.getElementById('project-id').value = projectId;
+        document.getElementById('project-name').value = name;
+        document.getElementById('project-area').value = areaId;
+        document.getElementById('project-description').value = description;
+        document.getElementById('project-path').value = path;
+
+        // Open the details section if there's a path
+        const details = document.querySelector('#project-form .form-details');
+        if (details && path) details.setAttribute('open', '');
+
+        document.getElementById('project-modal-title').textContent = 'Edit Project';
+        document.getElementById('project-delete-btn').style.display = 'block';
+
+        document.getElementById('project-modal').classList.add('visible');
+        setTimeout(() => document.getElementById('project-name').focus(), 100);
+    },
+
+    hideProjectModal() {
+        document.getElementById('project-modal').classList.remove('visible');
+        this.editingProjectId = null;
+    },
+
+    async saveProject(e) {
+        e.preventDefault();
+
+        const projectData = {
+            name: document.getElementById('project-name').value,
+            area_id: document.getElementById('project-area').value,
+            description: document.getElementById('project-description').value,
+            path: document.getElementById('project-path').value || null
+        };
+
+        const projectId = document.getElementById('project-id').value;
+
+        try {
+            const resp = await fetch(projectId ? `/api/pm/projects/${projectId}` : '/api/pm/projects', {
+                method: projectId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(projectData)
+            });
+
+            if (resp.ok) {
+                this.hideProjectModal();
+                location.reload();
+            } else {
+                const err = await resp.json();
+                alert(err.error || 'Failed to save project');
+            }
+        } catch (err) {
+            console.error('Failed to save project:', err);
+        }
+    },
+
+    async deleteProject() {
+        const projectId = document.getElementById('project-id').value;
+        if (!projectId) return;
+
+        if (!confirm('Delete this project? All tasks will be deleted.')) return;
+
+        try {
+            await fetch(`/api/pm/projects/${projectId}`, { method: 'DELETE' });
+            this.hideProjectModal();
+            location.reload();
+        } catch (err) {
+            console.error('Failed to delete project:', err);
+        }
+    },
+
+    // ===== Path Browser =====
+    pathBrowserTarget: null,  // 'area' or 'project'
+    currentBrowsePath: '/home/pds',
+
+    async showPathBrowser(target) {
+        this.pathBrowserTarget = target;
+        this.currentBrowsePath = '/home/pds';
+        document.getElementById('path-browser-modal').classList.add('visible');
+        await this.loadDirectory('/home/pds');
+    },
+
+    hidePathBrowser() {
+        document.getElementById('path-browser-modal').classList.remove('visible');
+        this.pathBrowserTarget = null;
+    },
+
+    async loadDirectory(path) {
+        const listEl = document.getElementById('path-browser-list');
+        const currentEl = document.getElementById('path-browser-current');
+        const upBtn = document.getElementById('path-browser-up');
+
+        listEl.innerHTML = '<div class="path-browser-loading">Loading...</div>';
+
+        try {
+            const resp = await fetch(`/api/pm/browse-directories?path=${encodeURIComponent(path)}`);
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                listEl.innerHTML = `<div class="path-browser-empty">${data.error || 'Failed to load'}</div>`;
+                return;
+            }
+
+            this.currentBrowsePath = data.current;
+            currentEl.textContent = data.current;
+            upBtn.disabled = !data.parent;
+            upBtn.style.opacity = data.parent ? '1' : '0.3';
+
+            if (data.entries.length === 0) {
+                listEl.innerHTML = '<div class="path-browser-empty">No subdirectories</div>';
+                return;
+            }
+
+            listEl.innerHTML = data.entries.map(entry => `
+                <div class="path-browser-entry" onclick="Projects.loadDirectory('${entry.path.replace(/'/g, "\\'")}')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span class="path-browser-entry-name">${entry.name}</span>
+                </div>
+            `).join('');
+        } catch (err) {
+            console.error('Failed to browse:', err);
+            listEl.innerHTML = '<div class="path-browser-empty">Failed to load directory</div>';
+        }
+    },
+
+    async browseUp() {
+        const resp = await fetch(`/api/pm/browse-directories?path=${encodeURIComponent(this.currentBrowsePath)}`);
+        const data = await resp.json();
+        if (data.parent) {
+            await this.loadDirectory(data.parent);
+        }
+    },
+
+    selectCurrentPath() {
+        const targetId = this.pathBrowserTarget === 'area' ? 'area-path' : 'project-path';
+        document.getElementById(targetId).value = this.currentBrowsePath;
+        this.hidePathBrowser();
+    },
+
+    clearPath(target) {
+        const targetId = target === 'area' ? 'area-path' : 'project-path';
+        document.getElementById(targetId).value = '';
+    },
+
+    // ===== Task Functions =====
+    async quickAddTask(e) {
+        e.preventDefault();
+
+        const title = document.getElementById('quick-task-title').value.trim();
+        const projectId = document.getElementById('quick-task-project').value;
+
+        if (!title || !projectId) {
+            alert('Please enter a task title and select a project');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/pm/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: title,
+                    project_id: projectId,
+                    status: 'todo',
+                    priority: 'medium'
+                })
+            });
+
+            if (resp.ok) {
+                document.getElementById('quick-task-title').value = '';
+                location.reload();
+            }
+        } catch (err) {
+            console.error('Failed to add task:', err);
+        }
+    },
+
+    showTaskModal(projectId = null) {
+        document.getElementById('task-form').reset();
+        document.getElementById('task-id').value = '';
+
+        if (projectId) {
+            document.getElementById('task-project').value = projectId;
+        }
+
+        document.getElementById('task-modal').classList.add('visible');
+        setTimeout(() => document.getElementById('task-title').focus(), 100);
+    },
+
+    hideTaskModal() {
+        document.getElementById('task-modal').classList.remove('visible');
+    },
+
+    async saveTask(e) {
+        e.preventDefault();
+
+        const taskData = {
+            title: document.getElementById('task-title').value,
+            project_id: document.getElementById('task-project').value,
+            notes: document.getElementById('task-notes').value,
+            status: document.getElementById('task-status').value,
+            priority: document.getElementById('task-priority').value
+        };
+
+        try {
+            const resp = await fetch('/api/pm/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(taskData)
+            });
+
+            if (resp.ok) {
+                this.hideTaskModal();
+                location.reload();
+            }
+        } catch (err) {
+            console.error('Failed to save task:', err);
+        }
+    }
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    Projects.init();
+});
+
+// Fix for back button - reload page if loaded from cache
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        location.reload();
+    }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        Projects.hidePathBrowser();
+        Projects.hideTaskModal();
+        Projects.hideAreaModal();
+        Projects.hideProjectModal();
+    }
+});
+</script>
+{% endblock %}

@@ -4,14 +4,12 @@ Provides stdout/stderr capture, timing, and error handling.
 """
 
 import io
-import sys
 import time
 import traceback
 import logging
 from abc import ABC, abstractmethod
 from contextlib import redirect_stdout, redirect_stderr
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 

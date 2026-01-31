@@ -56,7 +56,7 @@ def install_service():
         print(f"Error: Service file not found: {SERVICE_SOURCE}")
         return False
 
-    print(f"Installing service file...")
+    print("Installing service file...")
     print(f"  Source: {SERVICE_SOURCE}")
     print(f"  Destination: {SERVICE_DEST}")
 

@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}Precision Fleet Support{% endblock %}
+{% block page_title %}Precision Fleet Support{% endblock %}
+{% block page_subtitle %}Business management dashboard{% endblock %}
+{% block sidebar_title %}PFS{% endblock %}
+
+{% block content %}
+<!-- Quick Stats -->
+<div class="stats-grid">
+    <div class="stat-card pfs">
+        <div class="stat-header">
+            <div class="stat-icon pfs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+            </div>
+            <span class="stat-badge info">Customers</span>
+        </div>
+        <div class="stat-value" id="customer-count">--</div>
+        <div class="stat-label">Active Customers</div>
+    </div>
+
+    <div class="stat-card pfs">
+        <div class="stat-header">
+            <div class="stat-icon pfs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM19 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
+                    <path d="M13 16V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10"/>
+                    <path d="M3 11h10"/>
+                    <path d="M13 6h5l4 5v5a1 1 0 0 1-1 1h-1"/>
+                </svg>
+            </div>
+            <span class="stat-badge success">Fleet</span>
+        </div>
+        <div class="stat-value" id="vehicle-count">--</div>
+        <div class="stat-label">Tracked Vehicles</div>
+    </div>
+
+    <div class="stat-card pfs">
+        <div class="stat-header">
+            <div class="stat-icon pfs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+            </div>
+            <span class="stat-badge warning">Pending</span>
+        </div>
+        <div class="stat-value" id="invoice-count">--</div>
+        <div class="stat-label">Open Invoices</div>
+    </div>
+
+    <div class="stat-card pfs">
+        <div class="stat-header">
+            <div class="stat-icon pfs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"/>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+            </div>
+            <span class="stat-badge success">Revenue</span>
+        </div>
+        <div class="stat-value" id="monthly-revenue">$--</div>
+        <div class="stat-label">This Month</div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            Quick Actions
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="module-grid">
+            <a href="#" class="module-card" onclick="showToast('QuickBooks sync coming soon', 'info'); return false;">
+                <div class="module-header">
+                    <div class="module-title">
+                        <div class="module-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                        </div>
+                        <span class="module-name">Sync QuickBooks</span>
+                    </div>
+                </div>
+                <div class="module-body">
+                    <p class="module-description">Import customers and invoices from QuickBooks Online</p>
+                </div>
+            </a>
+
+            <a href="#" class="module-card" onclick="showToast('Customer portal coming soon', 'info'); return false;">
+                <div class="module-header">
+                    <div class="module-title">
+                        <div class="module-icon" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <span class="module-name">Customer Portal</span>
+                    </div>
+                </div>
+                <div class="module-body">
+                    <p class="module-description">View and manage customer portal access</p>
+                </div>
+            </a>
+
+            <a href="#" class="module-card" onclick="showToast('Service requests coming soon', 'info'); return false;">
+                <div class="module-header">
+                    <div class="module-title">
+                        <div class="module-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                        </div>
+                        <span class="module-name">Service Requests</span>
+                    </div>
+                </div>
+                <div class="module-body">
+                    <p class="module-description">View pending and active service requests</p>
+                </div>
+            </a>
+
+            <a href="#" class="module-card" onclick="showToast('Reports coming soon', 'info'); return false;">
+                <div class="module-header">
+                    <div class="module-title">
+                        <div class="module-icon" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="20" x2="18" y2="10"/>
+                                <line x1="12" y1="20" x2="12" y2="4"/>
+                                <line x1="6" y1="20" x2="6" y2="14"/>
+                            </svg>
+                        </div>
+                        <span class="module-name">Reports</span>
+                    </div>
+                </div>
+                <div class="module-body">
+                    <p class="module-description">Generate business and fleet reports</p>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Recent Activity
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="job-list" id="activity-list">
+            <div class="job-item">
+                <div class="job-status"></div>
+                <div class="job-info">
+                    <div class="job-name" style="color: var(--text-muted);">No recent activity</div>
+                    <div class="job-schedule">Activity will appear here as you use the system</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notes Section -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            Notes
+        </span>
+    </div>
+    <div class="card-body">
+        <textarea id="pfs-notes" class="pfs-notes-textarea" placeholder="Add notes, reminders, or tasks here..."></textarea>
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+            <button class="btn btn-primary" onclick="saveNotes()">Save Notes</button>
+            <span id="notes-status" style="color: var(--text-muted); font-size: 13px; align-self: center;"></span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+/* PFS Color Theme */
+.stat-card.pfs {
+    border-top: 3px solid #0ea5e9;
+}
+
+.stat-icon.pfs {
+    background: rgba(14, 165, 233, 0.15);
+    color: #0ea5e9;
+}
+
+/* Notes Textarea */
+.pfs-notes-textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.pfs-notes-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.pfs-notes-textarea::placeholder {
+    color: var(--text-muted);
+}
+
+/* Toast for this page */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 14px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.toast.visible {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.toast.success {
+    border-left: 4px solid var(--success);
+}
+
+.toast.error {
+    border-left: 4px solid var(--error);
+}
+
+.toast.info {
+    border-left: 4px solid #0ea5e9;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Toast notification
+function showToast(message, type = 'success') {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('visible'), 10);
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Notes persistence (localStorage for now)
+function loadNotes() {
+    const notes = localStorage.getItem('pfs_notes') || '';
+    document.getElementById('pfs-notes').value = notes;
+}
+
+function saveNotes() {
+    const notes = document.getElementById('pfs-notes').value;
+    localStorage.setItem('pfs_notes', notes);
+    document.getElementById('notes-status').textContent = 'Saved!';
+    setTimeout(() => {
+        document.getElementById('notes-status').textContent = '';
+    }, 2000);
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadNotes();
+});
+</script>
+{% endblock %}

@@ -58,7 +58,7 @@ systemctl --user disable polymarket-dashboard
 ### Manual Start
 
 ```bash
-cd /home/pds/money_printing/polymarket
+cd /home/pds/boomshakalaka/money_printing/polymarket
 python -m dashboard.server
 ```
 
@@ -95,7 +95,7 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/pds/money_printing/polymarket
+WorkingDirectory=/home/pds/boomshakalaka/money_printing/polymarket
 Environment="PATH=/home/pds/miniconda3/envs/money_env/bin:..."
 ExecStart=/home/pds/miniconda3/envs/money_env/bin/python -m dashboard.server
 Restart=always
@@ -121,7 +121,7 @@ dashboard/
 Run health checks from command line:
 
 ```bash
-cd /home/pds/money_printing/polymarket
+cd /home/pds/boomshakalaka/money_printing/polymarket
 python -m dashboard.health_check
 ```
 

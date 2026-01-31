@@ -149,7 +149,7 @@ def status_dashboard():
         print("Dashboard: NOT RUNNING")
         return False
 
-    print(f"Dashboard: RUNNING")
+    print("Dashboard: RUNNING")
     print(f"  PIDs: {pids}")
 
     # Try to check if responding

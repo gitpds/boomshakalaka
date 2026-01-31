@@ -316,22 +316,26 @@ async function loadDevServers() {
         count.textContent = data.active.length;
 
         if (data.active.length === 0) {
+            // Build range description from API response
+            const rangeDesc = data.ranges ? data.ranges.map(r => `${r.start}-${r.end}`).join(', ') : '3000-3010, 4000-4019, etc.';
             list.innerHTML = `
                 <div class="job-item" style="justify-content: center; color: var(--text-secondary);">
-                    No dev servers running (ports 4000-4019)
+                    No dev servers running on monitored ports
                 </div>
             `;
             return;
         }
 
+        // Use proxy route to access dev servers through the tunneled dashboard port
         list.innerHTML = data.active.map(server => `
             <a href="http://localhost:${server.port}" target="_blank" class="job-item" style="cursor: pointer; text-decoration: none;">
                 <div class="job-status running"></div>
                 <div class="job-info">
-                    <div class="job-name">${server.project}</div>
+                    <div class="job-name">${server.project}${server.managed ? ' <span style="color: var(--accent-color); font-size: 0.75rem;">[PM2]</span>' : ''}</div>
                     <div class="job-schedule">${server.cwd || server.command}</div>
                 </div>
-                <div class="job-meta">
+                <div class="job-meta" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    ${server.category ? `<span class="badge badge-secondary" style="font-size: 0.7rem;">${server.category}</span>` : ''}
                     <span class="badge badge-success">:${server.port}</span>
                 </div>
             </a>
