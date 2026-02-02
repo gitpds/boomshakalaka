@@ -6158,15 +6158,37 @@ def projects_area(area_name):
     if not area:
         return redirect(url_for('projects'))
 
-    # Get projects (user-created, no auto-sync)
+    # Get projects with task counts
     projects_list = get_projects_by_area(area['id'])
+    for project in projects_list:
+        tasks = get_tasks_by_project(project['id'])
+        project['task_count'] = len(tasks)
+        project['done_count'] = len([t for t in tasks if t['status'] == 'done'])
+        project['in_progress_count'] = len([t for t in tasks if t['status'] == 'in_progress'])
 
-    return render_template('projects.html',
+    # Calculate area stats
+    all_tasks = []
+    for project in projects_list:
+        tasks = get_tasks_by_project(project['id'])
+        for t in tasks:
+            t['project_name'] = project['name']
+        all_tasks.extend(tasks)
+
+    area_stats = {
+        'open_tasks': len([t for t in all_tasks if t['status'] != 'done']),
+        'in_progress': len([t for t in all_tasks if t['status'] == 'in_progress']),
+        'done_tasks': len([t for t in all_tasks if t['status'] == 'done'])
+    }
+
+    # Recent tasks (sorted by created_at, non-done first)
+    recent_tasks = sorted(all_tasks, key=lambda t: (t['status'] == 'done', t.get('created_at', '')), reverse=True)[:10]
+
+    return render_template('area_detail.html',
                          active_page='projects',
-                         current_area=area,
+                         area=area,
                          projects=projects_list,
-                         areas=get_all_areas(),
-                         stats=get_pm_stats(),
+                         stats=area_stats,
+                         recent_tasks=recent_tasks,
                          available_icons=AVAILABLE_ICONS,
                          default_colors=DEFAULT_COLORS,
                          **get_common_context())
@@ -6518,6 +6540,53 @@ def api_pm_browse_directories():
         'parent': parent,
         'entries': entries
     })
+
+
+@app.route('/api/pm/create-directory', methods=['POST'])
+def api_pm_create_directory():
+    """Create a new directory"""
+    from pathlib import Path
+    import re
+
+    data = request.get_json() or {}
+    parent_path = data.get('parent', '/home/pds')
+    folder_name = data.get('name', '').strip()
+
+    if not folder_name:
+        return jsonify({'error': 'Folder name is required'}), 400
+
+    # Validate folder name (no path separators, no special chars)
+    if not re.match(r'^[\w\-. ]+$', folder_name):
+        return jsonify({'error': 'Invalid folder name. Use only letters, numbers, dashes, underscores, dots, and spaces.'}), 400
+
+    # Security: Only allow creating within /home/pds
+    try:
+        parent = Path(parent_path).resolve()
+        allowed_base = Path('/home/pds').resolve()
+        if not str(parent).startswith(str(allowed_base)):
+            return jsonify({'error': 'Access denied'}), 403
+    except Exception:
+        return jsonify({'error': 'Invalid path'}), 400
+
+    if not parent.exists():
+        return jsonify({'error': 'Parent directory does not exist'}), 404
+
+    new_dir = parent / folder_name
+
+    if new_dir.exists():
+        return jsonify({'error': 'A folder with this name already exists'}), 400
+
+    try:
+        new_dir.mkdir(parents=False)
+        return jsonify({
+            'success': True,
+            'path': str(new_dir),
+            'name': folder_name
+        })
+    except PermissionError:
+        return jsonify({'error': 'Permission denied'}), 403
+    except Exception as e:
+        return jsonify({'error': f'Failed to create folder: {str(e)}'}), 500
 
 
 @app.route('/api/pm/lists')

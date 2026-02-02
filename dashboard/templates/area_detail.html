@@ -1,0 +1,1242 @@
+{% extends "base.html" %}
+
+{% block title %}{{ area.name }} - Projects{% endblock %}
+{% block sidebar_title %}{{ area.name }}{% endblock %}
+{% block page_title %}{{ area.name }}{% endblock %}
+{% block page_subtitle %}{{ projects|length }} projects{% endblock %}
+
+{% block content %}
+<div class="area-container">
+    <!-- Area Header -->
+    <div class="area-header">
+        <div class="area-header-left">
+            <div class="area-breadcrumb">
+                <a href="{{ url_for('projects') }}">Projects</a>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"/>
+                </svg>
+                <span>{{ area.name }}</span>
+            </div>
+            {% if area.path %}
+            <div class="area-path">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span title="{{ area.path }}">{{ area.path }}</span>
+            </div>
+            {% endif %}
+        </div>
+        <div class="area-actions">
+            <button class="btn btn-secondary" onclick="AreaDetail.showEditModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+                Edit Area
+            </button>
+            <button class="btn btn-primary" onclick="AreaDetail.showProjectModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New Project
+            </button>
+        </div>
+    </div>
+
+    <!-- Area Stats -->
+    <div class="area-stats-grid">
+        <div class="area-stat-card">
+            <div class="area-stat-value">{{ projects|length }}</div>
+            <div class="area-stat-label">Projects</div>
+        </div>
+        <div class="area-stat-card">
+            <div class="area-stat-value">{{ stats.open_tasks }}</div>
+            <div class="area-stat-label">Open Tasks</div>
+        </div>
+        <div class="area-stat-card">
+            <div class="area-stat-value">{{ stats.in_progress }}</div>
+            <div class="area-stat-label">In Progress</div>
+        </div>
+        <div class="area-stat-card area-stat-highlight">
+            <div class="area-stat-value">{{ stats.done_tasks }}</div>
+            <div class="area-stat-label">Completed</div>
+        </div>
+    </div>
+
+    <!-- Projects Grid -->
+    <div class="area-section">
+        <h2 class="area-section-title">Projects</h2>
+        {% if projects %}
+        <div class="area-projects-grid">
+            {% for project in projects %}
+            <a href="{{ url_for('project_detail', area_name=area.name, project_name=project.name) }}" class="area-project-card">
+                <div class="area-project-header">
+                    <span class="area-project-name">{{ project.name }}</span>
+                    {% if project.in_progress_count > 0 %}
+                    <span class="area-project-badge active">{{ project.in_progress_count }} active</span>
+                    {% endif %}
+                </div>
+                {% if project.description %}
+                <div class="area-project-description">{{ project.description[:100] }}{% if project.description|length > 100 %}...{% endif %}</div>
+                {% endif %}
+                <div class="area-project-stats">
+                    <span class="area-project-tasks">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"/>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                        </svg>
+                        {{ project.done_count }}/{{ project.task_count }}
+                    </span>
+                    {% if project.path %}
+                    <span class="area-project-linked" title="{{ project.path }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="area-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            </svg>
+            <p>No projects in this area yet</p>
+            <button class="btn btn-primary" onclick="AreaDetail.showProjectModal()">Create First Project</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Tasks -->
+    {% if recent_tasks %}
+    <div class="area-section">
+        <h2 class="area-section-title">Recent Tasks</h2>
+        <div class="area-tasks-list">
+            {% for task in recent_tasks[:10] %}
+            <div class="area-task-item">
+                <div class="area-task-checkbox">
+                    <input type="checkbox"
+                           {% if task.status == 'done' %}checked{% endif %}
+                           onchange="AreaDetail.toggleTask('{{ task.id }}', this.checked)">
+                </div>
+                <div class="area-task-content">
+                    <span class="area-task-title {% if task.status == 'done' %}done{% endif %}">{{ task.title }}</span>
+                    <span class="area-task-project">{{ task.project_name }}</span>
+                </div>
+                <span class="task-priority {{ task.priority }}">{{ task.priority }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Edit Area Modal -->
+<div class="task-modal" id="edit-modal">
+    <div class="task-dialog">
+        <div class="modal-header">
+            <h3>Edit Area</h3>
+            <button class="modal-close" onclick="AreaDetail.hideEditModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <form id="edit-form" onsubmit="AreaDetail.saveArea(event)">
+            <div class="form-group">
+                <label for="edit-name">Name</label>
+                <input type="text" id="edit-name" required value="{{ area.name }}">
+            </div>
+            <div class="form-group">
+                <label>Icon</label>
+                <div class="icon-picker" id="icon-picker">
+                    {% for icon in available_icons %}
+                    <button type="button" class="icon-option{% if icon == area.icon %} selected{% endif %}" data-icon="{{ icon }}" onclick="AreaDetail.selectIcon(this)">
+                        {% if icon == 'folder' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        {% elif icon == 'briefcase' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        {% elif icon == 'cpu' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
+                        {% elif icon == 'zap' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        {% elif icon == 'brain' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/></svg>
+                        {% elif icon == 'heart' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                        {% elif icon == 'star' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        {% elif icon == 'home' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        {% elif icon == 'rocket' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>
+                        {% else %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        {% endif %}
+                    </button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="edit-icon" value="{{ area.icon }}">
+            </div>
+            <div class="form-group">
+                <label>Color</label>
+                <div class="color-picker" id="color-picker">
+                    {% for color in default_colors %}
+                    <button type="button" class="color-option{% if color == area.color %} selected{% endif %}" data-color="{{ color }}" style="background: {{ color }};" onclick="AreaDetail.selectColor(this)"></button>
+                    {% endfor %}
+                </div>
+                <input type="hidden" id="edit-color" value="{{ area.color }}">
+            </div>
+            <details class="form-details"{% if area.path %} open{% endif %}>
+                <summary>Link to folder</summary>
+                <div class="form-group">
+                    <label for="edit-path">Folder Path</label>
+                    <div class="path-browser-field">
+                        <input type="text" id="edit-path" value="{{ area.path or '' }}" placeholder="No folder linked" readonly>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="AreaDetail.showPathBrowser()">Browse</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('edit-path').value=''" title="Clear">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </details>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="AreaDetail.hideEditModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="AreaDetail.deleteArea()">Delete</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- New Project Modal -->
+<div class="task-modal" id="project-modal">
+    <div class="task-dialog">
+        <div class="modal-header">
+            <h3>New Project</h3>
+            <button class="modal-close" onclick="AreaDetail.hideProjectModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <form id="project-form" onsubmit="AreaDetail.saveProject(event)">
+            <div class="form-group">
+                <label for="project-name">Name</label>
+                <input type="text" id="project-name" required placeholder="Enter project name...">
+            </div>
+            <div class="form-group">
+                <label for="project-description">Description</label>
+                <textarea id="project-description" rows="2" placeholder="Brief description..."></textarea>
+            </div>
+            <details class="form-details">
+                <summary>Link to folder</summary>
+                <div class="form-group">
+                    <label for="project-path">Folder Path</label>
+                    <div class="path-browser-field">
+                        <input type="text" id="project-path" placeholder="No folder linked" readonly>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="AreaDetail.showPathBrowser('project')">Browse</button>
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('project-path').value=''" title="Clear">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </details>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="AreaDetail.hideProjectModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Project</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Directory Browser Modal -->
+<div class="task-modal" id="path-browser-modal">
+    <div class="task-dialog path-browser-dialog">
+        <div class="modal-header">
+            <h3>Select Folder</h3>
+            <button class="modal-close" onclick="AreaDetail.hidePathBrowser()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <div class="path-browser-content">
+            <div class="path-browser-nav">
+                <button type="button" class="btn btn-ghost btn-sm" id="path-browser-up" onclick="AreaDetail.browseUp()" title="Go up">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </button>
+                <div class="path-browser-current" id="path-browser-current">/home/pds</div>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="AreaDetail.showNewFolderInput()" title="New Folder" id="new-folder-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        <line x1="12" y1="11" x2="12" y2="17"/>
+                        <line x1="9" y1="14" x2="15" y2="14"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="path-browser-new-folder" id="path-browser-new-folder" style="display: none;">
+                <input type="text" id="new-folder-name" placeholder="New folder name..." onkeydown="AreaDetail.handleNewFolderKey(event)">
+                <button type="button" class="btn btn-primary btn-sm" onclick="AreaDetail.createNewFolder()">Create</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="AreaDetail.hideNewFolderInput()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="path-browser-list" id="path-browser-list"></div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="AreaDetail.hidePathBrowser()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="AreaDetail.selectCurrentPath()">Select This Folder</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.area-container {
+    max-width: 1200px;
+}
+
+/* Area Header */
+.area-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    gap: 16px;
+}
+
+.area-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.area-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.area-breadcrumb a {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.area-breadcrumb a:hover {
+    color: var(--accent);
+}
+
+.area-breadcrumb svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+}
+
+.area-breadcrumb span {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.area-path {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+.area-path svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.area-path span {
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.area-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.area-actions .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.area-actions .btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Stats Grid */
+.area-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.area-stat-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.area-stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.area-stat-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.area-stat-highlight .area-stat-value {
+    color: var(--success);
+}
+
+/* Section */
+.area-section {
+    margin-bottom: 32px;
+}
+
+.area-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+/* Projects Grid */
+.area-projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.area-project-card {
+    display: block;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.area-project-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.area-project-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.area-project-name {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.area-project-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.area-project-badge.active {
+    background: rgba(255, 140, 0, 0.15);
+    color: var(--accent);
+}
+
+.area-project-description {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.area-project-stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.area-project-tasks {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.area-project-tasks svg {
+    width: 16px;
+    height: 16px;
+}
+
+.area-project-linked svg {
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+}
+
+/* Tasks List */
+.area-tasks-list {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.area-task-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s ease;
+}
+
+.area-task-item:last-child {
+    border-bottom: none;
+}
+
+.area-task-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.area-task-checkbox input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.area-task-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.area-task-title {
+    display: block;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.area-task-title.done {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.area-task-project {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* Empty State */
+.area-empty {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.area-empty svg {
+    width: 48px;
+    height: 48px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.area-empty p {
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+/* Task Priority */
+.task-priority {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.task-priority.high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.task-priority.medium {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.task-priority.low {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+/* Modal Styles */
+.task-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.task-modal.visible {
+    display: flex;
+}
+
+.task-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.path-browser-dialog {
+    max-width: 600px;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 6px;
+}
+
+.modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.modal-close svg {
+    width: 20px;
+    height: 20px;
+}
+
+#edit-form, #project-form {
+    padding: 24px 28px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Icon & Color Pickers */
+.icon-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.icon-option {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s ease;
+}
+
+.icon-option:hover {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.icon-option.selected {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.icon-option svg {
+    width: 20px;
+    height: 20px;
+}
+
+.color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.color-option {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.color-option:hover {
+    transform: scale(1.1);
+}
+
+.color-option.selected {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 2px var(--bg-secondary);
+}
+
+/* Path Browser */
+.path-browser-field {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.path-browser-field input {
+    flex: 1;
+    cursor: pointer;
+}
+
+.path-browser-field .btn-ghost {
+    background: transparent;
+    border: none;
+    padding: 6px;
+    color: var(--text-muted);
+}
+
+.path-browser-field .btn-ghost:hover {
+    color: var(--error);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.path-browser-content {
+    padding: 0;
+}
+
+.path-browser-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.path-browser-current {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-browser-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.path-browser-entry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.path-browser-entry:hover {
+    background: var(--bg-tertiary);
+}
+
+.path-browser-entry svg {
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.path-browser-entry-name {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.path-browser-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.path-browser-new-folder {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.path-browser-new-folder input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.path-browser-new-folder input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Details/Summary */
+.form-details {
+    margin-top: 16px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.form-details summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    user-select: none;
+}
+
+.form-details summary:hover {
+    color: var(--text-secondary);
+}
+
+.form-details[open] summary {
+    margin-bottom: 12px;
+}
+
+.form-details .form-group {
+    margin-bottom: 0;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.btn-sm {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-primary);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .area-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .area-header {
+        flex-direction: column;
+    }
+
+    .area-projects-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+const AreaDetail = {
+    areaId: '{{ area.id }}',
+    currentBrowsePath: '/home/pds',
+    pathBrowserTarget: 'area',
+
+    selectIcon(btn) {
+        document.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('edit-icon').value = btn.dataset.icon;
+    },
+
+    selectColor(btn) {
+        document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('edit-color').value = btn.dataset.color;
+    },
+
+    showEditModal() {
+        document.getElementById('edit-modal').classList.add('visible');
+    },
+
+    hideEditModal() {
+        document.getElementById('edit-modal').classList.remove('visible');
+    },
+
+    async saveArea(e) {
+        e.preventDefault();
+
+        const areaData = {
+            name: document.getElementById('edit-name').value,
+            icon: document.getElementById('edit-icon').value,
+            color: document.getElementById('edit-color').value,
+            path: document.getElementById('edit-path').value || null
+        };
+
+        try {
+            const resp = await fetch(`/api/pm/areas/${this.areaId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(areaData)
+            });
+
+            if (resp.ok) {
+                const area = await resp.json();
+                window.location.href = `/projects/${area.name}`;
+            } else {
+                const err = await resp.json();
+                alert(err.error || 'Failed to save area');
+            }
+        } catch (err) {
+            console.error('Failed to save area:', err);
+        }
+    },
+
+    async deleteArea() {
+        if (!confirm('Delete this area? Projects will be unlinked but not deleted.')) return;
+
+        try {
+            await fetch(`/api/pm/areas/${this.areaId}`, { method: 'DELETE' });
+            window.location.href = '/projects';
+        } catch (err) {
+            console.error('Failed to delete area:', err);
+        }
+    },
+
+    showProjectModal() {
+        document.getElementById('project-form').reset();
+        document.getElementById('project-modal').classList.add('visible');
+        setTimeout(() => document.getElementById('project-name').focus(), 100);
+    },
+
+    hideProjectModal() {
+        document.getElementById('project-modal').classList.remove('visible');
+    },
+
+    async saveProject(e) {
+        e.preventDefault();
+
+        const projectData = {
+            name: document.getElementById('project-name').value,
+            area_id: this.areaId,
+            description: document.getElementById('project-description').value,
+            path: document.getElementById('project-path').value || null
+        };
+
+        try {
+            const resp = await fetch('/api/pm/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(projectData)
+            });
+
+            if (resp.ok) {
+                this.hideProjectModal();
+                location.reload();
+            } else {
+                const err = await resp.json();
+                alert(err.error || 'Failed to create project');
+            }
+        } catch (err) {
+            console.error('Failed to create project:', err);
+        }
+    },
+
+    async toggleTask(taskId, done) {
+        const newStatus = done ? 'done' : 'todo';
+        try {
+            await fetch(`/api/pm/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            location.reload();
+        } catch (err) {
+            console.error('Failed to update task:', err);
+        }
+    },
+
+    // Path Browser
+    showPathBrowser(target = 'area') {
+        this.pathBrowserTarget = target;
+        this.currentBrowsePath = '/home/pds';
+        document.getElementById('path-browser-modal').classList.add('visible');
+        this.loadDirectory('/home/pds');
+    },
+
+    hidePathBrowser() {
+        document.getElementById('path-browser-modal').classList.remove('visible');
+    },
+
+    async loadDirectory(path) {
+        const listEl = document.getElementById('path-browser-list');
+        const currentEl = document.getElementById('path-browser-current');
+        const upBtn = document.getElementById('path-browser-up');
+
+        listEl.innerHTML = '<div class="path-browser-empty">Loading...</div>';
+
+        try {
+            const resp = await fetch(`/api/pm/browse-directories?path=${encodeURIComponent(path)}`);
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                listEl.innerHTML = `<div class="path-browser-empty">${data.error}</div>`;
+                return;
+            }
+
+            this.currentBrowsePath = data.current;
+            currentEl.textContent = data.current;
+            upBtn.disabled = !data.parent;
+            upBtn.style.opacity = data.parent ? '1' : '0.3';
+
+            if (data.entries.length === 0) {
+                listEl.innerHTML = '<div class="path-browser-empty">No subdirectories</div>';
+                return;
+            }
+
+            listEl.innerHTML = data.entries.map(entry => `
+                <div class="path-browser-entry" onclick="AreaDetail.loadDirectory('${entry.path.replace(/'/g, "\\'")}')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span class="path-browser-entry-name">${entry.name}</span>
+                </div>
+            `).join('');
+        } catch (err) {
+            console.error('Failed to browse:', err);
+            listEl.innerHTML = '<div class="path-browser-empty">Failed to load</div>';
+        }
+    },
+
+    async browseUp() {
+        const resp = await fetch(`/api/pm/browse-directories?path=${encodeURIComponent(this.currentBrowsePath)}`);
+        const data = await resp.json();
+        if (data.parent) {
+            await this.loadDirectory(data.parent);
+        }
+    },
+
+    selectCurrentPath() {
+        const targetId = this.pathBrowserTarget === 'project' ? 'project-path' : 'edit-path';
+        document.getElementById(targetId).value = this.currentBrowsePath;
+        this.hidePathBrowser();
+    },
+
+    showNewFolderInput() {
+        document.getElementById('path-browser-new-folder').style.display = 'flex';
+        document.getElementById('new-folder-btn').style.display = 'none';
+        setTimeout(() => document.getElementById('new-folder-name').focus(), 50);
+    },
+
+    hideNewFolderInput() {
+        document.getElementById('path-browser-new-folder').style.display = 'none';
+        document.getElementById('new-folder-btn').style.display = 'block';
+        document.getElementById('new-folder-name').value = '';
+    },
+
+    handleNewFolderKey(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            this.createNewFolder();
+        } else if (e.key === 'Escape') {
+            this.hideNewFolderInput();
+        }
+    },
+
+    async createNewFolder() {
+        const nameInput = document.getElementById('new-folder-name');
+        const folderName = nameInput.value.trim();
+
+        if (!folderName) {
+            alert('Please enter a folder name');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/pm/create-directory', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    parent: this.currentBrowsePath,
+                    name: folderName
+                })
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok) {
+                this.hideNewFolderInput();
+                // Navigate into the new folder
+                await this.loadDirectory(data.path);
+            } else {
+                alert(data.error || 'Failed to create folder');
+            }
+        } catch (err) {
+            console.error('Failed to create folder:', err);
+            alert('Failed to create folder');
+        }
+    }
+};
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        AreaDetail.hideEditModal();
+        AreaDetail.hideProjectModal();
+        AreaDetail.hidePathBrowser();
+    }
+});
+
+// Fix for back button
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        location.reload();
+    }
+});
+</script>
+{% endblock %}

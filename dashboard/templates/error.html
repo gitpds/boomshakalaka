@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_code }} - {{ error_message }}{% endblock %}
+{% block page_title %}{{ error_message }}{% endblock %}
+{% block page_subtitle %}Error {{ error_code }}{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-code">{{ error_code }}</div>
+    <h2 class="error-title">{{ error_message }}</h2>
+    {% if error_details %}
+    <p class="error-details">{{ error_details }}</p>
+    {% endif %}
+    <div class="error-actions">
+        <a href="{{ url_for('home') }}" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            Go Home
+        </a>
+        {% if error_code == 403 and not user %}
+        <a href="{{ url_for('login') }}" class="btn btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                <polyline points="10 17 15 12 10 7"/>
+                <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Sign In
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+.error-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    text-align: center;
+    padding: 40px;
+}
+
+.error-code {
+    font-family: 'Crimson Pro', serif;
+    font-size: 120px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 16px;
+    opacity: 0.8;
+}
+
+.error-title {
+    font-family: 'Crimson Pro', serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.error-details {
+    font-size: 16px;
+    color: var(--text-muted);
+    max-width: 500px;
+    margin-bottom: 32px;
+}
+
+.error-actions {
+    display: flex;
+    gap: 16px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+    border-color: var(--accent);
+}
+</style>
+{% endblock %}

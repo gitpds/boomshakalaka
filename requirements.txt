@@ -15,3 +15,6 @@ python-dotenv>=1.0
 
 # AI/LLM (optional - for theme generation)
 anthropic>=0.18
+
+# Firebase Authentication
+firebase-admin>=6.0

@@ -5,26 +5,58 @@
 {% block page_subtitle %}Configure dashboard preferences and system settings{% endblock %}
 
 {% block content %}
-<!-- Admin Mode -->
+<!-- User Profile -->
 <div class="card">
     <div class="card-header">
         <span class="card-title">
             <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
             </svg>
-            Admin Mode
+            Account
         </span>
     </div>
     <div class="card-body">
-        <div class="settings-section">
-            <div class="settings-item">
-                <div class="settings-item-info">
-                    <h4>Enable Admin View</h4>
-                    <p>Show admin-only sections like Precision Fleet Support</p>
-                </div>
-                <div class="toggle {% if is_admin %}active{% endif %}" data-setting="adminMode" onclick="toggleAdminMode(this)"></div>
+        {% if user %}
+        <div class="user-profile">
+            <div class="user-profile-row">
+                <span class="user-profile-label">Email</span>
+                <span class="user-profile-value">{{ user.email }}</span>
+            </div>
+            <div class="user-profile-row">
+                <span class="user-profile-label">Name</span>
+                <span class="user-profile-value">{{ user.name or 'Not set' }}</span>
+            </div>
+            <div class="user-profile-row">
+                <span class="user-profile-label">Role</span>
+                <span class="user-profile-value role-badge role-{{ user.role or 'guest' }}">{{ user.role or 'guest' }}</span>
+            </div>
+            <div class="user-profile-actions">
+                <button class="btn btn-secondary" onclick="logoutUser()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    Sign Out
+                </button>
             </div>
         </div>
+        {% else %}
+        <div class="user-profile-guest">
+            <p style="color: var(--text-muted); margin-bottom: 16px;">
+                You are not signed in. Sign in to access admin features and personalized settings.
+            </p>
+            <a href="{{ url_for('login') }}" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; margin-right: 6px;">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                    <polyline points="10 17 15 12 10 7"/>
+                    <line x1="15" y1="12" x2="3" y2="12"/>
+                </svg>
+                Sign In
+            </a>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -209,6 +241,79 @@
 
 {% block styles %}
 <style>
+/* User Profile Styles */
+.user-profile {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.user-profile-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.user-profile-row:last-of-type {
+    border-bottom: none;
+}
+
+.user-profile-label {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.user-profile-value {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.role-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    text-transform: capitalize;
+}
+
+.role-super_admin {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+}
+
+.role-admin {
+    background: rgba(0, 123, 255, 0.15);
+    color: #007bff;
+}
+
+.role-technician {
+    background: rgba(40, 167, 69, 0.15);
+    color: #28a745;
+}
+
+.role-customer {
+    background: rgba(108, 117, 125, 0.15);
+    color: #6c757d;
+}
+
+.role-guest {
+    background: rgba(108, 117, 125, 0.1);
+    color: var(--text-muted);
+}
+
+.user-profile-actions {
+    padding-top: 16px;
+    display: flex;
+    gap: 12px;
+}
+
+.user-profile-guest {
+    text-align: center;
+    padding: 20px;
+}
+
 /* Saved Themes Grid */
 .saved-themes-grid {
     display: grid;
@@ -339,33 +444,6 @@
 // ============================================================================
 let allThemes = {};
 let activeThemeId = null;
-
-// ============================================================================
-// Admin Mode Toggle
-// ============================================================================
-async function toggleAdminMode(toggleElement) {
-    toggleElement.classList.toggle('active');
-    const enabled = toggleElement.classList.contains('active');
-
-    try {
-        const response = await fetch('/api/admin-mode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            showToast(enabled ? 'Admin mode enabled' : 'Admin mode disabled');
-            // Reload page to update sidebar
-            setTimeout(() => window.location.reload(), 500);
-        }
-    } catch (error) {
-        console.error('Error toggling admin mode:', error);
-        toggleElement.classList.toggle('active'); // Revert
-        showToast('Failed to toggle admin mode', 'error');
-    }
-}
 
 // ============================================================================
 // Dark Mode Toggle
