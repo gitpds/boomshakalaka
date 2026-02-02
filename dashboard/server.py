@@ -17,11 +17,31 @@ import json
 import uuid
 import logging
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
+import websocket as ws_client
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file
+from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, session, Response
+from flask_sock import Sock
 from werkzeug.utils import secure_filename
+
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / '.env')
+
+# Authentication module
+try:
+    from dashboard.auth import (
+        init_firebase, verify_firebase_token, get_user_role,
+        get_current_user, is_authenticated, is_admin as auth_is_admin,
+        requires_auth, requires_role, login_user, logout_user
+    )
+    AUTH_AVAILABLE = True
+except ImportError as e:
+    print(f"Auth import failed: {e}")
+    AUTH_AVAILABLE = False
 
 # Theme generator for AI-powered theme customization
 try:
@@ -125,9 +145,19 @@ app = Flask(__name__,
             template_folder=os.path.join(os.path.dirname(__file__), 'templates'),
             static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 
+# Flask secret key for sessions (required for login)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+
 # Enable template hot reload without full debug mode
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
+
+# Initialize Flask-Sock for WebSocket support (OpenClaw proxy)
+sock = Sock(app)
+
+# Initialize Firebase on startup
+if AUTH_AVAILABLE:
+    init_firebase()
 
 # Configuration
 PROJECT_ROOT = Path('/home/pds/boomshakalaka')
@@ -426,10 +456,21 @@ def get_log_data():
 
 def get_common_context():
     """Get common context for all pages"""
-    # Check for admin mode via cookie
-    is_admin = request.cookies.get('admin_mode', '0') == '1'
+    # Get user from session (Firebase auth)
+    user = None
+    is_admin = False
+
+    if AUTH_AVAILABLE:
+        user = get_current_user()
+        if user:
+            is_admin = user.get('role') in ['admin', 'super_admin']
+    else:
+        # Fallback to cookie-based admin mode if auth not available
+        is_admin = request.cookies.get('admin_mode', '0') == '1'
+
     return {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'user': user,
         'is_admin': is_admin,
     }
 
@@ -1926,9 +1967,84 @@ def settings():
                          **get_common_context())
 
 
+# =============================================================================
+# Authentication Routes
+# =============================================================================
+
+@app.route('/login')
+def login():
+    """Login page with Firebase authentication"""
+    # If already logged in, redirect to home
+    if AUTH_AVAILABLE and is_authenticated():
+        return redirect(url_for('home'))
+    return render_template('login.html')
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_auth_login():
+    """Authenticate user with Firebase token"""
+    if not AUTH_AVAILABLE:
+        return jsonify({'success': False, 'error': 'Authentication not available'}), 503
+
+    data = request.get_json() or {}
+    token = data.get('token')
+
+    if not token:
+        return jsonify({'success': False, 'error': 'Token required'}), 400
+
+    success, error = login_user(token)
+
+    if success:
+        user = get_current_user()
+        return jsonify({
+            'success': True,
+            'user': {
+                'email': user.get('email'),
+                'name': user.get('name'),
+                'role': user.get('role'),
+            }
+        })
+    else:
+        return jsonify({'success': False, 'error': error}), 401
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_auth_logout():
+    """Logout current user"""
+    if AUTH_AVAILABLE:
+        logout_user()
+    return jsonify({'success': True})
+
+
+@app.route('/api/auth/me')
+def api_auth_me():
+    """Get current authenticated user info"""
+    if not AUTH_AVAILABLE:
+        return jsonify({'error': 'Authentication not available'}), 503
+
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    return jsonify({
+        'uid': user.get('uid'),
+        'email': user.get('email'),
+        'name': user.get('name'),
+        'role': user.get('role'),
+    })
+
+
+# Legacy admin mode toggle (deprecated - kept for backward compatibility)
 @app.route('/api/admin-mode', methods=['POST'])
 def api_admin_mode():
-    """Toggle admin mode on/off"""
+    """Toggle admin mode on/off (deprecated - use Firebase auth instead)"""
+    if AUTH_AVAILABLE and is_authenticated():
+        # If using Firebase auth, admin mode is determined by role
+        user = get_current_user()
+        is_admin = user.get('role') in ['admin', 'super_admin'] if user else False
+        return jsonify({'success': True, 'enabled': is_admin, 'message': 'Using Firebase role-based access'})
+
+    # Fallback to cookie-based for non-auth mode
     data = request.get_json() or {}
     enabled = data.get('enabled', False)
 
@@ -1943,6 +2059,18 @@ def api_admin_mode():
 @app.route('/pfs')
 def pfs():
     """Precision Fleet Support - Admin only business management section"""
+    # Require admin or super_admin role
+    if AUTH_AVAILABLE:
+        user = get_current_user()
+        if not user:
+            return redirect(url_for('login', next=request.url))
+        if user.get('role') not in ['admin', 'super_admin']:
+            return render_template('error.html',
+                                 error_code=403,
+                                 error_message='Access Denied',
+                                 error_details='This page requires admin privileges.',
+                                 **get_common_context()), 403
+
     return render_template('pfs.html',
                          active_page='pfs',
                          active_category='pfs',
@@ -2055,6 +2183,16 @@ def reggie_settings():
                          **get_common_context())
 
 
+@app.route('/reggie/openclaw')
+def reggie_openclaw():
+    """OpenClaw AI Gateway - Reggie's brain interface"""
+    return render_template('reggie_openclaw.html',
+                         active_page='reggie',
+                         reggie_page='openclaw',
+                         page_name='OpenClaw',
+                         **get_common_context())
+
+
 # Keep old routes for backwards compatibility
 @app.route('/overview')
 def overview():
@@ -2146,34 +2284,66 @@ def api_stats():
 
 REGGIE_ROBOT_URL = 'http://192.168.0.11:8000'
 REGGIE_DASHBOARD_URL = 'http://192.168.0.168:3008'  # Optional MacBook dashboard
+REGGIE_OPENCLAW_URL = 'http://192.168.0.168:18789'  # OpenClaw AI Gateway on MacBook
 
 
 @app.route('/api/reggie/health')
 def api_reggie_health():
-    """Check Reggie robot health (primary) and optional MacBook dashboard"""
+    """Check Reggie robot health (primary) and optional MacBook dashboard/OpenClaw.
+
+    All checks run in parallel for faster response times when accessed remotely.
+    """
     result = {
         'robot': False,
         'dashboard': False,
+        'openclaw': False,
         'daemon': None,
         'timestamp': datetime.now().isoformat()
     }
 
-    # Primary: Check robot API directly
-    try:
-        resp = requests.get(f'{REGGIE_ROBOT_URL}/api/daemon/status', timeout=3)
-        if resp.status_code == 200:
-            result['robot'] = True
-            data = resp.json()
-            result['daemon'] = data.get('state', 'unknown')
-    except requests.RequestException:
-        pass
+    def check_robot():
+        """Check robot API (timeout 3s)"""
+        try:
+            resp = requests.get(f'{REGGIE_ROBOT_URL}/api/daemon/status', timeout=3)
+            if resp.status_code == 200:
+                return ('robot', True, resp.json().get('state', 'unknown'))
+        except requests.RequestException:
+            pass
+        return ('robot', False, None)
 
-    # Secondary: Check MacBook dashboard (optional)
-    try:
-        resp = requests.get(REGGIE_DASHBOARD_URL, timeout=2)
-        result['dashboard'] = resp.status_code == 200
-    except requests.RequestException:
-        pass
+    def check_dashboard():
+        """Check MacBook dashboard (timeout 2s)"""
+        try:
+            resp = requests.get(REGGIE_DASHBOARD_URL, timeout=2)
+            return ('dashboard', resp.status_code == 200)
+        except requests.RequestException:
+            pass
+        return ('dashboard', False)
+
+    def check_openclaw():
+        """Check OpenClaw Gateway (timeout 5s for remote access latency)"""
+        try:
+            resp = requests.get(f'{REGGIE_OPENCLAW_URL}/health', timeout=5)
+            return ('openclaw', resp.status_code == 200)
+        except requests.RequestException:
+            pass
+        return ('openclaw', False)
+
+    # Run all checks in parallel
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [
+            executor.submit(check_robot),
+            executor.submit(check_dashboard),
+            executor.submit(check_openclaw)
+        ]
+        for future in as_completed(futures):
+            res = future.result()
+            if res[0] == 'robot':
+                result['robot'] = res[1]
+                if len(res) > 2:
+                    result['daemon'] = res[2]
+            else:
+                result[res[0]] = res[1]
 
     return jsonify(result)
 
@@ -2321,6 +2491,211 @@ def api_reggie_proxy(endpoint):
         return jsonify({'error': 'Request timed out'}), 504
     except requests.RequestException as e:
         return jsonify({'error': str(e)}), 503
+
+
+# ============================================
+# OpenClaw Proxy Routes (Secure Context Fix)
+# ============================================
+# Proxy OpenClaw through localhost so browser treats it as secure context
+# This fixes the WebSocket "secure context required" error
+
+@app.route('/openclaw-proxy/')
+@app.route('/openclaw-proxy/<path:path>')
+def openclaw_proxy(path: str = ''):
+    """Proxy HTTP requests to OpenClaw gateway"""
+    target_url = f'{REGGIE_OPENCLAW_URL}/{path}'
+
+    # Forward query string
+    if request.query_string:
+        target_url += '?' + request.query_string.decode()
+
+    try:
+        # Forward the request
+        resp = requests.request(
+            method=request.method,
+            url=target_url,
+            headers={k: v for k, v in request.headers if k.lower() not in ['host']},
+            data=request.get_data(),
+            timeout=30,
+            allow_redirects=False
+        )
+
+        # Build response - exclude hop-by-hop headers
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = [(k, v) for k, v in resp.raw.headers.items() if k.lower() not in excluded_headers]
+
+        return Response(resp.content, resp.status_code, headers)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+
+@sock.route('/openclaw-proxy')
+@sock.route('/openclaw-ws')
+def openclaw_ws_proxy(ws):
+    """Proxy WebSocket connections to OpenClaw gateway"""
+    openclaw_ws_url = REGGIE_OPENCLAW_URL.replace('http://', 'ws://')
+
+    try:
+        target = ws_client.create_connection(openclaw_ws_url, timeout=30)
+    except Exception as e:
+        logger.error(f"OpenClaw WebSocket connection failed: {e}")
+        return
+
+    def forward_to_client():
+        """Forward messages from OpenClaw to browser"""
+        try:
+            while True:
+                msg = target.recv()
+                if msg:
+                    ws.send(msg)
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread.start()
+
+    try:
+        while True:
+            msg = ws.receive()
+            if msg:
+                target.send(msg)
+    except Exception:
+        pass
+    finally:
+        target.close()
+
+
+# Root WebSocket proxy for OpenClaw iframe
+# OpenClaw UI connects to ws://localhost:3003/ based on window.location.origin
+@sock.route('/')
+def openclaw_root_ws_proxy(ws):
+    """Proxy root WebSocket connections to OpenClaw gateway (for iframe)"""
+    openclaw_ws_url = REGGIE_OPENCLAW_URL.replace('http://', 'ws://')
+
+    try:
+        target = ws_client.create_connection(openclaw_ws_url, timeout=30)
+    except Exception as e:
+        logger.error(f"OpenClaw root WebSocket connection failed: {e}")
+        return
+
+    running = True
+
+    def forward_to_client():
+        nonlocal running
+        try:
+            while running:
+                opcode, data = target.recv_data(control_frame=True)
+                if opcode == ws_client.ABNF.OPCODE_TEXT:
+                    ws.send(data.decode('utf-8'))
+                elif opcode == ws_client.ABNF.OPCODE_BINARY:
+                    ws.send(data)
+                elif opcode == ws_client.ABNF.OPCODE_CLOSE:
+                    break
+                elif opcode == ws_client.ABNF.OPCODE_PING:
+                    target.pong(data)
+                elif opcode == ws_client.ABNF.OPCODE_PONG:
+                    pass
+        except Exception as e:
+            logger.debug(f"OpenClaw WS forward_to_client ended: {e}")
+        finally:
+            running = False
+
+    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread.start()
+
+    try:
+        while running:
+            msg = ws.receive(timeout=1)
+            if msg is None:
+                continue
+            if isinstance(msg, bytes):
+                target.send_binary(msg)
+            else:
+                target.send(msg)
+    except Exception as e:
+        logger.debug(f"OpenClaw WS main loop ended: {e}")
+    finally:
+        running = False
+        try:
+            target.close()
+        except Exception:
+            pass
+
+
+# ============================================
+# Camera Signaling Proxy (SSH Tunnel Support)
+# ============================================
+REGGIE_CAMERA_SIGNALING_URL = 'ws://192.168.0.11:8443'
+
+@sock.route('/reggie/camera-signaling')
+def reggie_camera_signaling_proxy(ws):
+    """Proxy WebRTC signaling WebSocket to robot camera server.
+
+    This enables camera access when connecting via SSH tunnel (localhost:3003)
+    since the robot at 192.168.0.11 isn't directly reachable.
+    """
+    logger.info("[CameraProxy] Client connected, connecting to robot...")
+    logger.info(f"[CameraProxy] Target URL: {REGGIE_CAMERA_SIGNALING_URL}")
+
+    try:
+        target = ws_client.create_connection(REGGIE_CAMERA_SIGNALING_URL, timeout=30)
+        logger.info("[CameraProxy] Connected to robot signaling server")
+    except Exception as e:
+        logger.error(f"[CameraProxy] Failed to connect to robot: {e}")
+        return
+
+    running = True
+
+    def forward_to_client():
+        nonlocal running
+        try:
+            while running:
+                opcode, data = target.recv_data(control_frame=True)
+                if opcode == ws_client.ABNF.OPCODE_TEXT:
+                    decoded = data.decode('utf-8')
+                    preview = decoded[:100] + ('...' if len(decoded) > 100 else '')
+                    logger.info(f"[CameraProxy] Robot->Client: {preview}")
+                    ws.send(decoded)
+                elif opcode == ws_client.ABNF.OPCODE_BINARY:
+                    logger.info(f"[CameraProxy] Robot->Client: (binary {len(data)} bytes)")
+                    ws.send(data)
+                elif opcode == ws_client.ABNF.OPCODE_CLOSE:
+                    logger.info("[CameraProxy] Robot sent close frame")
+                    break
+                elif opcode == ws_client.ABNF.OPCODE_PING:
+                    target.pong(data)
+                elif opcode == ws_client.ABNF.OPCODE_PONG:
+                    pass
+        except Exception as e:
+            logger.info(f"[CameraProxy] Forward thread ended: {e}")
+        finally:
+            running = False
+
+    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread.start()
+    logger.info("[CameraProxy] Forward thread started, listening for client messages...")
+
+    try:
+        while running:
+            msg = ws.receive(timeout=1)
+            if msg is None:
+                continue
+            if isinstance(msg, bytes):
+                logger.info(f"[CameraProxy] Client->Robot: (binary {len(msg)} bytes)")
+                target.send_binary(msg)
+            else:
+                preview = msg[:100] + ('...' if len(msg) > 100 else '')
+                logger.info(f"[CameraProxy] Client->Robot: {preview}")
+                target.send(msg)
+    except Exception as e:
+        logger.info(f"[CameraProxy] Main loop ended: {e}")
+    finally:
+        running = False
+        logger.info("[CameraProxy] Connection closed")
+        try:
+            target.close()
+        except Exception:
+            pass
 
 
 @app.route('/api/team-videos/<team>')
