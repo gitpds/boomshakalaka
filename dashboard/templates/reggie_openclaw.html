@@ -217,7 +217,11 @@ const OPENCLAW_URL = '/openclaw-proxy/';
 const OPENCLAW_DIRECT_URL = 'http://192.168.0.168:18789';
 let openclawOnline = false;
 
-async function checkOpenClawStatus() {
+// Auto-retry with exponential backoff
+let retryCount = 0;
+const maxRetries = 3;
+
+async function checkOpenClawStatus(isAutoRetry = false) {
     const banner = document.getElementById('openclaw-banner');
     const statusText = document.getElementById('openclaw-status-text');
     const retryBtn = document.getElementById('openclaw-retry-btn');
@@ -225,12 +229,21 @@ async function checkOpenClawStatus() {
     const frame = document.getElementById('openclaw-frame');
     const quickbarStatus = document.getElementById('quickbar-status');
 
-    statusText.textContent = 'Checking OpenClaw Gateway...';
+    // Reset retry count on manual retry
+    if (!isAutoRetry) {
+        retryCount = 0;
+    }
+
+    statusText.textContent = retryCount > 0
+        ? `Retrying connection (${retryCount}/${maxRetries})...`
+        : 'Checking OpenClaw Gateway...';
     banner.className = 'openclaw-status-banner';
     retryBtn.style.display = 'none';
 
     try {
-        const response = await fetch('/api/reggie/health', { signal: AbortSignal.timeout(10000) });
+        const response = await fetch('/api/reggie/health', {
+            signal: AbortSignal.timeout(15000)  // 15s timeout for health check with retry
+        });
         if (response.ok) {
             const data = await response.json();
             openclawOnline = data.openclaw;
@@ -240,6 +253,7 @@ async function checkOpenClawStatus() {
                 banner.classList.add('online');
                 quickbarStatus.textContent = 'Connected';
                 quickbarStatus.classList.add('online');
+                retryCount = 0;  // Reset on success
 
                 // Load the iframe
                 loading.style.display = 'none';
@@ -253,6 +267,18 @@ async function checkOpenClawStatus() {
         }
     } catch (err) {
         console.error('OpenClaw check failed:', err);
+        retryCount++;
+
+        // Auto-retry with exponential backoff
+        if (retryCount < maxRetries) {
+            const delay = 2000 * retryCount;  // 2s, 4s, 6s
+            statusText.textContent = `Connection failed, retrying in ${delay/1000}s (${retryCount}/${maxRetries})...`;
+            banner.classList.add('offline');
+            setTimeout(() => checkOpenClawStatus(true), delay);
+            return;
+        }
+
+        // Show offline state after max retries
         statusText.textContent = 'OpenClaw Gateway offline - Start it on MacBook (192.168.0.168)';
         banner.classList.add('offline');
         retryBtn.style.display = 'block';
@@ -266,7 +292,7 @@ async function checkOpenClawStatus() {
                 <line x1="9" y1="9" x2="15" y2="15"/>
             </svg>
             <p style="color: var(--text-primary); font-weight: 500;">OpenClaw Gateway Offline</p>
-            <p class="loading-subtitle">SSH into MacBook and run: <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">openclaw gateway</code></p>
+            <p class="loading-subtitle">Service should auto-restart. If not, SSH into MacBook and run: <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">launchctl start com.reggie.openclaw</code></p>
         `;
     }
 }

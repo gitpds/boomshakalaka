@@ -18,6 +18,7 @@ import uuid
 import logging
 import sqlite3
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import websocket as ws_client
@@ -116,11 +117,12 @@ try:
         init_database as init_projects_db,
         import_areas_from_directory, import_projects_from_directory,
         get_all_areas, get_area, get_area_by_name,
-        create_area, update_area, delete_area,
+        create_area, update_area, delete_area, reorder_areas,
         get_all_projects, get_projects_by_area, get_project, get_project_by_name,
         create_project, update_project, delete_project,
         get_tasks_by_project, get_all_tasks, get_task,
         create_task, update_task, delete_task, reorder_tasks,
+        get_all_active_tasks, get_active_tasks_by_area,
         get_all_lists, get_list, create_list, update_list, delete_list,
         add_list_item, update_list_item, delete_list_item,
         get_stats as get_pm_stats,
@@ -2312,22 +2314,25 @@ def api_reggie_health():
         return ('robot', False, None)
 
     def check_dashboard():
-        """Check MacBook dashboard (timeout 2s)"""
+        """Check MacBook dashboard (timeout 1s - fast LAN)"""
         try:
-            resp = requests.get(REGGIE_DASHBOARD_URL, timeout=2)
+            resp = requests.get(REGGIE_DASHBOARD_URL, timeout=1)
             return ('dashboard', resp.status_code == 200)
         except requests.RequestException:
             pass
         return ('dashboard', False)
 
     def check_openclaw():
-        """Check OpenClaw Gateway (timeout 5s for remote access latency)"""
+        """Check OpenClaw Gateway (fast fail, 3s timeout)"""
         try:
-            resp = requests.get(f'{REGGIE_OPENCLAW_URL}/health', timeout=5)
+            resp = requests.get(
+                REGGIE_OPENCLAW_URL,
+                timeout=3,
+                headers={'Connection': 'close'}
+            )
             return ('openclaw', resp.status_code == 200)
         except requests.RequestException:
-            pass
-        return ('openclaw', False)
+            return ('openclaw', False)
 
     # Run all checks in parallel
     with ThreadPoolExecutor(max_workers=3) as executor:
@@ -2510,11 +2515,15 @@ def openclaw_proxy(path: str = ''):
         target_url += '?' + request.query_string.decode()
 
     try:
+        # Add Connection: close to prevent keep-alive issues
+        proxy_headers = {k: v for k, v in request.headers if k.lower() not in ['host', 'connection']}
+        proxy_headers['Connection'] = 'close'
+
         # Forward the request
         resp = requests.request(
             method=request.method,
             url=target_url,
-            headers={k: v for k, v in request.headers if k.lower() not in ['host']},
+            headers=proxy_headers,
             data=request.get_data(),
             timeout=30,
             allow_redirects=False
@@ -6138,11 +6147,13 @@ def projects():
         area['projects'] = get_projects_by_area(area['id'])
 
     stats = get_pm_stats()
+    active_tasks = get_all_active_tasks()
 
     return render_template('projects.html',
                          active_page='projects',
                          areas=areas,
                          stats=stats,
+                         active_tasks=active_tasks,
                          available_icons=AVAILABLE_ICONS,
                          default_colors=DEFAULT_COLORS,
                          **get_common_context())
@@ -6183,12 +6194,16 @@ def projects_area(area_name):
     # Recent tasks (sorted by created_at, non-done first)
     recent_tasks = sorted(all_tasks, key=lambda t: (t['status'] == 'done', t.get('created_at', '')), reverse=True)[:10]
 
+    # Get active tasks grouped by priority
+    active_tasks = get_active_tasks_by_area(area['id'])
+
     return render_template('area_detail.html',
                          active_page='projects',
                          area=area,
                          projects=projects_list,
                          stats=area_stats,
                          recent_tasks=recent_tasks,
+                         active_tasks=active_tasks,
                          available_icons=AVAILABLE_ICONS,
                          default_colors=DEFAULT_COLORS,
                          **get_common_context())
@@ -6310,6 +6325,29 @@ def api_pm_delete_area(area_id):
     if delete_area(area_id):
         return jsonify({'success': True})
     return jsonify({'error': 'Area not found'}), 404
+
+
+@app.route('/api/pm/areas/reorder', methods=['POST'])
+def api_pm_reorder_areas():
+    """Reorder areas"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    area_orders = data.get('areas', [])
+
+    if reorder_areas(area_orders):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Failed to reorder'}), 500
+
+
+@app.route('/api/pm/tasks/active')
+def api_pm_active_tasks():
+    """Get all active (in-progress or high-priority) tasks"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    return jsonify(get_all_active_tasks())
 
 
 @app.route('/api/pm/import', methods=['POST'])
