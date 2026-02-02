@@ -73,6 +73,31 @@
     </div>
 </div>
 
+<!-- Dev Servers -->
+<div class="card" style="margin-top: 24px; margin-bottom: 24px;">
+    <div class="card-header" style="cursor: pointer;" onclick="toggleDevServers()">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            Dev Servers
+            <span id="dev-server-count" class="badge badge-accent" style="margin-left: 8px;">0</span>
+        </span>
+        <svg id="dev-servers-chevron" class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 20px; height: 20px; transition: transform 0.2s;">
+            <polyline points="6 9 12 15 18 9"/>
+        </svg>
+    </div>
+    <div id="dev-servers-body" class="card-body" style="display: none;">
+        <div id="dev-servers-list" class="job-list">
+            <div class="job-item" style="justify-content: center; color: var(--text-secondary);">
+                Loading...
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="grid-2">
     <!-- Category Quick Links -->
     <div class="card">
@@ -263,5 +288,85 @@ document.addEventListener('DOMContentLoaded', async () => {
         pmBadge.className = `badge ${data.polymarket_api.status === 'healthy' ? 'badge-success' : 'badge-error'}`;
     }
 });
+
+// Dev Servers Widget
+let devServersExpanded = false;
+
+function toggleDevServers() {
+    devServersExpanded = !devServersExpanded;
+    const body = document.getElementById('dev-servers-body');
+    const chevron = document.getElementById('dev-servers-chevron');
+
+    body.style.display = devServersExpanded ? 'block' : 'none';
+    chevron.style.transform = devServersExpanded ? 'rotate(180deg)' : '';
+
+    if (devServersExpanded) {
+        loadDevServers();
+    }
+}
+
+async function loadDevServers() {
+    const list = document.getElementById('dev-servers-list');
+    const count = document.getElementById('dev-server-count');
+
+    try {
+        const response = await fetch('/api/dev-port/active');
+        const data = await response.json();
+
+        count.textContent = data.active.length;
+
+        if (data.active.length === 0) {
+            // Build range description from API response
+            const rangeDesc = data.ranges ? data.ranges.map(r => `${r.start}-${r.end}`).join(', ') : '3000-3010, 4000-4019, etc.';
+            list.innerHTML = `
+                <div class="job-item" style="justify-content: center; color: var(--text-secondary);">
+                    No dev servers running on monitored ports
+                </div>
+            `;
+            return;
+        }
+
+        // Use proxy route to access dev servers through the tunneled dashboard port
+        list.innerHTML = data.active.map(server => `
+            <a href="http://localhost:${server.port}" target="_blank" class="job-item" style="cursor: pointer; text-decoration: none;">
+                <div class="job-status running"></div>
+                <div class="job-info">
+                    <div class="job-name">${server.project}${server.managed ? ' <span style="color: var(--accent-color); font-size: 0.75rem;">[PM2]</span>' : ''}</div>
+                    <div class="job-schedule">${server.cwd || server.command}</div>
+                </div>
+                <div class="job-meta" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    ${server.category ? `<span class="badge badge-secondary" style="font-size: 0.7rem;">${server.category}</span>` : ''}
+                    <span class="badge badge-success">:${server.port}</span>
+                </div>
+            </a>
+        `).join('');
+    } catch (error) {
+        list.innerHTML = `
+            <div class="job-item" style="justify-content: center; color: var(--text-error);">
+                Error loading dev servers
+            </div>
+        `;
+    }
+}
+
+// Load count on page load and poll every 10 seconds
+function updateDevServerCount() {
+    fetch('/api/dev-port/active')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('dev-server-count').textContent = data.active.length;
+            // If expanded, also refresh the list
+            if (devServersExpanded) {
+                loadDevServers();
+            }
+        })
+        .catch(() => {});
+}
+
+// Initial load
+updateDevServerCount();
+
+// Poll every 10 seconds
+setInterval(updateDevServerCount, 10000);
 </script>
 {% endblock %}

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0d0906">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <title>{% block title %}Boomshakalaka{% endblock %} | Mobile</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='mobile/mobile.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon_darkbg.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/favicon_darkbg.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+    {% block head %}{% endblock %}
+</head>
+<body class="mobile-app">
+    <div class="scanner-bg"></div>
+    <div class="scan-line"></div>
+
+    <div class="mobile-shell">
+        <header class="mobile-header">
+            <div class="header-logo">
+                <img src="{{ url_for('static', filename='images/logo-small.png') }}" alt="Logo" onerror="this.style.display='none'">
+                <span class="header-title">Boomshakalaka</span>
+            </div>
+            <div class="header-status">
+                <div class="status-orb" id="status-orb"></div>
+            </div>
+        </header>
+
+        <main class="mobile-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <nav class="mobile-nav">
+        <a href="/m" class="nav-item {% if active_page == 'home' %}active{% endif %}">
+            <span class="nav-icon">&#127968;</span>
+            <span class="nav-label">Home</span>
+        </a>
+        <a href="/m/workshop" class="nav-item {% if active_page == 'workshop' or active_category == 'workshop' %}active{% endif %}">
+            <span class="nav-icon">&#128736;</span>
+            <span class="nav-label">Workshop</span>
+        </a>
+        <a href="/m/automation" class="nav-item {% if active_page == 'automation' %}active{% endif %}">
+            <span class="nav-icon">&#9881;</span>
+            <span class="nav-label">Auto</span>
+        </a>
+        <a href="/m/reggie" class="nav-item {% if active_page == 'reggie' or active_category == 'reggie' %}active{% endif %}">
+            <span class="nav-icon">&#129302;</span>
+            <span class="nav-label">Reggie</span>
+        </a>
+    </nav>
+
+    <div class="bottom-sheet-overlay"></div>
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='mobile/mobile.js') }}"></script>
+    <script src="{{ url_for('static', filename='mobile/api.js') }}"></script>
+
+    <script>
+        async function checkStatus() {
+            try {
+                const health = await MobileAPI.getHealth();
+                const orb = document.getElementById('status-orb');
+                orb.className = health?.status === 'healthy' ? 'status-orb' : health?.status === 'degraded' ? 'status-orb warning' : 'status-orb error';
+            } catch { document.getElementById('status-orb').className = 'status-orb error'; }
+        }
+        checkStatus();
+        setInterval(checkStatus, 30000);
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

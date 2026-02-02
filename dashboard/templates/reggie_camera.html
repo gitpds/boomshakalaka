@@ -92,7 +92,7 @@
                     </div>
                     <div class="info-item">
                         <span class="info-label">Signaling</span>
-                        <span class="info-value">192.168.0.11:8443</span>
+                        <span class="info-value" id="signaling-mode">--</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Producer</span>
@@ -452,7 +452,8 @@
 {% block reggie_scripts %}
 <script>
 const CameraPage = {
-    signalingUrl: 'ws://192.168.0.11:8443',
+    signalingUrl: null,
+    signalingMode: 'direct',
     ws: null,
     pc: null,
     sessionId: null,
@@ -461,7 +462,38 @@ const CameraPage = {
     isConnecting: false,
     isFullscreen: false,
 
+    getSignalingUrl() {
+        const hostname = window.location.hostname;
+
+        // SSH tunnel (localhost) -> use proxy through Boomshakalaka
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            this.signalingMode = 'proxy';
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${wsProtocol}//${window.location.host}/reggie/camera-signaling`;
+        }
+
+        // VPN or local network -> direct connection to robot
+        this.signalingMode = 'direct';
+        return 'ws://192.168.0.11:8443';
+    },
+
     init() {
+        // Set signaling URL based on access method
+        this.signalingUrl = this.getSignalingUrl();
+        console.log('[Camera] Using signaling URL:', this.signalingUrl, '(' + this.signalingMode + ')');
+
+        // Update signaling mode display
+        const signalingDisplay = document.getElementById('signaling-mode');
+        if (signalingDisplay) {
+            if (this.signalingMode === 'proxy') {
+                signalingDisplay.textContent = 'Proxy';
+                signalingDisplay.title = 'Via Boomshakalaka relay';
+            } else {
+                signalingDisplay.textContent = '192.168.0.11:8443';
+                signalingDisplay.title = 'Direct connection';
+            }
+        }
+
         // Update requirements based on connection status
         ReggieShared.on('connectionChange', (data) => {
             this.updateRequirements(data);
@@ -491,7 +523,14 @@ const CameraPage = {
     },
 
     connect() {
-        if (this.isConnecting || this.pc) return;
+        console.log('[Camera] ====== CONNECT STARTED ======');
+        console.log('[Camera] Signaling URL:', this.signalingUrl);
+        console.log('[Camera] Mode:', this.signalingMode);
+
+        if (this.isConnecting || this.pc) {
+            console.log('[Camera] Already connecting or connected, aborting');
+            return;
+        }
         this.isConnecting = true;
 
         const statusText = document.getElementById('camera-status-text');
@@ -503,16 +542,25 @@ const CameraPage = {
         connectBtn.disabled = true;
 
         try {
-            // Create peer connection
+            console.log('[Camera] Creating RTCPeerConnection...');
+            // Create peer connection with TURN for remote VPN access
             this.pc = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    {
+                        urls: 'turn:192.168.0.199:3478',
+                        username: 'reggie',
+                        credential: 'ReggieT0rn2026!'
+                    }
+                ]
             });
 
             this.pc.addTransceiver('video', { direction: 'recvonly' });
             this.pc.addTransceiver('audio', { direction: 'recvonly' });
+            console.log('[Camera] RTCPeerConnection created, transceivers added');
 
             this.pc.ontrack = (event) => {
-                console.log('[Camera] Received track:', event.track.kind);
+                console.log('[Camera] ontrack - Received track:', event.track.kind, 'streams:', event.streams.length);
                 const video = document.getElementById('camera-video');
                 if (video && event.streams[0]) {
                     video.srcObject = event.streams[0];
@@ -541,14 +589,27 @@ const CameraPage = {
             };
 
             this.pc.onconnectionstatechange = () => {
-                console.log('[Camera] Connection state:', this.pc.connectionState);
+                console.log('[Camera] RTCPeerConnection state:', this.pc.connectionState);
                 if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed') {
                     this.handleDisconnect();
                 }
             };
 
+            this.pc.onicegatheringstatechange = () => {
+                console.log('[Camera] ICE gathering state:', this.pc.iceGatheringState);
+            };
+
+            this.pc.oniceconnectionstatechange = () => {
+                console.log('[Camera] ICE connection state:', this.pc.iceConnectionState);
+            };
+
+            this.pc.onsignalingstatechange = () => {
+                console.log('[Camera] Signaling state:', this.pc.signalingState);
+            };
+
             this.pc.onicecandidate = (event) => {
                 if (event.candidate) {
+                    console.log('[Camera] ICE candidate:', event.candidate.candidate.substring(0, 60) + '...');
                     if (this.sessionId) {
                         this.sendMessage({
                             type: 'peer',
@@ -560,33 +621,39 @@ const CameraPage = {
                             }
                         });
                     } else {
+                        console.log('[Camera] ICE candidate queued (no sessionId yet)');
                         this.pendingIceCandidates.push(event.candidate);
                     }
+                } else {
+                    console.log('[Camera] ICE gathering complete');
                 }
             };
 
             // Connect to signaling server
+            console.log('[Camera] Creating WebSocket to:', this.signalingUrl);
             this.ws = new WebSocket(this.signalingUrl);
 
             this.ws.onopen = () => {
-                console.log('[Camera] WebSocket connected');
+                console.log('[Camera] WebSocket OPEN - readyState:', this.ws.readyState);
                 statusText.textContent = 'Connected to signaling...';
             };
 
             this.ws.onmessage = async (event) => {
+                console.log('[Camera] <<< RECV:', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
                 const msg = JSON.parse(event.data);
                 await this.handleMessage(msg);
             };
 
             this.ws.onerror = (err) => {
-                console.error('[Camera] WebSocket error:', err);
+                console.error('[Camera] WebSocket ERROR:', err);
+                console.error('[Camera] WebSocket ERROR details - readyState:', this.ws?.readyState);
                 statusText.textContent = 'Connection failed';
                 streamStatus.textContent = 'Error';
                 this.cleanup();
             };
 
-            this.ws.onclose = () => {
-                console.log('[Camera] WebSocket closed');
+            this.ws.onclose = (event) => {
+                console.log('[Camera] WebSocket CLOSED - code:', event.code, 'reason:', event.reason || '(none)', 'wasClean:', event.wasClean);
                 if (this.isConnecting) {
                     statusText.textContent = 'Connection closed';
                     this.cleanup();
@@ -601,19 +668,28 @@ const CameraPage = {
     },
 
     async handleMessage(msg) {
+        console.log('[Camera] Processing message type:', msg.type);
         const statusText = document.getElementById('camera-status-text');
         const producerName = document.getElementById('producer-name');
 
         switch (msg.type) {
             case 'welcome':
+                console.log('[Camera] Received welcome, sending setPeerStatus and list');
                 this.sendMessage({ type: 'setPeerStatus', roles: ['listener'], meta: {} });
                 this.sendMessage({ type: 'list' });
                 statusText.textContent = 'Finding camera...';
                 break;
 
             case 'list':
+                console.log('[Camera] Received producer list:', msg.producers?.length || 0, 'producers');
+                if (msg.producers) {
+                    msg.producers.forEach((p, i) => {
+                        console.log(`[Camera]   Producer ${i}: id=${p.id} name=${p.meta?.name}`);
+                    });
+                }
                 const producer = msg.producers.find(p => p.meta?.name === 'reachymini');
                 if (!producer) {
+                    console.log('[Camera] No reachymini producer found!');
                     statusText.textContent = 'Camera not available';
                     document.getElementById('stream-status').textContent = 'No producer';
                     this.cleanup();
@@ -621,23 +697,29 @@ const CameraPage = {
                 }
                 this.producerPeerId = producer.id;
                 producerName.textContent = producer.meta?.name || 'Unknown';
+                console.log('[Camera] Found producer, starting session with peerId:', producer.id);
                 this.sendMessage({ type: 'startSession', peerId: producer.id });
                 statusText.textContent = 'Starting session...';
                 break;
 
             case 'sessionStarted':
                 this.sessionId = msg.sessionId;
+                console.log('[Camera] Session started, sessionId:', this.sessionId);
                 statusText.textContent = 'Waiting for stream...';
                 break;
 
             case 'peer':
                 if (msg.sdp && msg.sdp.type === 'offer') {
+                    console.log('[Camera] Received SDP offer, creating answer...');
                     await this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp }));
+                    console.log('[Camera] Remote description set');
                     const answer = await this.pc.createAnswer();
                     await this.pc.setLocalDescription(answer);
+                    console.log('[Camera] Local description set, sending answer');
                     this.sendMessage({ type: 'peer', sessionId: this.sessionId, sdp: { type: 'answer', sdp: answer.sdp } });
 
                     // Flush pending ICE candidates
+                    console.log('[Camera] Flushing', this.pendingIceCandidates.length, 'pending ICE candidates');
                     for (const candidate of this.pendingIceCandidates) {
                         this.sendMessage({
                             type: 'peer',
@@ -648,6 +730,7 @@ const CameraPage = {
                     this.pendingIceCandidates = [];
                 }
                 if (msg.ice) {
+                    console.log('[Camera] Received remote ICE candidate');
                     await this.pc.addIceCandidate(new RTCIceCandidate({
                         candidate: msg.ice.candidate,
                         sdpMLineIndex: msg.ice.sdpMLineIndex,
@@ -660,12 +743,19 @@ const CameraPage = {
                 console.error('[Camera] Signaling error:', msg.details);
                 statusText.textContent = 'Error: ' + msg.details;
                 break;
+
+            default:
+                console.log('[Camera] Unknown message type:', msg.type);
         }
     },
 
     sendMessage(msg) {
         if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(msg));
+            const json = JSON.stringify(msg);
+            console.log('[Camera] >>> SEND:', json.substring(0, 200) + (json.length > 200 ? '...' : ''));
+            this.ws.send(json);
+        } else {
+            console.warn('[Camera] Cannot send - WebSocket not open, readyState:', this.ws?.readyState);
         }
     },
 

@@ -1,5 +1,35 @@
 # Reggie Dashboard Quick Reference
 
+## SSH Access (Autonomous)
+
+| Host | Alias | Command | User | Password | Key |
+|------|-------|---------|------|----------|-----|
+| Reggie Robot (192.168.0.11) | `reggie`, `reggie-robot` | `ssh reggie` | pollen | root | automation_key |
+| Reggie Brain/MacBook (192.168.0.168) | `reggiembp`, `reggie-brain` | `ssh reggiembp` | reggie | Full3ff3ct | automation_key |
+| DofBot Arm (192.168.0.52) | `dofbot` | `ssh dofbot` | jetson | (passwordless sudo) | jetson_key |
+
+All hosts use passphrase-less keys for autonomous access.
+
+### Quick SSH Commands
+```bash
+# Robot
+ssh reggie 'hostname'                    # reachy-mini
+ssh reggie 'systemctl status reachy-mini-daemon'
+ssh reggie 'sudo systemctl restart reachy-mini-daemon'
+
+# MacBook
+ssh reggiembp 'hostname'                 # reggiembp.local
+ssh reggiembp 'ls ~/Reggie/'             # List Reggie projects
+ssh reggiembp 'cd ~/Reggie/reggie-homebase && npm run dev'  # Start homebase
+
+# DofBot (Jetson Nano - Ubuntu 18.04, Python 3.6.9)
+ssh dofbot 'hostname'                    # jetson-desktop
+ssh dofbot 'ls ~/Dofbot/'                # List arm control projects
+ssh dofbot 'sudo whoami'                 # root (passwordless)
+```
+
+---
+
 ## URLs
 
 | Page | URL |

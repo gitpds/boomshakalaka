@@ -9,7 +9,6 @@ import uuid
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Type
-from datetime import datetime
 
 from automation.jobs.base import BaseJob, JobResult
 from automation.runner import db

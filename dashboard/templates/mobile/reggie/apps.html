@@ -1,0 +1,88 @@
+{% extends "mobile/base.html" %}
+{% block title %}Reggie Apps{% endblock %}
+
+{% block content %}
+<h2 class="page-title">HuggingFace Apps</h2>
+
+<div class="adventure-card mb-4" id="status-banner">
+    <div class="flex items-center gap-3">
+        <div class="status-orb" id="api-status-orb"></div>
+        <div><div style="font-weight: 500;">HuggingFace API</div><div class="text-muted" style="font-size: 0.8rem;" id="api-status-text">Checking connection...</div></div>
+    </div>
+</div>
+
+<div class="list-group" id="apps-list">
+    <div class="skeleton" style="height: 80px;"></div>
+    <div class="skeleton" style="height: 80px;"></div>
+    <div class="skeleton" style="height: 80px;"></div>
+</div>
+
+<div class="bottom-sheet" id="app-detail-sheet">
+    <div class="bottom-sheet-handle"></div>
+    <div class="bottom-sheet-content">
+        <div class="flex items-center gap-4 mb-4">
+            <div class="list-item-icon" style="width: 56px; height: 56px; font-size: 1.8rem;" id="detail-icon">&#129302;</div>
+            <div><h3 class="page-title" style="font-size: 1.1rem; margin-bottom: 4px;" id="detail-name">App Name</h3><div id="detail-status"></div></div>
+        </div>
+        <div class="adventure-card mb-3"><p class="text-secondary" style="margin: 0; font-size: 0.9rem;" id="detail-description">App description.</p></div>
+        <div class="adventure-card mb-3">
+            <div class="flex justify-between mb-2"><span class="text-secondary">Model</span><span id="detail-model">-</span></div>
+            <div class="flex justify-between"><span class="text-secondary">Status</span><span id="detail-run-status">Stopped</span></div>
+        </div>
+        <div class="flex gap-3">
+            <button class="btn btn-secondary" style="flex: 1;" id="detail-stop-btn" onclick="stopApp()" disabled>Stop</button>
+            <button class="btn btn-primary" style="flex: 1;" id="detail-start-btn" onclick="startApp()">Start</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/reggie.js') }}"></script>
+<script>
+let apps = [], selectedApp = null;
+
+document.addEventListener('DOMContentLoaded', async function() { await loadApps(); checkApiStatus(); setInterval(checkApiStatus, 30000); });
+
+async function checkApiStatus() {
+    const orb = document.getElementById('api-status-orb');
+    const text = document.getElementById('api-status-text');
+    try { const r = await fetch('/api/reggie/apps/status'); orb.className = r.ok ? 'status-orb' : 'status-orb warning'; text.textContent = r.ok ? 'Connected' : 'Limited'; } catch { orb.className = 'status-orb error'; text.textContent = 'Not connected'; }
+}
+
+async function loadApps() {
+    apps = await ReggieModule.apps.load();
+    document.getElementById('apps-list').innerHTML = apps.map(a => `
+        <div class="adventure-card list-item interactive" style="margin-bottom: 12px;" onclick="showAppDetail('${a.id}')">
+            <div class="list-item-icon">${a.icon || '&#129302;'}</div>
+            <div class="list-item-content"><div class="list-item-title">${a.name}</div><div class="list-item-subtitle">${a.model || 'AI Model'}</div></div>
+            <span class="badge ${a.status === 'running' ? 'badge-success' : 'badge-info'}">${a.status === 'running' ? 'Running' : 'Stopped'}</span>
+        </div>
+    `).join('');
+}
+
+function showAppDetail(appId) {
+    selectedApp = apps.find(a => a.id === appId);
+    if (!selectedApp) return;
+    document.getElementById('detail-icon').innerHTML = selectedApp.icon || '&#129302;';
+    document.getElementById('detail-name').textContent = selectedApp.name;
+    document.getElementById('detail-description').textContent = selectedApp.description || 'No description.';
+    document.getElementById('detail-model').textContent = selectedApp.model || '-';
+    document.getElementById('detail-run-status').textContent = selectedApp.status === 'running' ? 'Running' : 'Stopped';
+    document.getElementById('detail-status').innerHTML = selectedApp.status === 'running' ? '<span class="badge badge-success">Running</span>' : '<span class="badge badge-info">Stopped</span>';
+    document.getElementById('detail-start-btn').disabled = selectedApp.status === 'running';
+    document.getElementById('detail-stop-btn').disabled = selectedApp.status !== 'running';
+    BottomSheet.open('app-detail-sheet');
+}
+
+async function startApp() {
+    if (!selectedApp) return; Haptic.medium(); Toast.info(`Starting ${selectedApp.name}...`);
+    try { await ReggieModule.apps.start(selectedApp.id); selectedApp.status = 'running'; document.getElementById('detail-status').innerHTML = '<span class="badge badge-success">Running</span>'; document.getElementById('detail-start-btn').disabled = true; document.getElementById('detail-stop-btn').disabled = false; Toast.success('Started!'); await loadApps(); } catch { Toast.error('Failed to start'); }
+}
+
+async function stopApp() {
+    if (!selectedApp) return; Haptic.medium(); Toast.info(`Stopping ${selectedApp.name}...`);
+    try { await ReggieModule.apps.stop(selectedApp.id); selectedApp.status = 'stopped'; document.getElementById('detail-status').innerHTML = '<span class="badge badge-info">Stopped</span>'; document.getElementById('detail-start-btn').disabled = false; document.getElementById('detail-stop-btn').disabled = true; Toast.success('Stopped'); await loadApps(); } catch { Toast.error('Failed to stop'); }
+}
+</script>
+{% endblock %}

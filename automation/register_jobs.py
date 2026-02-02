@@ -45,7 +45,7 @@ def register_inventory_email_job(job_id: str, name: str, location: str,
             "subject_prefix": f"[TEST] Monthly Inventory Check - {location}",
             "location": location
         }
-        print(f"  Using TEST mode - emails will go to paul@paulstotts.com")
+        print("  Using TEST mode - emails will go to paul@paulstotts.com")
     else:
         # Production configuration
         config = {

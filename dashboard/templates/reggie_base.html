@@ -32,12 +32,6 @@
             </svg>
             <span>Camera</span>
         </a>
-        <a href="{{ url_for('reggie_moves') }}" class="reggie-nav-item {% if reggie_page == 'moves' %}active{% endif %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            <span>Moves</span>
-        </a>
         <a href="{{ url_for('reggie_apps') }}" class="reggie-nav-item {% if reggie_page == 'apps' %}active{% endif %}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="7" height="7"/>
@@ -46,6 +40,12 @@
                 <rect x="3" y="14" width="7" height="7"/>
             </svg>
             <span>Apps</span>
+        </a>
+        <a href="{{ url_for('reggie_openclaw') }}" class="reggie-nav-item {% if reggie_page == 'openclaw' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>OpenClaw</span>
         </a>
         <a href="{{ url_for('reggie_settings') }}" class="reggie-nav-item {% if reggie_page == 'settings' %}active{% endif %}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -68,6 +68,10 @@
             <div class="status-item" id="camera-status-item" title="Camera Feed">
                 <span class="status-dot" id="camera-dot"></span>
                 <span class="status-label">Cam</span>
+            </div>
+            <div class="status-item" id="openclaw-status-item" title="OpenClaw AI Gateway">
+                <span class="status-dot" id="openclaw-dot"></span>
+                <span class="status-label">OC</span>
             </div>
         </div>
     </div>
@@ -376,6 +380,7 @@ const ReggieShared = {
     // Check robot health
     async checkHealth() {
         this.updateStatusDot('robot-dot', 'connecting');
+        this.updateStatusDot('openclaw-dot', 'connecting');
 
         try {
             const response = await fetch('/api/reggie/health', { signal: AbortSignal.timeout(5000) });
@@ -383,9 +388,11 @@ const ReggieShared = {
                 const data = await response.json();
                 this.state.connected = data.robot;
                 this.state.daemonRunning = data.daemon === 'running';
+                this.state.openclawConnected = data.openclaw;
 
                 this.updateStatusDot('robot-dot', data.robot ? 'online' : 'offline');
-                this.emit('connectionChange', { connected: data.robot, daemon: data.daemon });
+                this.updateStatusDot('openclaw-dot', data.openclaw ? 'online' : 'offline');
+                this.emit('connectionChange', { connected: data.robot, daemon: data.daemon, openclaw: data.openclaw });
                 return data;
             }
         } catch (err) {
@@ -393,9 +400,11 @@ const ReggieShared = {
         }
 
         this.state.connected = false;
+        this.state.openclawConnected = false;
         this.updateStatusDot('robot-dot', 'offline');
-        this.emit('connectionChange', { connected: false, daemon: null });
-        return { robot: false, daemon: null };
+        this.updateStatusDot('openclaw-dot', 'offline');
+        this.emit('connectionChange', { connected: false, daemon: null, openclaw: false });
+        return { robot: false, daemon: null, openclaw: false };
     },
 
     // WebSocket connection

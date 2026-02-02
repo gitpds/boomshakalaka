@@ -1,0 +1,810 @@
+{% extends "base.html" %}
+
+{% block title %}Lists{% endblock %}
+{% block sidebar_title %}Lists{% endblock %}
+{% block page_title %}Lists{% endblock %}
+{% block page_subtitle %}Personal checklists and notes{% endblock %}
+
+{% block content %}
+<div class="lists-container">
+    <!-- Header Actions -->
+    <div class="lists-header">
+        <button class="btn btn-primary" onclick="Lists.showNewListModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New List
+        </button>
+    </div>
+
+    <!-- Lists Grid -->
+    <div class="lists-grid" id="lists-grid">
+        {% for lst in lists %}
+        <div class="list-card" data-list-id="{{ lst.id }}">
+            <div class="list-header">
+                <div class="list-icon">
+                    {% if lst.icon == 'film' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                        <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/>
+                        <line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/>
+                        <line x1="17" y1="17" x2="22" y2="17"/>
+                    </svg>
+                    {% elif lst.icon == 'book' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                    </svg>
+                    {% elif lst.icon == 'music' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18V5l12-2v13"/>
+                        <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                    </svg>
+                    {% elif lst.icon == 'shopping-cart' %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                    </svg>
+                    {% else %}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                        <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                        <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                    </svg>
+                    {% endif %}
+                </div>
+                <div class="list-info">
+                    <h3 class="list-name">{{ lst.name }}</h3>
+                    <span class="list-stats">
+                        {% if lst['items'] %}
+                        {{ lst['items']|selectattr('checked', 'equalto', 0)|list|length }} remaining
+                        {% else %}
+                        Empty
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="list-actions">
+                    <button class="list-action-btn" onclick="Lists.editList('{{ lst.id }}')" title="Edit list">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="list-items">
+                {% if lst['items'] %}
+                {% for item in lst['items'] %}
+                <div class="list-item {% if item.checked %}checked{% endif %}" data-item-id="{{ item.id }}">
+                    <label class="list-checkbox">
+                        <input type="checkbox" {% if item.checked %}checked{% endif %}
+                               onchange="Lists.toggleItem('{{ lst.id }}', '{{ item.id }}', this.checked)">
+                        <span class="checkbox-mark"></span>
+                    </label>
+                    <span class="item-content">{{ item.content }}</span>
+                    <button class="item-delete" onclick="Lists.deleteItem('{{ lst.id }}', '{{ item.id }}')" title="Delete">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                <div class="list-add-item">
+                    <input type="text" placeholder="Add item..."
+                           onkeydown="Lists.handleAddItemKey(event, '{{ lst.id }}', this)">
+                    <button onclick="Lists.addItemFromInput('{{ lst.id }}', this.previousElementSibling)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not lists %}
+        <div class="lists-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            <h3>No lists yet</h3>
+            <p>Create a list to track movies, books, or anything else</p>
+            <button class="btn btn-primary" onclick="Lists.showNewListModal()">Create First List</button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- New/Edit List Modal -->
+<div class="list-modal" id="list-modal">
+    <div class="list-dialog">
+        <div class="modal-header">
+            <h3 id="list-modal-title">New List</h3>
+            <button class="modal-close" onclick="Lists.hideListModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+        </div>
+        <form id="list-form" onsubmit="Lists.saveList(event)">
+            <input type="hidden" id="list-id">
+            <div class="form-group">
+                <label for="list-name">Name</label>
+                <input type="text" id="list-name" required placeholder="Enter list name...">
+            </div>
+            <div class="form-group">
+                <label>Icon</label>
+                <div class="icon-picker" id="icon-picker">
+                    <button type="button" class="icon-option selected" data-icon="list">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                            <line x1="8" y1="18" x2="21" y2="18"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="icon-option" data-icon="film">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                            <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="icon-option" data-icon="book">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="icon-option" data-icon="music">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18V5l12-2v13"/>
+                            <circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="icon-option" data-icon="shopping-cart">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+                            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                        </svg>
+                    </button>
+                </div>
+                <input type="hidden" id="list-icon" value="list">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="Lists.hideListModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="delete-list-btn" onclick="Lists.deleteList()" style="display: none;">Delete</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.lists-container {
+    max-width: 1200px;
+}
+
+.lists-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 24px;
+}
+
+.lists-header .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lists-header .btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Lists Grid */
+.lists-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+.list-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.list-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.list-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+}
+
+.list-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.list-info {
+    flex: 1;
+}
+
+.list-name {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.list-stats {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.list-actions {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.list-card:hover .list-actions {
+    opacity: 1;
+}
+
+.list-action-btn {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 6px;
+}
+
+.list-action-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.list-action-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* List Items */
+.list-items {
+    padding: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+
+.list-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.list-item.checked .item-content {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.list-checkbox {
+    position: relative;
+    cursor: pointer;
+}
+
+.list-checkbox input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.checkbox-mark {
+    display: block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.list-checkbox input:checked + .checkbox-mark {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.list-checkbox input:checked + .checkbox-mark::after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 3px;
+    width: 5px;
+    height: 10px;
+    border: solid var(--bg-primary);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.item-content {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.item-delete {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    border-radius: 4px;
+}
+
+.list-item:hover .item-delete {
+    opacity: 1;
+}
+
+.item-delete:hover {
+    color: var(--error);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.item-delete svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Add Item */
+.list-add-item {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 4px;
+}
+
+.list-add-item input {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.list-add-item input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.list-add-item button {
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.list-add-item button:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+.list-add-item button svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Empty State */
+.lists-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.lists-empty svg {
+    width: 64px;
+    height: 64px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.lists-empty h3 {
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.lists-empty p {
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+/* Modal */
+.list-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.list-modal.visible {
+    display: flex;
+}
+
+.list-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 6px;
+}
+
+.modal-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.modal-close svg {
+    width: 20px;
+    height: 20px;
+}
+
+#list-form {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.form-group input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Icon Picker */
+.icon-picker {
+    display: flex;
+    gap: 8px;
+}
+
+.icon-option {
+    width: 44px;
+    height: 44px;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: all 0.15s ease;
+}
+
+.icon-option:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.icon-option.selected {
+    border-color: var(--accent);
+    background: rgba(255, 140, 0, 0.1);
+    color: var(--accent);
+}
+
+.icon-option svg {
+    width: 20px;
+    height: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-primary);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .lists-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+const Lists = {
+    editingListId: null,
+    selectedIcon: 'list',
+
+    init() {
+        // Setup icon picker
+        document.querySelectorAll('.icon-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.icon-option').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                this.selectedIcon = btn.dataset.icon;
+                document.getElementById('list-icon').value = btn.dataset.icon;
+            });
+        });
+    },
+
+    showNewListModal() {
+        this.editingListId = null;
+        document.getElementById('list-modal-title').textContent = 'New List';
+        document.getElementById('list-form').reset();
+        document.getElementById('list-id').value = '';
+        document.getElementById('list-icon').value = 'list';
+        document.getElementById('delete-list-btn').style.display = 'none';
+
+        // Reset icon picker
+        document.querySelectorAll('.icon-option').forEach(b => b.classList.remove('selected'));
+        document.querySelector('.icon-option[data-icon="list"]').classList.add('selected');
+        this.selectedIcon = 'list';
+
+        document.getElementById('list-modal').classList.add('visible');
+        setTimeout(() => document.getElementById('list-name').focus(), 100);
+    },
+
+    hideListModal() {
+        document.getElementById('list-modal').classList.remove('visible');
+        this.editingListId = null;
+    },
+
+    async editList(listId) {
+        try {
+            const resp = await fetch(`/api/pm/lists/${listId}`);
+            const list = await resp.json();
+
+            this.editingListId = listId;
+            document.getElementById('list-modal-title').textContent = 'Edit List';
+            document.getElementById('list-id').value = list.id;
+            document.getElementById('list-name').value = list.name;
+            document.getElementById('list-icon').value = list.icon;
+            document.getElementById('delete-list-btn').style.display = 'block';
+
+            // Set icon picker
+            document.querySelectorAll('.icon-option').forEach(b => b.classList.remove('selected'));
+            const iconBtn = document.querySelector(`.icon-option[data-icon="${list.icon}"]`);
+            if (iconBtn) iconBtn.classList.add('selected');
+            this.selectedIcon = list.icon;
+
+            document.getElementById('list-modal').classList.add('visible');
+        } catch (err) {
+            console.error('Failed to load list:', err);
+        }
+    },
+
+    async saveList(e) {
+        e.preventDefault();
+
+        const listData = {
+            name: document.getElementById('list-name').value,
+            icon: document.getElementById('list-icon').value
+        };
+
+        const listId = document.getElementById('list-id').value;
+
+        try {
+            if (listId) {
+                await fetch(`/api/pm/lists/${listId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(listData)
+                });
+            } else {
+                await fetch('/api/pm/lists', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(listData)
+                });
+            }
+
+            this.hideListModal();
+            location.reload();
+        } catch (err) {
+            console.error('Failed to save list:', err);
+        }
+    },
+
+    async deleteList() {
+        const listId = document.getElementById('list-id').value;
+        if (!listId) return;
+
+        if (!confirm('Are you sure you want to delete this list and all its items?')) return;
+
+        try {
+            await fetch(`/api/pm/lists/${listId}`, { method: 'DELETE' });
+            this.hideListModal();
+            location.reload();
+        } catch (err) {
+            console.error('Failed to delete list:', err);
+        }
+    },
+
+    handleAddItemKey(e, listId, input) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            this.addItemFromInput(listId, input);
+        }
+    },
+
+    async addItemFromInput(listId, input) {
+        const content = input.value.trim();
+        if (!content) return;
+
+        try {
+            await fetch(`/api/pm/lists/${listId}/items`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+
+            input.value = '';
+            location.reload();
+        } catch (err) {
+            console.error('Failed to add item:', err);
+        }
+    },
+
+    async toggleItem(listId, itemId, checked) {
+        try {
+            await fetch(`/api/pm/lists/${listId}/items/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ checked: checked ? 1 : 0 })
+            });
+
+            // Update UI
+            const item = document.querySelector(`[data-item-id="${itemId}"]`);
+            if (item) {
+                item.classList.toggle('checked', checked);
+            }
+        } catch (err) {
+            console.error('Failed to toggle item:', err);
+        }
+    },
+
+    async deleteItem(listId, itemId) {
+        try {
+            await fetch(`/api/pm/lists/${listId}/items/${itemId}`, { method: 'DELETE' });
+            location.reload();
+        } catch (err) {
+            console.error('Failed to delete item:', err);
+        }
+    }
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    Lists.init();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        Lists.hideListModal();
+    }
+});
+</script>
+{% endblock %}

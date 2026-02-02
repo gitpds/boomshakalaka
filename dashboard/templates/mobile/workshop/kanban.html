@@ -1,0 +1,137 @@
+{% extends "mobile/base.html" %}
+{% block title %}Kanban Board{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h2 class="page-title" style="margin-bottom: 0;">Kanban Board</h2>
+    <button class="btn btn-primary btn-icon" onclick="BottomSheet.open('add-task-sheet')">&#43;</button>
+</div>
+
+<div class="tab-bar" id="column-tabs">
+    <button class="tab-item active" data-column="todo">To Do</button>
+    <button class="tab-item" data-column="progress">In Progress</button>
+    <button class="tab-item" data-column="done">Done</button>
+</div>
+
+<div class="kanban-container" id="kanban-container">
+    <div class="kanban-column" data-column="todo">
+        <div class="kanban-header"><span class="kanban-title">&#128203; To Do</span><span class="kanban-count" id="todo-count">0</span></div>
+        <div class="kanban-cards" id="todo-cards"></div>
+    </div>
+    <div class="kanban-column" data-column="progress">
+        <div class="kanban-header"><span class="kanban-title">&#9881; In Progress</span><span class="kanban-count" id="progress-count">0</span></div>
+        <div class="kanban-cards" id="progress-cards"></div>
+    </div>
+    <div class="kanban-column" data-column="done">
+        <div class="kanban-header"><span class="kanban-title">&#10003; Done</span><span class="kanban-count" id="done-count">0</span></div>
+        <div class="kanban-cards" id="done-cards"></div>
+    </div>
+</div>
+
+<p class="text-muted text-center mt-2" style="font-size: 0.75rem;">Swipe columns or long-press cards to drag</p>
+
+<div class="bottom-sheet" id="add-task-sheet">
+    <div class="bottom-sheet-handle"></div>
+    <div class="bottom-sheet-content">
+        <h3 class="page-title" style="font-size: 1.1rem;">Add Task</h3>
+        <form id="add-task-form">
+            <div class="form-group">
+                <label class="form-label">Title</label>
+                <input type="text" class="form-input" id="task-title" placeholder="Task title..." required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-input form-textarea" id="task-description" placeholder="Task description..."></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Priority</label>
+                <div class="tab-bar">
+                    <button type="button" class="tab-item" data-priority="low">Low</button>
+                    <button type="button" class="tab-item active" data-priority="medium">Medium</button>
+                    <button type="button" class="tab-item" data-priority="high">High</button>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block mt-4">Create Task</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/workshop.js') }}"></script>
+<script>
+let tasks = [], selectedPriority = 'medium';
+
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadTasks();
+    initTabNavigation();
+    initForms();
+});
+
+async function loadTasks() {
+    tasks = await WorkshopModule.kanban.load();
+    renderTasks();
+}
+
+function renderTasks() {
+    const todo = tasks.filter(t => !t.column || t.column === 'todo' || t.column === 'To Do');
+    const progress = tasks.filter(t => t.column === 'progress' || t.column === 'In Progress');
+    const done = tasks.filter(t => t.column === 'done' || t.column === 'Done');
+
+    document.getElementById('todo-cards').innerHTML = renderCards(todo);
+    document.getElementById('progress-cards').innerHTML = renderCards(progress);
+    document.getElementById('done-cards').innerHTML = renderCards(done);
+    document.getElementById('todo-count').textContent = todo.length;
+    document.getElementById('progress-count').textContent = progress.length;
+    document.getElementById('done-count').textContent = done.length;
+
+    DragDrop.init(document.getElementById('kanban-container'), {
+        onDrop: async (card, container) => {
+            const taskId = card.dataset.taskId;
+            const column = container.closest('.kanban-column')?.dataset.column;
+            if (taskId && column) { try { await MobileAPI.moveTask(taskId, column); await loadTasks(); } catch { Toast.error('Failed to move'); await loadTasks(); } }
+        }
+    });
+}
+
+function renderCards(list) {
+    if (!list.length) return '<div class="text-muted text-center" style="padding: 20px; font-size: 0.85rem;">No tasks</div>';
+    return list.map(t => `
+        <div class="kanban-card priority-${t.priority || 'medium'}" data-task-id="${t.id}">
+            <div class="kanban-card-title">${t.title}</div>
+            <div class="kanban-card-meta"><span>${t.priority === 'high' ? '&#128308; High' : t.priority === 'low' ? '&#128994; Low' : '&#128992; Medium'}</span></div>
+        </div>
+    `).join('');
+}
+
+function initTabNavigation() {
+    document.querySelectorAll('#column-tabs .tab-item').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('#column-tabs .tab-item').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            const target = document.querySelector(`[data-column="${this.dataset.column}"]`);
+            if (target) target.scrollIntoView({ behavior: 'smooth', inline: 'start' });
+        });
+    });
+    document.querySelectorAll('[data-priority]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-priority]').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            selectedPriority = this.dataset.priority;
+        });
+    });
+}
+
+function initForms() {
+    document.getElementById('add-task-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const title = document.getElementById('task-title').value.trim();
+        if (!title) return;
+        try {
+            await MobileAPI.createTask({ title, description: document.getElementById('task-description').value.trim(), priority: selectedPriority, column: 'todo' });
+            BottomSheet.close(); Toast.success('Task created!'); this.reset(); await loadTasks();
+        } catch { Toast.error('Failed to create task'); }
+    });
+}
+</script>
+{% endblock %}

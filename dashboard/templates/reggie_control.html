@@ -2,10 +2,97 @@
 
 {% block reggie_content %}
 <div class="control-layout">
-    <!-- Left Column: Head & Body Controls -->
-    <div class="control-column">
-        <!-- Head Pose Card -->
-        <div class="reggie-card">
+    <!-- Top Section: Camera -->
+    <div class="camera-section">
+        <div class="reggie-card camera-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 7l-7 5 7 5V7z"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+                <span>Camera</span>
+                <span class="reggie-card-badge live-badge" id="camera-badge" style="display: none;">Live</span>
+                <div class="camera-header-actions">
+                    <button class="header-action-btn" onclick="ControlPage.toggleFullscreen()" title="Fullscreen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 3 21 3 21 9"/>
+                            <polyline points="9 21 3 21 3 15"/>
+                            <line x1="21" y1="3" x2="14" y2="10"/>
+                            <line x1="3" y1="21" x2="10" y2="14"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="camera-body" id="camera-body">
+                <div class="camera-container">
+                    <video id="camera-video" autoplay playsinline muted></video>
+                    <div class="camera-placeholder" id="camera-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        <span class="camera-status-text" id="camera-status-text">Camera not connected</span>
+                        <button class="reggie-btn reggie-btn-primary" id="camera-connect-btn" onclick="ControlPage.connectCamera()">
+                            Connect Camera
+                        </button>
+                    </div>
+                    <div class="camera-overlay" id="camera-overlay">
+                        <div class="live-indicator">
+                            <span class="live-dot"></span>
+                            <span>Live</span>
+                        </div>
+                        <div class="camera-controls">
+                            <button class="camera-control-btn" onclick="ControlPage.disconnectCamera()" title="Disconnect">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                    <path d="M16.24 7.76 14.12 14.12 7.76 16.24"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions Row -->
+    <div class="quick-actions-section">
+        <div class="quick-actions-row">
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('happy')" title="Wave">
+                <span class="action-icon">&#128075;</span>
+                <span class="action-label">Wave</span>
+            </button>
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('dance_1')" title="Dance">
+                <span class="action-icon">&#128131;</span>
+                <span class="action-label">Dance</span>
+            </button>
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('happy')" title="Happy">
+                <span class="action-icon">&#128522;</span>
+                <span class="action-label">Happy</span>
+            </button>
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('sad')" title="Sad">
+                <span class="action-icon">&#128546;</span>
+                <span class="action-label">Sad</span>
+            </button>
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('surprised')" title="Surprised">
+                <span class="action-icon">&#128558;</span>
+                <span class="action-label">Surprise</span>
+            </button>
+            <button class="quick-action-btn" onclick="ControlPage.quickPlay('wake_up')" title="Wake Up">
+                <span class="action-icon">&#127749;</span>
+                <span class="action-label">Wake</span>
+            </button>
+            <button class="quick-action-btn" onclick="ControlPage.quickPlay('goto_sleep')" title="Sleep">
+                <span class="action-icon">&#127769;</span>
+                <span class="action-label">Sleep</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Controls Grid: Head, Body, Moves -->
+    <div class="controls-section">
+        <!-- Head Control -->
+        <div class="reggie-card control-card">
             <div class="reggie-card-header">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="4" y="4" width="16" height="16" rx="2"/>
@@ -13,201 +100,114 @@
                     <circle cx="15" cy="10" r="1.5"/>
                     <path d="M9 15h6"/>
                 </svg>
-                <span>Head Pose</span>
-                <span class="reggie-card-badge" id="head-live-badge" style="display: none;">Live</span>
+                <span>Head</span>
             </div>
             <div class="reggie-card-body">
                 <div class="slider-group">
                     <div class="reggie-slider-row">
                         <label>Roll</label>
                         <input type="range" id="head-roll" min="-45" max="45" step="1" value="0">
-                        <span class="reggie-slider-value" id="head-roll-val">0°</span>
+                        <span class="reggie-slider-value" id="head-roll-val">0</span>
                     </div>
                     <div class="reggie-slider-row">
                         <label>Pitch</label>
                         <input type="range" id="head-pitch" min="-45" max="45" step="1" value="0">
-                        <span class="reggie-slider-value" id="head-pitch-val">0°</span>
+                        <span class="reggie-slider-value" id="head-pitch-val">0</span>
                     </div>
                     <div class="reggie-slider-row">
                         <label>Yaw</label>
                         <input type="range" id="head-yaw" min="-90" max="90" step="1" value="0">
-                        <span class="reggie-slider-value" id="head-yaw-val">0°</span>
+                        <span class="reggie-slider-value" id="head-yaw-val">0</span>
                     </div>
+                </div>
+                <div class="preset-btns">
+                    <button class="preset-btn" onclick="ControlPage.preset('up')">&#8593;</button>
+                    <button class="preset-btn" onclick="ControlPage.preset('down')">&#8595;</button>
+                    <button class="preset-btn" onclick="ControlPage.preset('left')">&#8592;</button>
+                    <button class="preset-btn" onclick="ControlPage.preset('right')">&#8594;</button>
+                    <button class="preset-btn center" onclick="ControlPage.preset('center')">&#9679;</button>
                 </div>
             </div>
         </div>
 
-        <!-- Body Rotation Card -->
-        <div class="reggie-card">
+        <!-- Body & Antennas Control -->
+        <div class="reggie-card control-card">
             <div class="reggie-card-header">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="4" y="8" width="16" height="12" rx="2"/>
                     <line x1="12" y1="2" x2="12" y2="8"/>
                 </svg>
-                <span>Body Rotation</span>
+                <span>Body & Antennas</span>
             </div>
             <div class="reggie-card-body">
                 <div class="slider-group">
                     <div class="reggie-slider-row">
-                        <label>Yaw</label>
+                        <label>Body</label>
                         <input type="range" id="body-yaw" min="-180" max="180" step="1" value="0">
-                        <span class="reggie-slider-value" id="body-yaw-val">0°</span>
+                        <span class="reggie-slider-value" id="body-yaw-val">0</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>L Ant</label>
+                        <input type="range" id="antenna-left" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="antenna-left-val">0</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>R Ant</label>
+                        <input type="range" id="antenna-right" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="antenna-right-val">0</span>
                     </div>
                 </div>
-                <div class="body-visual">
-                    <div class="body-indicator" id="body-indicator">
-                        <div class="body-arrow"></div>
-                    </div>
+                <div class="antenna-controls">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="sync-antennas">
+                        <span>Sync</span>
+                    </label>
+                    <button class="reggie-btn reggie-btn-sm" onclick="ControlPage.resetAntennas()">Reset</button>
                 </div>
             </div>
         </div>
 
-        <!-- Antennas Card -->
-        <div class="reggie-card">
+        <!-- Moves Panel -->
+        <div class="reggie-card control-card moves-card">
             <div class="reggie-card-header">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M2 12h6l3-9 6 18 3-9h4"/>
+                    <polygon points="5 3 19 12 5 21 5 3"/>
                 </svg>
-                <span>Antennas</span>
-            </div>
-            <div class="reggie-card-body">
-                <div class="slider-group">
-                    <div class="reggie-slider-row">
-                        <label>Left</label>
-                        <input type="range" id="antenna-left" min="-90" max="90" step="1" value="0">
-                        <span class="reggie-slider-value" id="antenna-left-val">0°</span>
-                    </div>
-                    <div class="reggie-slider-row">
-                        <label>Right</label>
-                        <input type="range" id="antenna-right" min="-90" max="90" step="1" value="0">
-                        <span class="reggie-slider-value" id="antenna-right-val">0°</span>
-                    </div>
+                <span>Moves</span>
+                <div class="moves-tabs">
+                    <button class="moves-tab active" data-dataset="dances" onclick="ControlPage.selectDataset('dances')">Dances</button>
+                    <button class="moves-tab" data-dataset="emotions" onclick="ControlPage.selectDataset('emotions')">Emotions</button>
                 </div>
-                <div class="antenna-sync">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="sync-antennas">
-                        <span>Sync antennas</span>
-                    </label>
+            </div>
+            <div class="reggie-card-body moves-body">
+                <div class="moves-grid" id="moves-grid">
+                    <div class="moves-loading">Loading...</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Right Column: Motor Mode & Presets -->
-    <div class="control-column">
-        <!-- Motor Mode Card -->
-        <div class="reggie-card">
-            <div class="reggie-card-header">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-                </svg>
-                <span>Motor Mode</span>
-            </div>
-            <div class="reggie-card-body">
-                <div class="motor-mode-grid">
-                    <button class="motor-mode-btn" id="mode-enabled" onclick="ControlPage.setMotorMode('enabled')">
-                        <div class="mode-icon">⚡</div>
-                        <div class="mode-name">Enabled</div>
-                        <div class="mode-desc">Motors active, full control</div>
-                    </button>
-                    <button class="motor-mode-btn" id="mode-disabled" onclick="ControlPage.setMotorMode('disabled')">
-                        <div class="mode-icon">⏹</div>
-                        <div class="mode-name">Disabled</div>
-                        <div class="mode-desc">Motors off, no resistance</div>
-                    </button>
-                    <button class="motor-mode-btn" id="mode-gravity" onclick="ControlPage.setMotorMode('gravity_compensation')">
-                        <div class="mode-icon">🪶</div>
-                        <div class="mode-name">Float</div>
-                        <div class="mode-desc">Gravity compensation mode</div>
-                    </button>
-                </div>
-            </div>
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-item">
+            <span class="status-dot" id="status-daemon-dot"></span>
+            <span>Daemon: <span id="status-daemon-text">--</span></span>
         </div>
-
-        <!-- Quick Presets Card -->
-        <div class="reggie-card">
-            <div class="reggie-card-header">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-                <span>Quick Presets</span>
-            </div>
-            <div class="reggie-card-body">
-                <div class="preset-grid-large">
-                    <button class="preset-btn-large" onclick="ControlPage.preset('up')" title="Look Up">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="18 15 12 9 6 15"/>
-                        </svg>
-                        <span>Up</span>
-                    </button>
-                    <button class="preset-btn-large" onclick="ControlPage.preset('down')" title="Look Down">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"/>
-                        </svg>
-                        <span>Down</span>
-                    </button>
-                    <button class="preset-btn-large" onclick="ControlPage.preset('left')" title="Look Left">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="15 18 9 12 15 6"/>
-                        </svg>
-                        <span>Left</span>
-                    </button>
-                    <button class="preset-btn-large" onclick="ControlPage.preset('right')" title="Look Right">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="9 18 15 12 9 6"/>
-                        </svg>
-                        <span>Right</span>
-                    </button>
-                    <button class="preset-btn-large center" onclick="ControlPage.preset('center')" title="Center All">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                        <span>Center</span>
-                    </button>
-                </div>
-            </div>
+        <div class="status-item">
+            <span class="status-dot" id="status-motor-dot"></span>
+            <span>Motors: <span id="status-motor-text">--</span></span>
         </div>
-
-        <!-- Current State Card -->
-        <div class="reggie-card">
-            <div class="reggie-card-header">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="16" x2="12" y2="12"/>
-                    <line x1="12" y1="8" x2="12.01" y2="8"/>
-                </svg>
-                <span>Current State</span>
-            </div>
-            <div class="reggie-card-body">
-                <div class="state-grid">
-                    <div class="state-item">
-                        <span class="state-label">Head Roll</span>
-                        <span class="state-value" id="state-roll">--</span>
-                    </div>
-                    <div class="state-item">
-                        <span class="state-label">Head Pitch</span>
-                        <span class="state-value" id="state-pitch">--</span>
-                    </div>
-                    <div class="state-item">
-                        <span class="state-label">Head Yaw</span>
-                        <span class="state-value" id="state-yaw">--</span>
-                    </div>
-                    <div class="state-item">
-                        <span class="state-label">Body Yaw</span>
-                        <span class="state-value" id="state-body">--</span>
-                    </div>
-                    <div class="state-item">
-                        <span class="state-label">L Antenna</span>
-                        <span class="state-value" id="state-ant-l">--</span>
-                    </div>
-                    <div class="state-item">
-                        <span class="state-label">R Antenna</span>
-                        <span class="state-value" id="state-ant-r">--</span>
-                    </div>
-                </div>
-            </div>
+        <div class="status-item">
+            <span class="status-dot" id="status-camera-dot"></span>
+            <span>Camera: <span id="status-camera-text">Off</span></span>
+        </div>
+        <div class="status-actions">
+            <select class="motor-mode-select" id="motor-mode-select" onchange="ControlPage.setMotorMode(this.value)">
+                <option value="enabled">Motors: Enabled</option>
+                <option value="disabled">Motors: Disabled</option>
+                <option value="gravity_compensation">Motors: Float</option>
+            </select>
+            <button class="reggie-btn reggie-btn-sm" onclick="ControlPage.toggleDaemon()" id="daemon-toggle-btn">Start Daemon</button>
         </div>
     </div>
 </div>
@@ -215,214 +215,491 @@
 <style>
 /* Control Layout */
 .control-layout {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-
-.control-column {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
+    height: 100%;
 }
 
-/* Slider Group */
-.slider-group {
+/* Camera Section */
+.camera-section {
+    flex: 0 0 auto;
+}
+
+.camera-card {
     display: flex;
     flex-direction: column;
-    gap: 14px;
 }
 
-/* Body Visual */
-.body-visual {
+.camera-header-actions {
+    margin-left: auto;
     display: flex;
-    justify-content: center;
-    padding: 20px 0 10px;
+    gap: 6px;
 }
 
-.body-indicator {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    border: 3px solid var(--border-color);
-    background: var(--bg-primary);
+.header-action-btn {
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.3s ease;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
 }
 
-.body-arrow {
-    width: 0;
-    height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-bottom: 20px solid var(--accent);
-    transform: translateY(-5px);
+.header-action-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
-/* Antenna Sync */
-.antenna-sync {
-    padding-top: 12px;
+.header-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.camera-body {
+    height: 280px;
+    min-height: 200px;
+}
+
+.camera-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+}
+
+.camera-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+}
+
+.camera-container video.connected {
+    display: block;
+}
+
+.camera-placeholder {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--bg-primary);
+}
+
+.camera-placeholder svg {
+    width: 48px;
+    height: 48px;
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.camera-status-text {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.camera-placeholder.hidden {
+    display: none;
+}
+
+.camera-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+    pointer-events: none;
+}
+
+.camera-overlay.visible {
+    display: block;
+}
+
+.live-indicator {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 12px;
+    font-size: 10px;
+    color: #fff;
+}
+
+.live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.camera-controls {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+    pointer-events: auto;
+}
+
+.camera-control-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.7);
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+}
+
+.camera-control-btn:hover {
+    background: rgba(0,0,0,0.9);
+}
+
+.camera-control-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.live-badge {
+    background: var(--success);
+}
+
+/* Quick Actions Row */
+.quick-actions-section {
+    flex: 0 0 auto;
+}
+
+.quick-actions-row {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.quick-action-btn:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.quick-action-btn:active {
+    transform: translateY(0);
+    background: var(--accent);
+}
+
+.action-icon {
+    font-size: 20px;
+}
+
+.action-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Controls Section */
+.controls-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+}
+
+.control-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Preset Buttons */
+.preset-btns {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
     border-top: 1px solid var(--border-color);
-    margin-top: 12px;
+}
+
+.preset-btn {
+    flex: 1;
+    padding: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.preset-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.preset-btn.center {
+    background: var(--bg-tertiary);
+}
+
+/* Antenna Controls */
+.antenna-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
 }
 
 .checkbox-label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
+    gap: 6px;
+    font-size: 11px;
     color: var(--text-secondary);
     cursor: pointer;
 }
 
 .checkbox-label input {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     accent-color: var(--accent);
 }
 
-/* Motor Mode Grid */
-.motor-mode-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+/* Moves Panel */
+.moves-card {
+    overflow: hidden;
 }
 
-.motor-mode-btn {
+.moves-tabs {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+}
+
+.moves-tab {
+    padding: 4px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.moves-tab:hover {
+    border-color: var(--accent);
+}
+
+.moves-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+.moves-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 10px !important;
+}
+
+.moves-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 6px;
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+.moves-loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 20px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.move-btn {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding: 16px 10px;
-    background: var(--bg-primary);
-    border: 2px solid var(--border-color);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.motor-mode-btn:hover {
-    border-color: var(--accent);
-}
-
-.motor-mode-btn.active {
-    background: var(--accent);
-    border-color: var(--accent);
-}
-
-.motor-mode-btn.active .mode-name,
-.motor-mode-btn.active .mode-desc {
-    color: var(--bg-primary);
-}
-
-.mode-icon {
-    font-size: 24px;
-}
-
-.mode-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.mode-desc {
-    font-size: 10px;
-    color: var(--text-muted);
-    text-align: center;
-}
-
-/* Preset Grid Large */
-.preset-grid-large {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-}
-
-.preset-btn-large {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 20px 10px;
+    padding: 10px 6px;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    color: var(--text-secondary);
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.15s;
 }
 
-.preset-btn-large svg {
-    width: 24px;
-    height: 24px;
+.move-btn:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
 }
 
-.preset-btn-large span {
-    font-size: 11px;
-    font-weight: 500;
-}
-
-.preset-btn-large:hover {
+.move-btn:active, .move-btn.playing {
     background: var(--accent);
     border-color: var(--accent);
-    color: var(--bg-primary);
 }
 
-.preset-btn-large.center {
-    grid-column: span 2;
-    background: var(--bg-tertiary);
+.move-btn .move-icon {
+    font-size: 18px;
 }
 
-/* State Grid */
-.state-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-}
-
-.state-item {
-    background: var(--bg-primary);
-    padding: 10px;
-    border-radius: 6px;
+.move-btn .move-name {
+    font-size: 9px;
+    color: var(--text-secondary);
     text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
 }
 
-.state-label {
-    display: block;
-    font-size: 10px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-bottom: 4px;
+/* Status Bar */
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 12px;
+    flex: 0 0 auto;
 }
 
-.state-value {
-    font-size: 14px;
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 500;
-    color: var(--text-primary);
+.status-bar .status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+}
+
+.status-bar .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.status-bar .status-dot.online { background: var(--success); }
+.status-bar .status-dot.offline { background: var(--error); }
+.status-bar .status-dot.warning { background: var(--warning); }
+
+.status-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.motor-mode-select {
+    padding: 6px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+/* Fullscreen */
+.camera-card.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    border-radius: 0;
+}
+
+.camera-card.fullscreen .camera-body {
+    height: calc(100vh - 50px);
 }
 
 /* Responsive */
-@media (max-width: 900px) {
-    .control-layout {
-        grid-template-columns: 1fr;
+@media (max-width: 1100px) {
+    .controls-section {
+        grid-template-columns: 1fr 1fr;
     }
 
-    .motor-mode-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .state-grid {
-        grid-template-columns: repeat(3, 1fr);
+    .moves-card {
+        grid-column: span 2;
     }
 }
 
-@media (max-width: 500px) {
-    .state-grid {
-        grid-template-columns: repeat(2, 1fr);
+@media (max-width: 700px) {
+    .controls-section {
+        grid-template-columns: 1fr;
+    }
+
+    .moves-card {
+        grid-column: span 1;
+    }
+
+    .quick-actions-row {
+        justify-content: flex-start;
+    }
+
+    .status-bar {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .status-actions {
+        width: 100%;
+        justify-content: center;
+        margin-left: 0;
+        margin-top: 8px;
     }
 }
 </style>
@@ -431,32 +708,297 @@
 {% block reggie_scripts %}
 <script>
 const ControlPage = {
+    // Camera state
+    signalingUrl: null,
+    signalingMode: 'direct',
+    ws: null,
+    pc: null,
+    sessionId: null,
+    producerPeerId: null,
+    pendingIceCandidates: [],
+    isConnecting: false,
+    isFullscreen: false,
+
+    // Control state
     isUserDragging: false,
     sliderDebounce: null,
     syncAntennas: false,
 
+    // Moves state
+    currentDataset: 'dances',
+    moves: [],
+
     init() {
+        console.log('[Control] Initializing consolidated control page...');
+
+        // Set signaling URL based on access method
+        this.signalingUrl = this.getSignalingUrl();
+        console.log('[Control] Signaling URL:', this.signalingUrl, '(' + this.signalingMode + ')');
+
         this.setupSliders();
         this.setupAntennaSync();
+        this.loadMoves();
+        this.setupStatusUpdates();
 
         // Listen for state updates from WebSocket
-        ReggieShared.on('stateUpdate', (state) => {
-            this.updateFromState(state);
-        });
+        ReggieShared.on('stateUpdate', (state) => this.updateFromState(state));
+        ReggieShared.on('motorModeChange', (mode) => this.updateMotorModeUI(mode));
+        ReggieShared.on('connectionChange', (data) => this.updateConnectionStatus(data));
 
-        // Listen for motor mode changes
-        ReggieShared.on('motorModeChange', (mode) => {
-            this.updateMotorModeUI(mode);
-        });
-
-        // Show live badge when WS connected
-        const checkWS = setInterval(() => {
-            const badge = document.getElementById('head-live-badge');
-            if (badge) {
-                badge.style.display = ReggieShared.ws?.readyState === WebSocket.OPEN ? 'inline' : 'none';
+        // Auto-connect camera if daemon is running
+        setTimeout(() => {
+            if (ReggieShared.state.daemonRunning) {
+                this.connectCamera();
             }
-        }, 1000);
+        }, 1500);
     },
+
+    // === CAMERA METHODS ===
+
+    getSignalingUrl() {
+        const hostname = window.location.hostname;
+
+        // SSH tunnel (localhost) -> use proxy through Boomshakalaka
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            this.signalingMode = 'proxy';
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${wsProtocol}//${window.location.host}/reggie/camera-signaling`;
+        }
+
+        // VPN or local network -> direct connection to robot
+        this.signalingMode = 'direct';
+        return 'ws://192.168.0.11:8443';
+    },
+
+    connectCamera() {
+        console.log('[Control] ====== CAMERA CONNECT ======');
+        console.log('[Control] Signaling URL:', this.signalingUrl);
+
+        if (this.isConnecting || this.pc) {
+            console.log('[Control] Already connecting or connected');
+            return;
+        }
+        this.isConnecting = true;
+
+        const statusText = document.getElementById('camera-status-text');
+        const connectBtn = document.getElementById('camera-connect-btn');
+
+        statusText.textContent = 'Connecting...';
+        connectBtn.disabled = true;
+
+        try {
+            console.log('[Control] Creating RTCPeerConnection...');
+            this.pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    {
+                        urls: 'turn:192.168.0.199:3478',
+                        username: 'reggie',
+                        credential: 'ReggieT0rn2026!'
+                    }
+                ]
+            });
+
+            this.pc.addTransceiver('video', { direction: 'recvonly' });
+            this.pc.addTransceiver('audio', { direction: 'recvonly' });
+
+            this.pc.ontrack = (event) => {
+                console.log('[Control] Received track:', event.track.kind);
+                const video = document.getElementById('camera-video');
+                if (video && event.streams[0]) {
+                    video.srcObject = event.streams[0];
+                    video.classList.add('connected');
+                    document.getElementById('camera-placeholder').classList.add('hidden');
+                    document.getElementById('camera-overlay').classList.add('visible');
+                    document.getElementById('camera-badge').style.display = 'inline';
+                    document.getElementById('status-camera-dot').className = 'status-dot online';
+                    document.getElementById('status-camera-text').textContent = 'Live';
+                    ReggieShared.updateCameraStatus(true);
+                    this.isConnecting = false;
+                }
+            };
+
+            this.pc.onconnectionstatechange = () => {
+                console.log('[Control] RTCPeerConnection state:', this.pc.connectionState);
+                if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed') {
+                    this.cleanupCamera();
+                }
+            };
+
+            this.pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    if (this.sessionId) {
+                        this.sendMessage({
+                            type: 'peer',
+                            sessionId: this.sessionId,
+                            ice: {
+                                candidate: event.candidate.candidate,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                sdpMid: event.candidate.sdpMid
+                            }
+                        });
+                    } else {
+                        this.pendingIceCandidates.push(event.candidate);
+                    }
+                }
+            };
+
+            // Connect to signaling server
+            console.log('[Control] Creating WebSocket to:', this.signalingUrl);
+            this.ws = new WebSocket(this.signalingUrl);
+
+            this.ws.onopen = () => {
+                console.log('[Control] WebSocket OPEN');
+                statusText.textContent = 'Connected to signaling...';
+            };
+
+            this.ws.onmessage = async (event) => {
+                const msg = JSON.parse(event.data);
+                await this.handleCameraMessage(msg);
+            };
+
+            this.ws.onerror = (err) => {
+                console.error('[Control] WebSocket ERROR:', err);
+                statusText.textContent = 'Connection failed';
+                this.cleanupCamera();
+            };
+
+            this.ws.onclose = (event) => {
+                console.log('[Control] WebSocket CLOSED:', event.code);
+                if (this.isConnecting) {
+                    statusText.textContent = 'Connection closed';
+                    this.cleanupCamera();
+                }
+            };
+
+        } catch (err) {
+            console.error('[Control] Camera error:', err);
+            statusText.textContent = 'Error: ' + err.message;
+            this.cleanupCamera();
+        }
+    },
+
+    async handleCameraMessage(msg) {
+        console.log('[Control] Message type:', msg.type);
+        const statusText = document.getElementById('camera-status-text');
+
+        switch (msg.type) {
+            case 'welcome':
+                this.sendMessage({ type: 'setPeerStatus', roles: ['listener'], meta: {} });
+                this.sendMessage({ type: 'list' });
+                statusText.textContent = 'Finding camera...';
+                break;
+
+            case 'list':
+                const producer = msg.producers.find(p => p.meta?.name === 'reachymini');
+                if (!producer) {
+                    statusText.textContent = 'Camera not available';
+                    this.cleanupCamera();
+                    return;
+                }
+                this.producerPeerId = producer.id;
+                this.sendMessage({ type: 'startSession', peerId: producer.id });
+                statusText.textContent = 'Starting session...';
+                break;
+
+            case 'sessionStarted':
+                this.sessionId = msg.sessionId;
+                console.log('[Control] Session started:', this.sessionId);
+                break;
+
+            case 'peer':
+                if (msg.sdp && msg.sdp.type === 'offer') {
+                    await this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp }));
+                    const answer = await this.pc.createAnswer();
+                    await this.pc.setLocalDescription(answer);
+                    this.sendMessage({ type: 'peer', sessionId: this.sessionId, sdp: { type: 'answer', sdp: answer.sdp } });
+
+                    // Flush pending ICE candidates
+                    for (const candidate of this.pendingIceCandidates) {
+                        this.sendMessage({
+                            type: 'peer',
+                            sessionId: this.sessionId,
+                            ice: { candidate: candidate.candidate, sdpMLineIndex: candidate.sdpMLineIndex, sdpMid: candidate.sdpMid }
+                        });
+                    }
+                    this.pendingIceCandidates = [];
+                }
+                if (msg.ice) {
+                    await this.pc.addIceCandidate(new RTCIceCandidate({
+                        candidate: msg.ice.candidate,
+                        sdpMLineIndex: msg.ice.sdpMLineIndex,
+                        sdpMid: msg.ice.sdpMid
+                    }));
+                }
+                break;
+
+            case 'error':
+                console.error('[Control] Signaling error:', msg.details);
+                statusText.textContent = 'Error: ' + msg.details;
+                break;
+        }
+    },
+
+    sendMessage(msg) {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(msg));
+        }
+    },
+
+    disconnectCamera() {
+        if (this.sessionId && this.ws?.readyState === WebSocket.OPEN) {
+            this.sendMessage({ type: 'endSession', sessionId: this.sessionId });
+        }
+        this.cleanupCamera();
+    },
+
+    cleanupCamera() {
+        this.isConnecting = false;
+
+        if (this.ws) {
+            this.ws.onopen = null;
+            this.ws.onmessage = null;
+            this.ws.onerror = null;
+            this.ws.onclose = null;
+            if (this.ws.readyState === WebSocket.OPEN) this.ws.close();
+            this.ws = null;
+        }
+
+        if (this.pc) {
+            this.pc.ontrack = null;
+            this.pc.onconnectionstatechange = null;
+            this.pc.onicecandidate = null;
+            this.pc.close();
+            this.pc = null;
+        }
+
+        const video = document.getElementById('camera-video');
+        if (video) {
+            video.srcObject = null;
+            video.classList.remove('connected');
+        }
+
+        document.getElementById('camera-placeholder')?.classList.remove('hidden');
+        document.getElementById('camera-overlay')?.classList.remove('visible');
+        document.getElementById('camera-badge').style.display = 'none';
+        document.getElementById('camera-status-text').textContent = 'Camera not connected';
+        document.getElementById('camera-connect-btn').disabled = false;
+        document.getElementById('status-camera-dot').className = 'status-dot offline';
+        document.getElementById('status-camera-text').textContent = 'Off';
+
+        ReggieShared.updateCameraStatus(false);
+        this.sessionId = null;
+        this.producerPeerId = null;
+        this.pendingIceCandidates = [];
+    },
+
+    toggleFullscreen() {
+        const card = document.querySelector('.camera-card');
+        this.isFullscreen = !this.isFullscreen;
+        card.classList.toggle('fullscreen', this.isFullscreen);
+    },
+
+    // === CONTROL METHODS ===
 
     setupSliders() {
         const sliders = ['head-roll', 'head-pitch', 'head-yaw', 'body-yaw', 'antenna-left', 'antenna-right'];
@@ -471,18 +1013,13 @@ const ControlPage = {
             document.addEventListener('touchend', () => { this.isUserDragging = false; });
 
             slider.addEventListener('input', (e) => {
-                document.getElementById(id + '-val').textContent = Math.round(e.target.value) + '°';
-
-                // Handle body yaw visual
-                if (id === 'body-yaw') {
-                    document.getElementById('body-indicator').style.transform = `rotate(${e.target.value}deg)`;
-                }
+                document.getElementById(id + '-val').textContent = Math.round(e.target.value);
 
                 // Handle antenna sync
                 if (this.syncAntennas && (id === 'antenna-left' || id === 'antenna-right')) {
                     const otherId = id === 'antenna-left' ? 'antenna-right' : 'antenna-left';
                     document.getElementById(otherId).value = e.target.value;
-                    document.getElementById(otherId + '-val').textContent = Math.round(e.target.value) + '°';
+                    document.getElementById(otherId + '-val').textContent = Math.round(e.target.value);
                 }
 
                 if (this.sliderDebounce) clearTimeout(this.sliderDebounce);
@@ -503,28 +1040,19 @@ const ControlPage = {
     updateFromState(state) {
         if (this.isUserDragging) return;
 
-        // Update sliders
         if (state.headPose) {
             this.updateSlider('head-roll', state.headPose.roll);
             this.updateSlider('head-pitch', state.headPose.pitch);
             this.updateSlider('head-yaw', state.headPose.yaw);
-
-            document.getElementById('state-roll').textContent = Math.round(state.headPose.roll) + '°';
-            document.getElementById('state-pitch').textContent = Math.round(state.headPose.pitch) + '°';
-            document.getElementById('state-yaw').textContent = Math.round(state.headPose.yaw) + '°';
         }
 
         if (state.bodyYaw !== undefined) {
             this.updateSlider('body-yaw', state.bodyYaw);
-            document.getElementById('body-indicator').style.transform = `rotate(${state.bodyYaw}deg)`;
-            document.getElementById('state-body').textContent = Math.round(state.bodyYaw) + '°';
         }
 
         if (state.antennas) {
             this.updateSlider('antenna-left', state.antennas[0]);
             this.updateSlider('antenna-right', state.antennas[1]);
-            document.getElementById('state-ant-l').textContent = Math.round(state.antennas[0]) + '°';
-            document.getElementById('state-ant-r').textContent = Math.round(state.antennas[1]) + '°';
         }
     },
 
@@ -532,7 +1060,7 @@ const ControlPage = {
         const slider = document.getElementById(id);
         const valEl = document.getElementById(id + '-val');
         if (slider) slider.value = value;
-        if (valEl) valEl.textContent = Math.round(value) + '°';
+        if (valEl) valEl.textContent = Math.round(value);
     },
 
     async sendPose() {
@@ -553,45 +1081,210 @@ const ControlPage = {
         await ReggieShared.sendPose(pose);
     },
 
-    setMotorMode(mode) {
-        ReggieShared.setMotorMode(mode);
-    },
-
-    updateMotorModeUI(mode) {
-        document.querySelectorAll('.motor-mode-btn').forEach(btn => btn.classList.remove('active'));
-        const btnId = 'mode-' + (mode === 'gravity_compensation' ? 'gravity' : mode);
-        document.getElementById(btnId)?.classList.add('active');
-    },
-
     preset(direction) {
         const presets = {
             up: { pitch: -30 },
             down: { pitch: 30 },
             left: { yaw: -45 },
             right: { yaw: 45 },
-            center: { roll: 0, pitch: 0, yaw: 0, body: 0 }
+            center: { roll: 0, pitch: 0, yaw: 0 }
         };
 
         const p = presets[direction];
         if (!p) return;
 
-        ['roll', 'pitch', 'yaw'].forEach(key => {
-            if (p[key] !== undefined) {
-                this.updateSlider('head-' + key, p[key]);
-            }
-        });
-
-        if (p.body !== undefined) {
-            this.updateSlider('body-yaw', p.body);
-            document.getElementById('body-indicator').style.transform = `rotate(${p.body}deg)`;
+        if (direction === 'center') {
+            this.updateSlider('head-roll', 0);
+            this.updateSlider('head-pitch', 0);
+            this.updateSlider('head-yaw', 0);
+        } else {
+            Object.keys(p).forEach(key => {
+                const current = parseFloat(document.getElementById(`head-${key}`).value);
+                const newVal = current + p[key];
+                this.updateSlider(`head-${key}`, Math.max(-90, Math.min(90, newVal)));
+            });
         }
 
         this.sendPose();
+    },
+
+    resetAntennas() {
+        this.updateSlider('antenna-left', 0);
+        this.updateSlider('antenna-right', 0);
+        this.sendPose();
+    },
+
+    // === MOTOR & DAEMON CONTROL ===
+
+    setupStatusUpdates() {
+        setInterval(() => this.updateStatusBar(), 2000);
+        this.updateStatusBar();
+    },
+
+    updateStatusBar() {
+        const daemonDot = document.getElementById('status-daemon-dot');
+        const daemonText = document.getElementById('status-daemon-text');
+        const motorDot = document.getElementById('status-motor-dot');
+        const motorText = document.getElementById('status-motor-text');
+        const daemonBtn = document.getElementById('daemon-toggle-btn');
+
+        const daemonRunning = ReggieShared.state.daemonRunning;
+        daemonDot.className = 'status-dot ' + (daemonRunning ? 'online' : 'offline');
+        daemonText.textContent = daemonRunning ? 'Running' : 'Stopped';
+        daemonBtn.textContent = daemonRunning ? 'Stop Daemon' : 'Start Daemon';
+
+        const mode = ReggieShared.state.motorMode;
+        motorDot.className = 'status-dot ' + (mode === 'enabled' ? 'online' : mode === 'gravity_compensation' ? 'warning' : 'offline');
+        motorText.textContent = mode || '--';
+    },
+
+    updateConnectionStatus(data) {
+        this.updateStatusBar();
+
+        // Auto-connect camera if daemon just started
+        if (data.daemon === 'running' && !this.pc) {
+            setTimeout(() => this.connectCamera(), 1000);
+        }
+    },
+
+    updateMotorModeUI(mode) {
+        const select = document.getElementById('motor-mode-select');
+        if (select) {
+            select.value = mode;
+        }
+    },
+
+    async setMotorMode(mode) {
+        await ReggieShared.setMotorMode(mode);
+    },
+
+    async toggleDaemon() {
+        await ReggieShared.toggleDaemon();
+    },
+
+    // === MOVES METHODS ===
+
+    selectDataset(dataset) {
+        this.currentDataset = dataset;
+
+        document.querySelectorAll('.moves-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.dataset === dataset);
+        });
+
+        this.loadMoves();
+    },
+
+    async loadMoves() {
+        const grid = document.getElementById('moves-grid');
+        grid.innerHTML = '<div class="moves-loading">Loading...</div>';
+
+        try {
+            const response = await fetch(`/api/reggie/moves/list/${this.currentDataset}`);
+            if (response.ok) {
+                const data = await response.json();
+                this.moves = data.moves || data || [];
+                this.renderMoves();
+            } else {
+                grid.innerHTML = '<div class="moves-loading">Failed to load</div>';
+            }
+        } catch (err) {
+            console.error('[Control] Failed to load moves:', err);
+            grid.innerHTML = '<div class="moves-loading">Error loading moves</div>';
+        }
+    },
+
+    renderMoves() {
+        const grid = document.getElementById('moves-grid');
+
+        if (this.moves.length === 0) {
+            grid.innerHTML = '<div class="moves-loading">No moves available</div>';
+            return;
+        }
+
+        const icons = this.currentDataset === 'dances'
+            ? ['&#128131;', '&#127925;', '&#127926;', '&#10024;', '&#127775;', '&#127917;', '&#127914;']
+            : ['&#128522;', '&#128546;', '&#128558;', '&#128545;', '&#129392;', '&#128564;', '&#129300;', '&#128526;'];
+
+        grid.innerHTML = this.moves.map((move, index) => {
+            const name = typeof move === 'string' ? move : move.name;
+            const icon = icons[index % icons.length];
+
+            return `
+                <button class="move-btn" onclick="ControlPage.playMove('${name}')">
+                    <span class="move-icon">${icon}</span>
+                    <span class="move-name">${name}</span>
+                </button>
+            `;
+        }).join('');
+    },
+
+    async playMove(name) {
+        const datasetPath = this.currentDataset === 'dances'
+            ? 'pollen-robotics/reachy-mini-dances-library'
+            : 'pollen-robotics/reachy-mini-emotions-library';
+
+        try {
+            await fetch(`/api/reggie/move/play/recorded-move-dataset/${datasetPath}/${name}`, {
+                method: 'POST'
+            });
+
+            // Visual feedback
+            document.querySelectorAll('.move-btn').forEach(btn => btn.classList.remove('playing'));
+            event.target.closest('.move-btn')?.classList.add('playing');
+
+            setTimeout(() => {
+                document.querySelectorAll('.move-btn').forEach(btn => btn.classList.remove('playing'));
+            }, 3000);
+
+        } catch (err) {
+            console.error('[Control] Failed to play move:', err);
+        }
+    },
+
+    async playAnimation(name) {
+        const datasetPath = name.includes('dance')
+            ? 'pollen-robotics/reachy-mini-dances-library'
+            : 'pollen-robotics/reachy-mini-emotions-library';
+
+        try {
+            await fetch(`/api/reggie/move/play/recorded-move-dataset/${datasetPath}/${name}`, {
+                method: 'POST'
+            });
+        } catch (err) {
+            console.error('[Control] Failed to play animation:', err);
+        }
+    },
+
+    async quickPlay(animation) {
+        try {
+            await fetch(`/api/reggie/move/play/${animation}`, { method: 'POST' });
+        } catch (err) {
+            console.error('[Control] Failed to play quick animation:', err);
+        }
     }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
     ControlPage.init();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Escape to exit fullscreen
+    if (e.key === 'Escape' && ControlPage.isFullscreen) {
+        ControlPage.toggleFullscreen();
+    }
+
+    // Arrow keys for head control (when not in input)
+    if (!e.target.matches('input')) {
+        switch (e.key) {
+            case 'ArrowUp': e.preventDefault(); ControlPage.preset('up'); break;
+            case 'ArrowDown': e.preventDefault(); ControlPage.preset('down'); break;
+            case 'ArrowLeft': e.preventDefault(); ControlPage.preset('left'); break;
+            case 'ArrowRight': e.preventDefault(); ControlPage.preset('right'); break;
+            case ' ': e.preventDefault(); ControlPage.preset('center'); break;
+        }
+    }
 });
 </script>
 {% endblock %}

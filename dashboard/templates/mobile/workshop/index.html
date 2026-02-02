@@ -1,0 +1,238 @@
+{% extends "mobile/base.html" %}
+{% block title %}Workshop{% endblock %}
+
+{% block content %}
+<h2 class="page-title">AI Workshop</h2>
+
+<!-- Terminal Chat View - Conversational Interface -->
+<div id="terminal-chat-view" class="terminal-chat-container mb-4">
+    <!-- Chat Header with window dropdown -->
+    <div class="chat-header">
+        <div class="chat-header-left">
+            <span class="chat-header-title">Claude</span>
+            <select id="window-selector">
+                <!-- Populated by JS from /api/terminal/windows -->
+            </select>
+            <button id="new-window-btn" class="chat-header-btn" title="New terminal window" onclick="TerminalChat.createWindow()">
+                <span>+</span>
+            </button>
+        </div>
+        <div class="chat-header-right">
+            <button id="upload-btn" class="chat-header-btn" title="Upload file" onclick="TerminalChat.openUpload()">
+                <span>&#128228;</span>
+            </button>
+            <button id="summary-filter-btn" class="chat-header-btn" title="Show summaries only">
+                <span class="filter-icon">&#128203;</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Hidden file input for uploads -->
+    <input type="file" id="chat-file-input" style="display: none" multiple onchange="TerminalChat.handleFileUpload(event)">
+
+    <!-- Conversation history (scrollable) -->
+    <div class="chat-messages" id="chat-messages">
+        <div class="chat-loading">
+            <div class="chat-loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Working indicator (hidden by default) -->
+    <div class="working-indicator hidden" id="working-indicator">
+        <div class="working-dots">
+            <span class="working-dot"></span>
+            <span class="working-dot"></span>
+            <span class="working-dot"></span>
+        </div>
+        <span class="working-text">Claude is working</span>
+        <span class="working-elapsed">0s</span>
+    </div>
+
+    <!-- Control bar with interrupt, escape, mode toggle, and suggestion -->
+    <div class="chat-control-bar" id="chat-control-bar">
+        <button class="control-key-btn" id="ctrl-c-btn" onclick="TerminalChat.sendCtrlC()" title="Send Ctrl+C (Interrupt)">
+            <span class="key-icon">^C</span>
+        </button>
+        <button class="control-key-btn" id="esc-btn" onclick="TerminalChat.sendEsc()" title="Send Escape">
+            <span class="key-icon">Esc</span>
+        </button>
+        <button class="control-mode-btn" id="mode-toggle-btn" onclick="TerminalChat.cycleMode()" title="Cycle mode (Shift+Tab)">
+            <span class="mode-icon">&#8644;</span>
+            <span class="mode-text" id="mode-text">Mode</span>
+        </button>
+        <button class="control-suggestion-btn" id="suggestion-btn" onclick="TerminalChat.applySuggestion()" title="Tab to apply suggestion">
+            <span class="suggestion-text" id="suggestion-text">No suggestion</span>
+        </button>
+    </div>
+
+    <!-- Input area -->
+    <div class="chat-input-area">
+        <div class="chat-input-wrapper">
+            <textarea id="chat-input" placeholder="Message Claude..." rows="1"></textarea>
+        </div>
+        <button id="send-btn" title="Send message">&#10148;</button>
+    </div>
+
+    <!-- Inline Terminal 1 expand section -->
+    <div class="terminal-expand-section">
+        <div class="terminal-expand-bar" onclick="TerminalChat.toggleTerminal1Inline()">
+            <span class="terminal-expand-arrow" id="terminal1-arrow">&#9660;</span>
+            <span id="terminal1-label">Expand Terminal 1</span>
+        </div>
+        <div class="terminal-inline-wrapper" id="terminal1-inline-wrapper">
+            <iframe id="terminal1-inline-frame" src="" frameborder="0"></iframe>
+        </div>
+    </div>
+
+    <!-- Inline Terminal 2 expand section -->
+    <div class="terminal-expand-section">
+        <div class="terminal-expand-bar" onclick="TerminalChat.toggleTerminal2Inline()">
+            <span class="terminal-expand-arrow" id="terminal2-arrow">&#9660;</span>
+            <span id="terminal2-label">Expand Terminal 2</span>
+        </div>
+        <div class="terminal-inline-wrapper" id="terminal2-inline-wrapper">
+            <iframe id="terminal2-inline-frame" src="" frameborder="0"></iframe>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-grid mb-4">
+    <a href="/m/workshop/kanban" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#128203;</span>
+        <span class="quick-title">Kanban</span>
+        <span class="quick-subtitle">Task Board</span>
+    </a>
+    <a href="/m/workshop/agents" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#129302;</span>
+        <span class="quick-title">Agents</span>
+        <span class="quick-subtitle">AI Workers</span>
+    </a>
+    <a href="/m/workshop/vibecraft" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#127912;</span>
+        <span class="quick-title">Vibecraft</span>
+        <span class="quick-subtitle">Creative Studio</span>
+    </a>
+    <a href="/ai" class="adventure-card interactive reticle quick-card">
+        <span class="quick-icon">&#128300;</span>
+        <span class="quick-title">AI Tools</span>
+        <span class="quick-subtitle">Full Dashboard</span>
+    </a>
+</div>
+
+<div class="adventure-card">
+    <div class="card-header">
+        <span class="card-title"><span class="card-icon">&#128203;</span> Recent Tasks</span>
+        <a href="/m/workshop/kanban" class="badge badge-accent">View All</a>
+    </div>
+    <div class="list-group" id="recent-tasks">
+        <div class="skeleton" style="height: 60px;"></div>
+    </div>
+</div>
+
+<div class="adventure-card mt-4">
+    <div class="card-header">
+        <span class="card-title"><span class="card-icon">&#129302;</span> Agent Status</span>
+        <a href="/m/workshop/agents" class="badge badge-accent">View All</a>
+    </div>
+    <div class="agent-grid" id="agent-status">
+        <div class="skeleton" style="height: 100px;"></div>
+        <div class="skeleton" style="height: 100px;"></div>
+    </div>
+</div>
+
+<!-- Terminal Modal -->
+<div class="terminal-modal" id="terminal-modal">
+    <div class="terminal-modal-header">
+        <div class="terminal-header-left">
+            <button class="terminal-tab-btn" onclick="TerminalModal.toggleTabPicker()">&#9776;</button>
+            <span id="terminal-tab-name">Terminal 1</span>
+        </div>
+        <div class="terminal-header-actions">
+            <button class="terminal-upload-btn" onclick="TerminalModal.openUpload()" title="Upload file">&#128228;</button>
+            <button class="terminal-close-btn" onclick="TerminalModal.close()">&times;</button>
+        </div>
+    </div>
+    <input type="file" id="mobile-file-input" style="display: none" multiple onchange="TerminalModal.handleFileSelect(event)">
+    <div class="terminal-container">
+        <iframe id="terminal-1" class="terminal-frame"></iframe>
+        <div class="terminal-2-wrapper" id="terminal-2-wrapper">
+            <iframe id="terminal-2" class="terminal-frame"></iframe>
+        </div>
+    </div>
+    <div class="terminal-toggle-bar" onclick="TerminalModal.toggleSecondTerminal()">
+        <span class="toggle-arrow" id="toggle-arrow">&#9650;</span>
+        <span id="toggle-label">Show Terminal 2</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='mobile/terminal-chat.css') }}">
+<script src="{{ url_for('static', filename='mobile/pages/workshop.js') }}"></script>
+<script src="{{ url_for('static', filename='mobile/terminal-chat.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    // Initialize Terminal Chat
+    TerminalChat.init();
+
+    // Load other content
+    await Promise.all([loadRecentTasks(), loadAgentStatus()]);
+});
+
+async function loadRecentTasks() {
+    const container = document.getElementById('recent-tasks');
+    const tasks = await WorkshopModule.kanban.load();
+    container.replaceChildren();
+    if (!tasks.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = '<div class="empty-icon">&#128203;</div><div class="empty-title">No Tasks</div>';
+        container.appendChild(empty);
+        return;
+    }
+    tasks.slice(0, 3).forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        const icon = document.createElement('div');
+        icon.className = 'list-item-icon';
+        icon.textContent = t.priority === 'high' ? '\u{1F534}' : t.priority === 'low' ? '\u{1F7E2}' : '\u{1F7E0}';
+        const content = document.createElement('div');
+        content.className = 'list-item-content';
+        const title = document.createElement('div');
+        title.className = 'list-item-title';
+        title.textContent = t.title;
+        const subtitle = document.createElement('div');
+        subtitle.className = 'list-item-subtitle';
+        subtitle.textContent = t.column || 'To Do';
+        content.append(title, subtitle);
+        item.append(icon, content);
+        container.appendChild(item);
+    });
+}
+
+async function loadAgentStatus() {
+    const container = document.getElementById('agent-status');
+    const agents = await WorkshopModule.agents.load();
+    container.replaceChildren();
+    agents.slice(0, 4).forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'adventure-card agent-card';
+        const avatar = document.createElement('div');
+        avatar.className = 'agent-avatar';
+        avatar.textContent = a.avatar || '\u{1F916}';
+        const name = document.createElement('div');
+        name.className = 'agent-name';
+        name.textContent = a.name;
+        const status = document.createElement('div');
+        status.className = 'agent-status';
+        status.innerHTML = '<div class="status-orb"></div>';
+        const statusText = document.createElement('span');
+        statusText.textContent = a.status || 'Ready';
+        status.appendChild(statusText);
+        card.append(avatar, name, status);
+        container.appendChild(card);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "mobile/base.html" %}
+{% block title %}Reggie Moves{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Moves &amp; Emotions</h2>
+
+<div class="adventure-card mb-4" id="now-playing" style="display: none;">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="loading-spinner" style="width: 24px; height: 24px;"></div>
+            <div><div id="playing-name">-</div><div class="text-muted" style="font-size: 0.8rem;">Now playing</div></div>
+        </div>
+        <button class="btn btn-secondary" onclick="stopMove()">Stop</button>
+    </div>
+</div>
+
+<div class="tab-bar mb-3">
+    <button class="tab-item active" data-category="dances">Dances</button>
+    <button class="tab-item" data-category="emotions">Emotions</button>
+    <button class="tab-item" data-category="gestures">Gestures</button>
+</div>
+
+<div class="moves-section" data-section="dances">
+    <div class="moves-grid">
+        <div class="adventure-card move-card interactive" onclick="playMove('dance_happy', 'Happy Dance')"><div class="move-icon">&#128131;</div><div class="move-name">Happy Dance</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('dance_robot', 'Robot')"><div class="move-icon">&#129302;</div><div class="move-name">Robot</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('dance_wave', 'Wave')"><div class="move-icon">&#127754;</div><div class="move-name">Wave</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('dance_spin', 'Spin')"><div class="move-icon">&#128260;</div><div class="move-name">Spin</div></div>
+    </div>
+</div>
+
+<div class="moves-section" data-section="emotions" style="display: none;">
+    <div class="moves-grid">
+        <div class="adventure-card move-card interactive" onclick="playMove('emotion_happy', 'Happy')"><div class="move-icon">&#128513;</div><div class="move-name">Happy</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('emotion_sad', 'Sad')"><div class="move-icon">&#128546;</div><div class="move-name">Sad</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('emotion_surprised', 'Surprised')"><div class="move-icon">&#128562;</div><div class="move-name">Surprised</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('emotion_confused', 'Confused')"><div class="move-icon">&#129300;</div><div class="move-name">Confused</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('emotion_sleepy', 'Sleepy')"><div class="move-icon">&#128564;</div><div class="move-name">Sleepy</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('emotion_love', 'Love')"><div class="move-icon">&#128525;</div><div class="move-name">Love</div></div>
+    </div>
+</div>
+
+<div class="moves-section" data-section="gestures" style="display: none;">
+    <div class="moves-grid">
+        <div class="adventure-card move-card interactive" onclick="playMove('gesture_wave', 'Wave')"><div class="move-icon">&#128075;</div><div class="move-name">Wave</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('gesture_nod', 'Nod')"><div class="move-icon">&#128522;</div><div class="move-name">Nod</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('gesture_shake', 'Shake Head')"><div class="move-icon">&#128528;</div><div class="move-name">Shake Head</div></div>
+        <div class="adventure-card move-card interactive" onclick="playMove('gesture_thumbsup', 'Thumbs Up')"><div class="move-icon">&#128077;</div><div class="move-name">Thumbs Up</div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='mobile/pages/reggie.js') }}"></script>
+<script>
+let currentlyPlaying = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.tab-bar .tab-item').forEach(tab => {
+        tab.addEventListener('click', function() {
+            const cat = this.dataset.category;
+            document.querySelectorAll('.tab-bar .tab-item').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelectorAll('.moves-section').forEach(s => s.style.display = s.dataset.section === cat ? 'block' : 'none');
+            Haptic.light();
+        });
+    });
+});
+
+async function playMove(moveId, moveName) {
+    Haptic.medium();
+    document.getElementById('now-playing').style.display = 'block';
+    document.getElementById('playing-name').textContent = moveName;
+    currentlyPlaying = moveId;
+    Toast.info(`Playing ${moveName}...`);
+    try {
+        await ReggieModule.playMove(moveId);
+        setTimeout(() => { if (currentlyPlaying === moveId) { document.getElementById('now-playing').style.display = 'none'; currentlyPlaying = null; } }, 3000);
+    } catch { Toast.error('Failed to play move'); document.getElementById('now-playing').style.display = 'none'; currentlyPlaying = null; }
+}
+
+async function stopMove() {
+    Haptic.medium();
+    try { await ReggieModule.stopMove(); document.getElementById('now-playing').style.display = 'none'; currentlyPlaying = null; Toast.success('Stopped'); } catch { Toast.error('Failed to stop'); }
+}
+</script>
+{% endblock %}

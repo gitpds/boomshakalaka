@@ -1,0 +1,16 @@
+{
+  "name": "boomshakalaka-tests",
+  "version": "1.0.0",
+  "description": "Test suite for boomshakalaka dashboard",
+  "scripts": {
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:e2e": "playwright test",
+    "test:all": "npm run test:unit && npm run test:e2e"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "@playwright/test": "^1.40.0"
+  }
+}

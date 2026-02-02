@@ -1,0 +1,40 @@
+{% extends "mobile/base.html" %}
+{% block title %}Vibecraft{% endblock %}
+
+{% block head %}
+<style>
+    .mobile-shell { padding-bottom: 0; }
+    .mobile-nav { display: none; }
+    .mobile-content { padding: 0; overflow: hidden; }
+    .mobile-header { position: absolute; top: 0; left: 0; right: 0; z-index: 100; background: rgba(6, 10, 20, 0.9); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="status-display" id="connection-status" style="margin: 16px; position: relative; z-index: 50;">
+    <div class="status-radar" id="status-radar"></div>
+    <div class="status-info">
+        <div class="status-label">Vibecraft Studio</div>
+        <div class="status-value" id="status-text">Connecting...</div>
+    </div>
+    <button class="btn btn-secondary btn-icon" onclick="window.location.href='/m/workshop'" style="margin-left: auto;">&#10005;</button>
+</div>
+
+<div class="iframe-fullscreen" style="top: calc(var(--header-height) + 100px); bottom: 0;">
+    <iframe id="vibecraft-frame" src="http://localhost:4003" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope" allowfullscreen onload="onFrameLoad()" onerror="onFrameError()"></iframe>
+</div>
+
+<div id="loading-overlay" style="position: fixed; inset: 0; background: var(--m-bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200;">
+    <div class="loading-spinner" style="width: 48px; height: 48px; margin-bottom: 16px;"></div>
+    <div class="text-secondary">Loading Vibecraft Studio...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let attempts = 0;
+function onFrameLoad() { document.getElementById('loading-overlay').style.display = 'none'; document.getElementById('connection-status').className = 'status-display'; document.getElementById('status-text').textContent = 'Connected'; }
+function onFrameError() { if (++attempts < 3) { document.getElementById('status-text').textContent = `Retrying... (${attempts}/3)`; setTimeout(() => document.getElementById('vibecraft-frame').src = 'http://localhost:4003', 2000); } else { document.getElementById('loading-overlay').innerHTML = '<div class="empty-state"><div class="empty-icon">&#127912;</div><div class="empty-title">Vibecraft Unavailable</div><a href="/m/workshop" class="btn btn-secondary mt-4">Back to Workshop</a></div>'; document.getElementById('connection-status').className = 'status-display error'; document.getElementById('status-text').textContent = 'Connection Failed'; } }
+setTimeout(() => { if (document.getElementById('loading-overlay').style.display !== 'none') onFrameError(); }, 10000);
+</script>
+{% endblock %}

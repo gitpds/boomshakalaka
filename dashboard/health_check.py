@@ -13,13 +13,12 @@ Usage:
 import os
 import sys
 import subprocess
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
 import argparse
 
-# Configuration
-PROJECT_ROOT = Path('/home/pds/money_printing')
+# Configuration - Updated 2026-01-27: money_printing moved into boomshakalaka
+PROJECT_ROOT = Path('/home/pds/boomshakalaka/money_printing')
 POLYMARKET_DIR = PROJECT_ROOT / 'polymarket'
 
 # Log files to check

@@ -1,0 +1,1095 @@
+{% extends "reggie_base.html" %}
+
+{% block reggie_content %}
+<div class="control-center-layout">
+    <!-- Top Row: Video + Quick Actions -->
+    <div class="control-center-top">
+        <!-- Video Panel -->
+        <div class="reggie-card video-panel">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 7l-7 5 7 5V7z"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+                <span>Live Video</span>
+                <span class="reggie-card-badge" id="video-badge" style="display: none;">Live</span>
+                <div class="video-header-actions">
+                    <button class="header-action-btn" onclick="ControlCenter.toggleFullscreen()" title="Fullscreen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 3 21 3 21 9"/>
+                            <polyline points="9 21 3 21 3 15"/>
+                            <line x1="21" y1="3" x2="14" y2="10"/>
+                            <line x1="3" y1="21" x2="10" y2="14"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="video-body">
+                <div class="video-container" id="video-container">
+                    <video id="control-video" autoplay playsinline muted></video>
+                    <div class="video-placeholder" id="video-placeholder">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        <span class="video-status-text" id="video-status-text">Click to connect</span>
+                        <button class="reggie-btn reggie-btn-sm" onclick="ControlCenter.connectCamera()">Connect Camera</button>
+                    </div>
+                    <div class="video-overlay" id="video-overlay">
+                        <div class="live-indicator">
+                            <span class="live-dot"></span>
+                            <span>Live</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions Panel -->
+        <div class="reggie-card quick-actions-panel">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                <span>Quick Actions</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="ControlCenter.action('wave')" title="Wave">
+                        <span class="action-icon">👋</span>
+                        <span class="action-label">Wave</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="ControlCenter.action('dance')" title="Dance">
+                        <span class="action-icon">💃</span>
+                        <span class="action-label">Dance</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="ControlCenter.action('nod')" title="Nod">
+                        <span class="action-icon">😊</span>
+                        <span class="action-label">Nod</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="ControlCenter.action('happy')" title="Happy">
+                        <span class="action-icon">🥰</span>
+                        <span class="action-label">Happy</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="ControlCenter.action('sad')" title="Sad">
+                        <span class="action-icon">😢</span>
+                        <span class="action-label">Sad</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="ControlCenter.action('surprised')" title="Surprised">
+                        <span class="action-icon">😮</span>
+                        <span class="action-label">Surprise</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="ControlCenter.action('wake_up')" title="Wake Up">
+                        <span class="action-icon">🌅</span>
+                        <span class="action-label">Wake</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="ControlCenter.action('goto_sleep')" title="Sleep">
+                        <span class="action-icon">🌙</span>
+                        <span class="action-label">Sleep</span>
+                    </button>
+                </div>
+
+                <!-- Motor Mode Toggle -->
+                <div class="motor-mode-section">
+                    <span class="motor-mode-label">Motor Mode:</span>
+                    <div class="motor-mode-btns">
+                        <button class="motor-mode-toggle" id="mode-enabled-btn" onclick="ControlCenter.setMode('enabled')">Enabled</button>
+                        <button class="motor-mode-toggle" id="mode-compliant-btn" onclick="ControlCenter.setMode('compliant')">Compliant</button>
+                        <button class="motor-mode-toggle" id="mode-disabled-btn" onclick="ControlCenter.setMode('disabled')">Disabled</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row: Controls -->
+    <div class="control-center-bottom">
+        <!-- Head Control -->
+        <div class="reggie-card control-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    <circle cx="9" cy="10" r="1.5"/>
+                    <circle cx="15" cy="10" r="1.5"/>
+                    <path d="M9 15h6"/>
+                </svg>
+                <span>Head Control</span>
+                <span class="reggie-card-badge live-badge" id="head-live-badge" style="display: none;">Live</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="slider-group">
+                    <div class="reggie-slider-row">
+                        <label>Roll</label>
+                        <input type="range" id="head-roll" min="-45" max="45" step="1" value="0">
+                        <span class="reggie-slider-value" id="head-roll-val">0°</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>Pitch</label>
+                        <input type="range" id="head-pitch" min="-45" max="45" step="1" value="0">
+                        <span class="reggie-slider-value" id="head-pitch-val">0°</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>Yaw</label>
+                        <input type="range" id="head-yaw" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="head-yaw-val">0°</span>
+                    </div>
+                </div>
+                <div class="quick-preset-btns">
+                    <button class="preset-mini-btn" onclick="ControlCenter.preset('up')">↑</button>
+                    <button class="preset-mini-btn" onclick="ControlCenter.preset('down')">↓</button>
+                    <button class="preset-mini-btn" onclick="ControlCenter.preset('left')">←</button>
+                    <button class="preset-mini-btn" onclick="ControlCenter.preset('right')">→</button>
+                    <button class="preset-mini-btn center" onclick="ControlCenter.preset('center')">●</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Body & Antennas Control -->
+        <div class="reggie-card control-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="4" y="8" width="16" height="12" rx="2"/>
+                    <line x1="12" y1="2" x2="12" y2="8"/>
+                </svg>
+                <span>Body & Antennas</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="slider-group">
+                    <div class="reggie-slider-row">
+                        <label>Body</label>
+                        <input type="range" id="body-yaw" min="-180" max="180" step="1" value="0">
+                        <span class="reggie-slider-value" id="body-yaw-val">0°</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>L Ant</label>
+                        <input type="range" id="antenna-left" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="antenna-left-val">0°</span>
+                    </div>
+                    <div class="reggie-slider-row">
+                        <label>R Ant</label>
+                        <input type="range" id="antenna-right" min="-90" max="90" step="1" value="0">
+                        <span class="reggie-slider-value" id="antenna-right-val">0°</span>
+                    </div>
+                </div>
+                <div class="antenna-controls">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="sync-antennas">
+                        <span>Sync antennas</span>
+                    </label>
+                    <button class="reggie-btn reggie-btn-sm" onclick="ControlCenter.resetAntennas()">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice Control (placeholder for Phase 4) -->
+        <div class="reggie-card control-card voice-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                <span>Voice Control</span>
+                <span class="reggie-card-badge coming-soon">Coming</span>
+            </div>
+            <div class="reggie-card-body">
+                <div class="voice-placeholder">
+                    <button class="ptt-button" id="ptt-button" disabled title="Coming in Phase 4">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        </svg>
+                    </button>
+                    <span class="voice-hint">Push to Talk</span>
+                    <span class="voice-status">Coming in Phase 4</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="status-item">
+            <span class="status-dot" id="status-robot-dot"></span>
+            <span>Robot: <span id="status-robot-text">Checking...</span></span>
+        </div>
+        <div class="status-item">
+            <span class="status-dot" id="status-daemon-dot"></span>
+            <span>Daemon: <span id="status-daemon-text">--</span></span>
+        </div>
+        <div class="status-item">
+            <span class="status-dot" id="status-motor-dot"></span>
+            <span>Motor: <span id="status-motor-text">--</span></span>
+        </div>
+        <div class="status-item">
+            <span class="status-dot" id="status-ws-dot"></span>
+            <span>Stream: <span id="status-ws-text">Disconnected</span></span>
+        </div>
+        <div class="status-actions">
+            <button class="reggie-btn reggie-btn-sm" onclick="ControlCenter.startDaemon()" id="start-daemon-btn">Start Daemon</button>
+            <button class="reggie-btn reggie-btn-sm" onclick="ControlCenter.stopDaemon()" id="stop-daemon-btn" style="display:none;">Stop Daemon</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Control Center Layout */
+.control-center-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+}
+
+/* Top Row */
+.control-center-top {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+}
+
+/* Video Panel */
+.video-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.video-header-actions {
+    margin-left: auto;
+}
+
+.header-action-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.header-action-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.header-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.video-body {
+    flex: 1;
+    min-height: 280px;
+}
+
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
+    background: #000;
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.video-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+}
+
+.video-container video.connected {
+    display: block;
+}
+
+.video-placeholder {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--bg-primary);
+}
+
+.video-placeholder svg {
+    width: 48px;
+    height: 48px;
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.video-status-text {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.video-placeholder.hidden {
+    display: none;
+}
+
+.video-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+    pointer-events: none;
+}
+
+.video-overlay.visible {
+    display: block;
+}
+
+.live-indicator {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 12px;
+    font-size: 10px;
+    color: #fff;
+}
+
+.live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Quick Actions Panel */
+.quick-actions-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.quick-action-btn:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.quick-action-btn:active {
+    transform: translateY(0);
+}
+
+.action-icon {
+    font-size: 20px;
+}
+
+.action-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+/* Motor Mode Section */
+.motor-mode-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.motor-mode-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.motor-mode-btns {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+}
+
+.motor-mode-toggle {
+    flex: 1;
+    padding: 6px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.motor-mode-toggle:hover {
+    border-color: var(--accent);
+}
+
+.motor-mode-toggle.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* Bottom Row: Controls */
+.control-center-bottom {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.control-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.live-badge {
+    background: var(--success);
+}
+
+/* Quick Preset Buttons */
+.quick-preset-btns {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.preset-mini-btn {
+    flex: 1;
+    padding: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.preset-mini-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.preset-mini-btn.center {
+    background: var(--bg-tertiary);
+}
+
+/* Antenna Controls */
+.antenna-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.checkbox-label input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+}
+
+/* Voice Card */
+.voice-card .coming-soon {
+    background: var(--text-muted);
+}
+
+.voice-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+}
+
+.ptt-button {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+}
+
+.ptt-button svg {
+    width: 24px;
+    height: 24px;
+}
+
+.voice-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.voice-status {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Status Bar */
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.status-bar .status-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+}
+
+.status-bar .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.status-bar .status-dot.online { background: var(--success); }
+.status-bar .status-dot.offline { background: var(--error); }
+.status-bar .status-dot.warning { background: var(--warning); }
+
+.status-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+/* Fullscreen Mode */
+.video-panel.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    border-radius: 0;
+}
+
+.video-panel.fullscreen .video-body {
+    height: calc(100vh - 50px);
+}
+
+/* Responsive */
+@media (max-width: 1000px) {
+    .control-center-top {
+        grid-template-columns: 1fr;
+    }
+
+    .control-center-bottom {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .voice-card {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 700px) {
+    .control-center-bottom {
+        grid-template-columns: 1fr;
+    }
+
+    .voice-card {
+        grid-column: span 1;
+    }
+
+    .quick-actions-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .status-bar {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .status-actions {
+        width: 100%;
+        justify-content: center;
+        margin-left: 0;
+        margin-top: 8px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block reggie_scripts %}
+<script>
+const ControlCenter = {
+    isUserDragging: false,
+    sliderDebounce: null,
+    syncAntennas: false,
+    cameraWs: null,
+    cameraPc: null,
+    sessionId: null,
+
+    // Animation mappings
+    animations: {
+        wave: 'pollen-robotics/reachy-mini-emotions-library/happy',
+        dance: 'pollen-robotics/reachy-mini-dances-library/dance_1',
+        nod: 'pollen-robotics/reachy-mini-emotions-library/happy',
+        happy: 'pollen-robotics/reachy-mini-emotions-library/happy',
+        sad: 'pollen-robotics/reachy-mini-emotions-library/sad',
+        surprised: 'pollen-robotics/reachy-mini-emotions-library/surprised',
+        wake_up: 'wake_up',
+        goto_sleep: 'goto_sleep'
+    },
+
+    init() {
+        this.setupSliders();
+        this.setupAntennaSync();
+        this.setupStatusUpdates();
+
+        // Listen for WebSocket state updates
+        ReggieShared.on('stateUpdate', (state) => this.updateFromState(state));
+        ReggieShared.on('motorModeChange', (mode) => this.updateMotorModeUI(mode));
+        ReggieShared.on('connectionChange', (data) => this.updateConnectionStatus(data));
+
+        // Auto-connect camera after brief delay
+        setTimeout(() => {
+            if (ReggieShared.state.daemonRunning) {
+                this.connectCamera();
+            }
+        }, 1500);
+    },
+
+    setupSliders() {
+        const sliders = ['head-roll', 'head-pitch', 'head-yaw', 'body-yaw', 'antenna-left', 'antenna-right'];
+
+        sliders.forEach(id => {
+            const slider = document.getElementById(id);
+            if (!slider) return;
+
+            slider.addEventListener('mousedown', () => { this.isUserDragging = true; });
+            slider.addEventListener('touchstart', () => { this.isUserDragging = true; });
+            document.addEventListener('mouseup', () => { this.isUserDragging = false; });
+            document.addEventListener('touchend', () => { this.isUserDragging = false; });
+
+            slider.addEventListener('input', (e) => {
+                document.getElementById(id + '-val').textContent = Math.round(e.target.value) + '°';
+
+                // Handle antenna sync
+                if (this.syncAntennas && (id === 'antenna-left' || id === 'antenna-right')) {
+                    const otherId = id === 'antenna-left' ? 'antenna-right' : 'antenna-left';
+                    document.getElementById(otherId).value = e.target.value;
+                    document.getElementById(otherId + '-val').textContent = Math.round(e.target.value) + '°';
+                }
+
+                if (this.sliderDebounce) clearTimeout(this.sliderDebounce);
+                this.sliderDebounce = setTimeout(() => this.sendPose(), 50);
+            });
+        });
+    },
+
+    setupAntennaSync() {
+        const checkbox = document.getElementById('sync-antennas');
+        if (checkbox) {
+            checkbox.addEventListener('change', (e) => {
+                this.syncAntennas = e.target.checked;
+            });
+        }
+    },
+
+    setupStatusUpdates() {
+        // Update status bar periodically
+        setInterval(() => this.updateStatusBar(), 2000);
+        this.updateStatusBar();
+    },
+
+    updateStatusBar() {
+        const robotDot = document.getElementById('status-robot-dot');
+        const robotText = document.getElementById('status-robot-text');
+        const daemonDot = document.getElementById('status-daemon-dot');
+        const daemonText = document.getElementById('status-daemon-text');
+        const motorDot = document.getElementById('status-motor-dot');
+        const motorText = document.getElementById('status-motor-text');
+        const startBtn = document.getElementById('start-daemon-btn');
+        const stopBtn = document.getElementById('stop-daemon-btn');
+
+        // Robot status
+        robotDot.className = 'status-dot ' + (ReggieShared.state.connected ? 'online' : 'offline');
+        robotText.textContent = ReggieShared.state.connected ? 'Connected' : 'Offline';
+
+        // Daemon status
+        const daemonRunning = ReggieShared.state.daemonRunning;
+        daemonDot.className = 'status-dot ' + (daemonRunning ? 'online' : 'offline');
+        daemonText.textContent = daemonRunning ? 'Running' : 'Stopped';
+
+        // Show/hide daemon buttons
+        startBtn.style.display = daemonRunning ? 'none' : 'inline-block';
+        stopBtn.style.display = daemonRunning ? 'inline-block' : 'none';
+
+        // Motor status
+        const mode = ReggieShared.state.motorMode;
+        motorDot.className = 'status-dot ' + (mode === 'enabled' ? 'online' : mode === 'compliant' ? 'warning' : 'offline');
+        motorText.textContent = mode || '--';
+    },
+
+    updateConnectionStatus(data) {
+        this.updateStatusBar();
+
+        // Auto-connect camera if daemon just started
+        if (data.daemon === 'running' && !this.cameraPc) {
+            setTimeout(() => this.connectCamera(), 1000);
+        }
+    },
+
+    updateFromState(state) {
+        if (this.isUserDragging) return;
+
+        // Update live badge
+        const badge = document.getElementById('head-live-badge');
+        if (badge) {
+            badge.style.display = ReggieShared.ws?.readyState === WebSocket.OPEN ? 'inline' : 'none';
+        }
+
+        // Update sliders from state
+        if (state.headPose) {
+            this.updateSlider('head-roll', state.headPose.roll);
+            this.updateSlider('head-pitch', state.headPose.pitch);
+            this.updateSlider('head-yaw', state.headPose.yaw);
+        }
+
+        if (state.bodyYaw !== undefined) {
+            this.updateSlider('body-yaw', state.bodyYaw);
+        }
+
+        if (state.antennas) {
+            this.updateSlider('antenna-left', state.antennas[0]);
+            this.updateSlider('antenna-right', state.antennas[1]);
+        }
+    },
+
+    updateSlider(id, value) {
+        const slider = document.getElementById(id);
+        const valEl = document.getElementById(id + '-val');
+        if (slider) slider.value = value;
+        if (valEl) valEl.textContent = Math.round(value) + '°';
+    },
+
+    async sendPose() {
+        const pose = {
+            head_pose: {
+                x: 0, y: 0, z: 0,
+                roll: ReggieShared.degToRad(parseFloat(document.getElementById('head-roll').value)),
+                pitch: ReggieShared.degToRad(parseFloat(document.getElementById('head-pitch').value)),
+                yaw: ReggieShared.degToRad(parseFloat(document.getElementById('head-yaw').value))
+            },
+            body_yaw: ReggieShared.degToRad(parseFloat(document.getElementById('body-yaw').value)),
+            antennas: [
+                ReggieShared.degToRad(parseFloat(document.getElementById('antenna-left').value)),
+                ReggieShared.degToRad(parseFloat(document.getElementById('antenna-right').value))
+            ]
+        };
+
+        await ReggieShared.sendPose(pose);
+    },
+
+    // Quick Actions
+    async action(name) {
+        const btn = event.target.closest('.quick-action-btn');
+        if (btn) {
+            btn.classList.add('active');
+            setTimeout(() => btn.classList.remove('active'), 500);
+        }
+
+        const animPath = this.animations[name];
+        if (animPath.includes('/')) {
+            // Full path animation
+            await fetch(`/api/reggie/move/play/recorded-move-dataset/${animPath}`, { method: 'POST' });
+        } else {
+            // Built-in animation
+            await fetch(`/api/reggie/move/play/${animPath}`, { method: 'POST' });
+        }
+    },
+
+    // Motor Mode
+    async setMode(mode) {
+        await ReggieShared.setMotorMode(mode);
+    },
+
+    updateMotorModeUI(mode) {
+        document.querySelectorAll('.motor-mode-toggle').forEach(btn => btn.classList.remove('active'));
+        const btnId = `mode-${mode === 'gravity_compensation' ? 'compliant' : mode}-btn`;
+        document.getElementById(btnId)?.classList.add('active');
+    },
+
+    // Presets
+    preset(direction) {
+        const presets = {
+            up: { pitch: -30 },
+            down: { pitch: 30 },
+            left: { yaw: -45 },
+            right: { yaw: 45 },
+            center: { roll: 0, pitch: 0, yaw: 0 }
+        };
+
+        const p = presets[direction];
+        if (!p) return;
+
+        if (direction === 'center') {
+            this.updateSlider('head-roll', 0);
+            this.updateSlider('head-pitch', 0);
+            this.updateSlider('head-yaw', 0);
+        } else {
+            Object.keys(p).forEach(key => {
+                const current = parseFloat(document.getElementById(`head-${key}`).value);
+                const newVal = direction === 'center' ? p[key] : current + p[key];
+                this.updateSlider(`head-${key}`, Math.max(-90, Math.min(90, newVal)));
+            });
+        }
+
+        this.sendPose();
+    },
+
+    resetAntennas() {
+        this.updateSlider('antenna-left', 0);
+        this.updateSlider('antenna-right', 0);
+        this.sendPose();
+    },
+
+    // Daemon Control
+    async startDaemon() {
+        await ReggieShared.toggleDaemon();
+    },
+
+    async stopDaemon() {
+        await ReggieShared.toggleDaemon();
+    },
+
+    // Camera (WebRTC)
+    async connectCamera() {
+        if (this.cameraPc) return;
+
+        const statusText = document.getElementById('video-status-text');
+        statusText.textContent = 'Connecting...';
+
+        try {
+            this.cameraPc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            this.cameraPc.addTransceiver('video', { direction: 'recvonly' });
+            this.cameraPc.addTransceiver('audio', { direction: 'recvonly' });
+
+            this.cameraPc.ontrack = (event) => {
+                const video = document.getElementById('control-video');
+                if (video && event.streams[0]) {
+                    video.srcObject = event.streams[0];
+                    video.classList.add('connected');
+                    document.getElementById('video-placeholder').classList.add('hidden');
+                    document.getElementById('video-overlay').classList.add('visible');
+                    document.getElementById('video-badge').style.display = 'inline';
+                    document.getElementById('status-ws-dot').className = 'status-dot online';
+                    document.getElementById('status-ws-text').textContent = 'Connected';
+                    ReggieShared.updateCameraStatus(true);
+                }
+            };
+
+            this.cameraPc.onconnectionstatechange = () => {
+                if (this.cameraPc?.connectionState === 'disconnected' ||
+                    this.cameraPc?.connectionState === 'failed') {
+                    this.disconnectCamera();
+                }
+            };
+
+            // Connect to signaling server
+            this.cameraWs = new WebSocket('ws://192.168.0.11:8443');
+
+            this.cameraWs.onmessage = async (event) => {
+                const msg = JSON.parse(event.data);
+                await this.handleCameraSignaling(msg);
+            };
+
+            this.cameraWs.onerror = () => {
+                statusText.textContent = 'Connection failed';
+                this.cleanupCamera();
+            };
+
+            this.cameraWs.onclose = () => {
+                if (!document.getElementById('control-video')?.classList.contains('connected')) {
+                    statusText.textContent = 'Click to connect';
+                    this.cleanupCamera();
+                }
+            };
+
+        } catch (err) {
+            console.error('Camera error:', err);
+            statusText.textContent = 'Error: ' + err.message;
+            this.cleanupCamera();
+        }
+    },
+
+    async handleCameraSignaling(msg) {
+        switch (msg.type) {
+            case 'welcome':
+                this.cameraWs.send(JSON.stringify({ type: 'setPeerStatus', roles: ['listener'], meta: {} }));
+                this.cameraWs.send(JSON.stringify({ type: 'list' }));
+                break;
+
+            case 'list':
+                const producer = msg.producers.find(p => p.meta?.name === 'reachymini');
+                if (!producer) {
+                    document.getElementById('video-status-text').textContent = 'Camera not available';
+                    this.cleanupCamera();
+                    return;
+                }
+                this.cameraWs.send(JSON.stringify({ type: 'startSession', peerId: producer.id }));
+                break;
+
+            case 'sessionStarted':
+                this.sessionId = msg.sessionId;
+                break;
+
+            case 'peer':
+                if (msg.sdp?.type === 'offer') {
+                    await this.cameraPc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp }));
+                    const answer = await this.cameraPc.createAnswer();
+                    await this.cameraPc.setLocalDescription(answer);
+                    this.cameraWs.send(JSON.stringify({ type: 'peer', sessionId: this.sessionId, sdp: { type: 'answer', sdp: answer.sdp } }));
+                }
+                if (msg.ice) {
+                    await this.cameraPc.addIceCandidate(new RTCIceCandidate({
+                        candidate: msg.ice.candidate,
+                        sdpMLineIndex: msg.ice.sdpMLineIndex,
+                        sdpMid: msg.ice.sdpMid
+                    }));
+                }
+                break;
+        }
+    },
+
+    disconnectCamera() {
+        if (this.sessionId && this.cameraWs?.readyState === WebSocket.OPEN) {
+            this.cameraWs.send(JSON.stringify({ type: 'endSession', sessionId: this.sessionId }));
+        }
+        this.cleanupCamera();
+    },
+
+    cleanupCamera() {
+        if (this.cameraWs) {
+            this.cameraWs.onopen = null;
+            this.cameraWs.onmessage = null;
+            this.cameraWs.onerror = null;
+            this.cameraWs.onclose = null;
+            if (this.cameraWs.readyState === WebSocket.OPEN) this.cameraWs.close();
+            this.cameraWs = null;
+        }
+
+        if (this.cameraPc) {
+            this.cameraPc.ontrack = null;
+            this.cameraPc.onconnectionstatechange = null;
+            this.cameraPc.close();
+            this.cameraPc = null;
+        }
+
+        const video = document.getElementById('control-video');
+        if (video) {
+            video.srcObject = null;
+            video.classList.remove('connected');
+        }
+
+        document.getElementById('video-placeholder')?.classList.remove('hidden');
+        document.getElementById('video-overlay')?.classList.remove('visible');
+        document.getElementById('video-badge').style.display = 'none';
+        document.getElementById('video-status-text').textContent = 'Click to connect';
+        document.getElementById('status-ws-dot').className = 'status-dot offline';
+        document.getElementById('status-ws-text').textContent = 'Disconnected';
+
+        ReggieShared.updateCameraStatus(false);
+        this.sessionId = null;
+    },
+
+    toggleFullscreen() {
+        const panel = document.querySelector('.video-panel');
+        panel.classList.toggle('fullscreen');
+    }
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    ControlCenter.init();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Escape to exit fullscreen
+    if (e.key === 'Escape') {
+        document.querySelector('.video-panel')?.classList.remove('fullscreen');
+    }
+
+    // Arrow keys for head control
+    if (!e.target.matches('input')) {
+        switch (e.key) {
+            case 'ArrowUp': e.preventDefault(); ControlCenter.preset('up'); break;
+            case 'ArrowDown': e.preventDefault(); ControlCenter.preset('down'); break;
+            case 'ArrowLeft': e.preventDefault(); ControlCenter.preset('left'); break;
+            case 'ArrowRight': e.preventDefault(); ControlCenter.preset('right'); break;
+            case ' ': e.preventDefault(); ControlCenter.preset('center'); break;
+        }
+    }
+});
+</script>
+{% endblock %}

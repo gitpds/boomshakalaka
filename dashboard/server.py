@@ -17,10 +17,31 @@ import json
 import uuid
 import logging
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
+import websocket as ws_client
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, Response, stream_with_context
+from flask import Flask, render_template, jsonify, redirect, url_for, request, send_file, session, Response
+from flask_sock import Sock
+from werkzeug.utils import secure_filename
+
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / '.env')
+
+# Authentication module
+try:
+    from dashboard.auth import (
+        init_firebase, verify_firebase_token, get_user_role,
+        get_current_user, is_authenticated, is_admin as auth_is_admin,
+        requires_auth, requires_role, login_user, logout_user
+    )
+    AUTH_AVAILABLE = True
+except ImportError as e:
+    print(f"Auth import failed: {e}")
+    AUTH_AVAILABLE = False
 
 # Theme generator for AI-powered theme customization
 try:
@@ -32,6 +53,15 @@ try:
 except ImportError:
     THEME_GENERATOR_AVAILABLE = False
     DEFAULT_THEME = None
+
+# Claude Code terminal parser for mobile chat interface
+try:
+    from dashboard.claude_parser import (
+        get_chat_buffer, get_terminal_state, send_to_tmux
+    )
+    CLAUDE_PARSER_AVAILABLE = True
+except ImportError:
+    CLAUDE_PARSER_AVAILABLE = False
 
 # Video model parameters for AI Studio Video generation
 try:
@@ -80,6 +110,27 @@ except ImportError as e:
     print(f"Automation import failed: {e}")
     AUTOMATION_AVAILABLE = False
 
+# Project Management database
+try:
+    from dashboard.projects_db import (
+        init_database as init_projects_db,
+        import_areas_from_directory, import_projects_from_directory,
+        get_all_areas, get_area, get_area_by_name,
+        create_area, update_area, delete_area,
+        get_all_projects, get_projects_by_area, get_project, get_project_by_name,
+        create_project, update_project, delete_project,
+        get_tasks_by_project, get_all_tasks, get_task,
+        create_task, update_task, delete_task, reorder_tasks,
+        get_all_lists, get_list, create_list, update_list, delete_list,
+        add_list_item, update_list_item, delete_list_item,
+        get_stats as get_pm_stats,
+        AVAILABLE_ICONS, DEFAULT_COLORS
+    )
+    PROJECTS_AVAILABLE = True
+except ImportError as e:
+    print(f"Projects import failed: {e}")
+    PROJECTS_AVAILABLE = False
+
 # Setup logging for AI Studio debugging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -94,11 +145,24 @@ app = Flask(__name__,
             template_folder=os.path.join(os.path.dirname(__file__), 'templates'),
             static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 
+# Flask secret key for sessions (required for login)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Enable template hot reload without full debug mode
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
+
+# Initialize Flask-Sock for WebSocket support (OpenClaw proxy)
+sock = Sock(app)
+
+# Initialize Firebase on startup
+if AUTH_AVAILABLE:
+    init_firebase()
+
 # Configuration
 PROJECT_ROOT = Path('/home/pds/boomshakalaka')
-# Keep pointing to old location for logs during migration
-LEGACY_POLYMARKET_DIR = Path('/home/pds/money_printing/polymarket')
-POLYMARKET_DIR = LEGACY_POLYMARKET_DIR  # Alias for backwards compatibility
+# Updated 2026-01-27: money_printing moved into boomshakalaka
+POLYMARKET_DIR = Path('/home/pds/boomshakalaka/money_printing/polymarket')
 
 # AI Studio Configuration (100% local - no external calls)
 COMFY_HOST = '127.0.0.1'  # Localhost only - never exposed
@@ -108,6 +172,18 @@ MODELS_DIR = PROJECT_ROOT / 'models'  # Symlink to ComfyUI models
 GENERATIONS_DIR = PROJECT_ROOT / 'data' / 'generations'
 DATABASES_DIR = PROJECT_ROOT / 'data' / 'databases'
 THEMES_FILE = PROJECT_ROOT / 'data' / 'themes.json'
+
+# Dev server port ranges to monitor
+# Each tuple: (start, end, category_name)
+DEV_PORT_RANGES = [
+    (3000, 3010, 'Node.js'),
+    (4000, 4019, 'Allocated'),
+    (5000, 5010, 'Flask'),
+    (8000, 8010, 'Django/FastAPI'),
+]
+
+# System ports to exclude even if in range
+EXCLUDED_PORTS = {3003, 3004}  # Dashboard, dashboard-ctl
 
 # Module Registry
 MODULES = {
@@ -335,7 +411,7 @@ def check_api_health():
         import httpx
         api_key = os.getenv('ODDS_API_KEY')
         response = httpx.get(
-            f'https://api.the-odds-api.com/v4/sports/',
+            'https://api.the-odds-api.com/v4/sports/',
             params={'apiKey': api_key},
             timeout=10
         )
@@ -380,8 +456,22 @@ def get_log_data():
 
 def get_common_context():
     """Get common context for all pages"""
+    # Get user from session (Firebase auth)
+    user = None
+    is_admin = False
+
+    if AUTH_AVAILABLE:
+        user = get_current_user()
+        if user:
+            is_admin = user.get('role') in ['admin', 'super_admin']
+    else:
+        # Fallback to cookie-based admin mode if auth not available
+        is_admin = request.cookies.get('admin_mode', '0') == '1'
+
     return {
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'user': user,
+        'is_admin': is_admin,
     }
 
 
@@ -657,7 +747,6 @@ def calculate_running_profit(games, lower_bound=15, upper_bound=17, bet_size=100
     }
 
 
-import re
 
 # YouTube Data API v3 key
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
@@ -1878,6 +1967,116 @@ def settings():
                          **get_common_context())
 
 
+# =============================================================================
+# Authentication Routes
+# =============================================================================
+
+@app.route('/login')
+def login():
+    """Login page with Firebase authentication"""
+    # If already logged in, redirect to home
+    if AUTH_AVAILABLE and is_authenticated():
+        return redirect(url_for('home'))
+    return render_template('login.html')
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_auth_login():
+    """Authenticate user with Firebase token"""
+    if not AUTH_AVAILABLE:
+        return jsonify({'success': False, 'error': 'Authentication not available'}), 503
+
+    data = request.get_json() or {}
+    token = data.get('token')
+
+    if not token:
+        return jsonify({'success': False, 'error': 'Token required'}), 400
+
+    success, error = login_user(token)
+
+    if success:
+        user = get_current_user()
+        return jsonify({
+            'success': True,
+            'user': {
+                'email': user.get('email'),
+                'name': user.get('name'),
+                'role': user.get('role'),
+            }
+        })
+    else:
+        return jsonify({'success': False, 'error': error}), 401
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_auth_logout():
+    """Logout current user"""
+    if AUTH_AVAILABLE:
+        logout_user()
+    return jsonify({'success': True})
+
+
+@app.route('/api/auth/me')
+def api_auth_me():
+    """Get current authenticated user info"""
+    if not AUTH_AVAILABLE:
+        return jsonify({'error': 'Authentication not available'}), 503
+
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    return jsonify({
+        'uid': user.get('uid'),
+        'email': user.get('email'),
+        'name': user.get('name'),
+        'role': user.get('role'),
+    })
+
+
+# Legacy admin mode toggle (deprecated - kept for backward compatibility)
+@app.route('/api/admin-mode', methods=['POST'])
+def api_admin_mode():
+    """Toggle admin mode on/off (deprecated - use Firebase auth instead)"""
+    if AUTH_AVAILABLE and is_authenticated():
+        # If using Firebase auth, admin mode is determined by role
+        user = get_current_user()
+        is_admin = user.get('role') in ['admin', 'super_admin'] if user else False
+        return jsonify({'success': True, 'enabled': is_admin, 'message': 'Using Firebase role-based access'})
+
+    # Fallback to cookie-based for non-auth mode
+    data = request.get_json() or {}
+    enabled = data.get('enabled', False)
+
+    response = jsonify({'success': True, 'enabled': enabled})
+    if enabled:
+        response.set_cookie('admin_mode', '1', max_age=60*60*24*365)  # 1 year
+    else:
+        response.set_cookie('admin_mode', '0', max_age=0)  # Delete cookie
+    return response
+
+
+@app.route('/pfs')
+def pfs():
+    """Precision Fleet Support - Admin only business management section"""
+    # Require admin or super_admin role
+    if AUTH_AVAILABLE:
+        user = get_current_user()
+        if not user:
+            return redirect(url_for('login', next=request.url))
+        if user.get('role') not in ['admin', 'super_admin']:
+            return render_template('error.html',
+                                 error_code=403,
+                                 error_message='Access Denied',
+                                 error_details='This page requires admin privileges.',
+                                 **get_common_context()), 403
+
+    return render_template('pfs.html',
+                         active_page='pfs',
+                         active_category='pfs',
+                         **get_common_context())
+
+
 @app.route('/terminal')
 def terminal():
     """Web terminal page - embeds ttyd for browser-based terminal access"""
@@ -1964,6 +2163,16 @@ def reggie_apps():
                          **get_common_context())
 
 
+@app.route('/reggie/center')
+def reggie_control_center():
+    """Reggie unified control center - all controls in one page"""
+    return render_template('reggie_control_center.html',
+                         active_page='reggie',
+                         reggie_page='center',
+                         page_name='Control Center',
+                         **get_common_context())
+
+
 @app.route('/reggie/settings')
 def reggie_settings():
     """Reggie settings and diagnostics page"""
@@ -1971,6 +2180,16 @@ def reggie_settings():
                          active_page='reggie',
                          reggie_page='settings',
                          page_name='Settings',
+                         **get_common_context())
+
+
+@app.route('/reggie/openclaw')
+def reggie_openclaw():
+    """OpenClaw AI Gateway - Reggie's brain interface"""
+    return render_template('reggie_openclaw.html',
+                         active_page='reggie',
+                         reggie_page='openclaw',
+                         page_name='OpenClaw',
                          **get_common_context())
 
 
@@ -2065,34 +2284,66 @@ def api_stats():
 
 REGGIE_ROBOT_URL = 'http://192.168.0.11:8000'
 REGGIE_DASHBOARD_URL = 'http://192.168.0.168:3008'  # Optional MacBook dashboard
+REGGIE_OPENCLAW_URL = 'http://192.168.0.168:18789'  # OpenClaw AI Gateway on MacBook
 
 
 @app.route('/api/reggie/health')
 def api_reggie_health():
-    """Check Reggie robot health (primary) and optional MacBook dashboard"""
+    """Check Reggie robot health (primary) and optional MacBook dashboard/OpenClaw.
+
+    All checks run in parallel for faster response times when accessed remotely.
+    """
     result = {
         'robot': False,
         'dashboard': False,
+        'openclaw': False,
         'daemon': None,
         'timestamp': datetime.now().isoformat()
     }
 
-    # Primary: Check robot API directly
-    try:
-        resp = requests.get(f'{REGGIE_ROBOT_URL}/api/daemon/status', timeout=3)
-        if resp.status_code == 200:
-            result['robot'] = True
-            data = resp.json()
-            result['daemon'] = data.get('state', 'unknown')
-    except requests.RequestException:
-        pass
+    def check_robot():
+        """Check robot API (timeout 3s)"""
+        try:
+            resp = requests.get(f'{REGGIE_ROBOT_URL}/api/daemon/status', timeout=3)
+            if resp.status_code == 200:
+                return ('robot', True, resp.json().get('state', 'unknown'))
+        except requests.RequestException:
+            pass
+        return ('robot', False, None)
 
-    # Secondary: Check MacBook dashboard (optional)
-    try:
-        resp = requests.get(REGGIE_DASHBOARD_URL, timeout=2)
-        result['dashboard'] = resp.status_code == 200
-    except requests.RequestException:
-        pass
+    def check_dashboard():
+        """Check MacBook dashboard (timeout 2s)"""
+        try:
+            resp = requests.get(REGGIE_DASHBOARD_URL, timeout=2)
+            return ('dashboard', resp.status_code == 200)
+        except requests.RequestException:
+            pass
+        return ('dashboard', False)
+
+    def check_openclaw():
+        """Check OpenClaw Gateway (timeout 5s for remote access latency)"""
+        try:
+            resp = requests.get(f'{REGGIE_OPENCLAW_URL}/health', timeout=5)
+            return ('openclaw', resp.status_code == 200)
+        except requests.RequestException:
+            pass
+        return ('openclaw', False)
+
+    # Run all checks in parallel
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [
+            executor.submit(check_robot),
+            executor.submit(check_dashboard),
+            executor.submit(check_openclaw)
+        ]
+        for future in as_completed(futures):
+            res = future.result()
+            if res[0] == 'robot':
+                result['robot'] = res[1]
+                if len(res) > 2:
+                    result['daemon'] = res[2]
+            else:
+                result[res[0]] = res[1]
 
     return jsonify(result)
 
@@ -2240,6 +2491,211 @@ def api_reggie_proxy(endpoint):
         return jsonify({'error': 'Request timed out'}), 504
     except requests.RequestException as e:
         return jsonify({'error': str(e)}), 503
+
+
+# ============================================
+# OpenClaw Proxy Routes (Secure Context Fix)
+# ============================================
+# Proxy OpenClaw through localhost so browser treats it as secure context
+# This fixes the WebSocket "secure context required" error
+
+@app.route('/openclaw-proxy/')
+@app.route('/openclaw-proxy/<path:path>')
+def openclaw_proxy(path: str = ''):
+    """Proxy HTTP requests to OpenClaw gateway"""
+    target_url = f'{REGGIE_OPENCLAW_URL}/{path}'
+
+    # Forward query string
+    if request.query_string:
+        target_url += '?' + request.query_string.decode()
+
+    try:
+        # Forward the request
+        resp = requests.request(
+            method=request.method,
+            url=target_url,
+            headers={k: v for k, v in request.headers if k.lower() not in ['host']},
+            data=request.get_data(),
+            timeout=30,
+            allow_redirects=False
+        )
+
+        # Build response - exclude hop-by-hop headers
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        headers = [(k, v) for k, v in resp.raw.headers.items() if k.lower() not in excluded_headers]
+
+        return Response(resp.content, resp.status_code, headers)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+
+@sock.route('/openclaw-proxy')
+@sock.route('/openclaw-ws')
+def openclaw_ws_proxy(ws):
+    """Proxy WebSocket connections to OpenClaw gateway"""
+    openclaw_ws_url = REGGIE_OPENCLAW_URL.replace('http://', 'ws://')
+
+    try:
+        target = ws_client.create_connection(openclaw_ws_url, timeout=30)
+    except Exception as e:
+        logger.error(f"OpenClaw WebSocket connection failed: {e}")
+        return
+
+    def forward_to_client():
+        """Forward messages from OpenClaw to browser"""
+        try:
+            while True:
+                msg = target.recv()
+                if msg:
+                    ws.send(msg)
+        except Exception:
+            pass
+
+    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread.start()
+
+    try:
+        while True:
+            msg = ws.receive()
+            if msg:
+                target.send(msg)
+    except Exception:
+        pass
+    finally:
+        target.close()
+
+
+# Root WebSocket proxy for OpenClaw iframe
+# OpenClaw UI connects to ws://localhost:3003/ based on window.location.origin
+@sock.route('/')
+def openclaw_root_ws_proxy(ws):
+    """Proxy root WebSocket connections to OpenClaw gateway (for iframe)"""
+    openclaw_ws_url = REGGIE_OPENCLAW_URL.replace('http://', 'ws://')
+
+    try:
+        target = ws_client.create_connection(openclaw_ws_url, timeout=30)
+    except Exception as e:
+        logger.error(f"OpenClaw root WebSocket connection failed: {e}")
+        return
+
+    running = True
+
+    def forward_to_client():
+        nonlocal running
+        try:
+            while running:
+                opcode, data = target.recv_data(control_frame=True)
+                if opcode == ws_client.ABNF.OPCODE_TEXT:
+                    ws.send(data.decode('utf-8'))
+                elif opcode == ws_client.ABNF.OPCODE_BINARY:
+                    ws.send(data)
+                elif opcode == ws_client.ABNF.OPCODE_CLOSE:
+                    break
+                elif opcode == ws_client.ABNF.OPCODE_PING:
+                    target.pong(data)
+                elif opcode == ws_client.ABNF.OPCODE_PONG:
+                    pass
+        except Exception as e:
+            logger.debug(f"OpenClaw WS forward_to_client ended: {e}")
+        finally:
+            running = False
+
+    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread.start()
+
+    try:
+        while running:
+            msg = ws.receive(timeout=1)
+            if msg is None:
+                continue
+            if isinstance(msg, bytes):
+                target.send_binary(msg)
+            else:
+                target.send(msg)
+    except Exception as e:
+        logger.debug(f"OpenClaw WS main loop ended: {e}")
+    finally:
+        running = False
+        try:
+            target.close()
+        except Exception:
+            pass
+
+
+# ============================================
+# Camera Signaling Proxy (SSH Tunnel Support)
+# ============================================
+REGGIE_CAMERA_SIGNALING_URL = 'ws://192.168.0.11:8443'
+
+@sock.route('/reggie/camera-signaling')
+def reggie_camera_signaling_proxy(ws):
+    """Proxy WebRTC signaling WebSocket to robot camera server.
+
+    This enables camera access when connecting via SSH tunnel (localhost:3003)
+    since the robot at 192.168.0.11 isn't directly reachable.
+    """
+    logger.info("[CameraProxy] Client connected, connecting to robot...")
+    logger.info(f"[CameraProxy] Target URL: {REGGIE_CAMERA_SIGNALING_URL}")
+
+    try:
+        target = ws_client.create_connection(REGGIE_CAMERA_SIGNALING_URL, timeout=30)
+        logger.info("[CameraProxy] Connected to robot signaling server")
+    except Exception as e:
+        logger.error(f"[CameraProxy] Failed to connect to robot: {e}")
+        return
+
+    running = True
+
+    def forward_to_client():
+        nonlocal running
+        try:
+            while running:
+                opcode, data = target.recv_data(control_frame=True)
+                if opcode == ws_client.ABNF.OPCODE_TEXT:
+                    decoded = data.decode('utf-8')
+                    preview = decoded[:100] + ('...' if len(decoded) > 100 else '')
+                    logger.info(f"[CameraProxy] Robot->Client: {preview}")
+                    ws.send(decoded)
+                elif opcode == ws_client.ABNF.OPCODE_BINARY:
+                    logger.info(f"[CameraProxy] Robot->Client: (binary {len(data)} bytes)")
+                    ws.send(data)
+                elif opcode == ws_client.ABNF.OPCODE_CLOSE:
+                    logger.info("[CameraProxy] Robot sent close frame")
+                    break
+                elif opcode == ws_client.ABNF.OPCODE_PING:
+                    target.pong(data)
+                elif opcode == ws_client.ABNF.OPCODE_PONG:
+                    pass
+        except Exception as e:
+            logger.info(f"[CameraProxy] Forward thread ended: {e}")
+        finally:
+            running = False
+
+    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread.start()
+    logger.info("[CameraProxy] Forward thread started, listening for client messages...")
+
+    try:
+        while running:
+            msg = ws.receive(timeout=1)
+            if msg is None:
+                continue
+            if isinstance(msg, bytes):
+                logger.info(f"[CameraProxy] Client->Robot: (binary {len(msg)} bytes)")
+                target.send_binary(msg)
+            else:
+                preview = msg[:100] + ('...' if len(msg) > 100 else '')
+                logger.info(f"[CameraProxy] Client->Robot: {preview}")
+                target.send(msg)
+    except Exception as e:
+        logger.info(f"[CameraProxy] Main loop ended: {e}")
+    finally:
+        running = False
+        logger.info("[CameraProxy] Connection closed")
+        try:
+            target.close()
+        except Exception:
+            pass
 
 
 @app.route('/api/team-videos/<team>')
@@ -3912,7 +4368,7 @@ def build_ltx_video_workflow(prompt, input_image, video_model, width, height, fr
     if crf is None:
         crf = 19
 
-    logger.info(f"Building LTX video workflow (native nodes):")
+    logger.info("Building LTX video workflow (native nodes):")
     logger.info(f"  prompt: {prompt[:100]}...")
     logger.info(f"  input_image: {input_image}")
     logger.info(f"  video_model: {video_model}")
@@ -4780,6 +5236,13 @@ def api_terminal_create():
             subprocess.run(['tmux', 'select-window', '-t', f'dashboard-bottom:{window_id}'],
                           capture_output=True, timeout=5)
 
+            # Initialize the new window with conda env and claude
+            subprocess.run(
+                ['tmux', 'send-keys', '-t', f'dashboard-top:{window_id}',
+                 'conda activate boom_env && claude --dangerously-skip-permissions', 'Enter'],
+                capture_output=True, timeout=5
+            )
+
             # Save metadata
             sessions = get_terminal_sessions()
             sessions.setdefault('windows', {})[window_id] = {'name': name}
@@ -4940,26 +5403,53 @@ def api_terminal_display_set():
             return jsonify({'error': f'Not a file: {path}'}), 400
 
         try:
-            content = file_path.read_text(encoding='utf-8', errors='replace')
-            # Detect language from extension
             ext = file_path.suffix.lower()
-            ext_to_lang = {
-                '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
-                '.jsx': 'jsx', '.tsx': 'tsx', '.json': 'json',
-                '.html': 'html', '.css': 'css', '.scss': 'scss',
-                '.md': 'markdown', '.yaml': 'yaml', '.yml': 'yaml',
-                '.sh': 'bash', '.bash': 'bash', '.zsh': 'zsh',
-                '.sql': 'sql', '.go': 'go', '.rs': 'rust',
-                '.java': 'java', '.c': 'c', '.cpp': 'cpp', '.h': 'c',
-                '.rb': 'ruby', '.php': 'php', '.swift': 'swift',
-                '.kt': 'kotlin', '.r': 'r', '.lua': 'lua',
-                '.toml': 'toml', '.ini': 'ini', '.xml': 'xml',
-            }
-            if ext == '.md':
-                content_type = 'markdown'  # Auto-render markdown files
+
+            # Check for binary file types first
+            image_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico'}
+            pdf_exts = {'.pdf'}
+
+            if ext in image_exts:
+                # Return image as base64 data URL
+                import base64
+                mime_types = {
+                    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                    '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+                    '.bmp': 'image/bmp', '.ico': 'image/x-icon'
+                }
+                mime = mime_types.get(ext, 'application/octet-stream')
+                data = base64.b64encode(file_path.read_bytes()).decode('ascii')
+                content = f"data:{mime};base64,{data}"
+                content_type = 'image'
+
+            elif ext in pdf_exts:
+                # Return PDF as base64 data URL
+                import base64
+                data = base64.b64encode(file_path.read_bytes()).decode('ascii')
+                content = f"data:application/pdf;base64,{data}"
+                content_type = 'pdf'
+
             else:
-                language = ext_to_lang.get(ext, 'plaintext')
-                content_type = 'code'
+                # Text file handling
+                content = file_path.read_text(encoding='utf-8', errors='replace')
+                # Detect language from extension
+                ext_to_lang = {
+                    '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+                    '.jsx': 'jsx', '.tsx': 'tsx', '.json': 'json',
+                    '.html': 'html', '.css': 'css', '.scss': 'scss',
+                    '.md': 'markdown', '.yaml': 'yaml', '.yml': 'yaml',
+                    '.sh': 'bash', '.bash': 'bash', '.zsh': 'zsh',
+                    '.sql': 'sql', '.go': 'go', '.rs': 'rust',
+                    '.java': 'java', '.c': 'c', '.cpp': 'cpp', '.h': 'c',
+                    '.rb': 'ruby', '.php': 'php', '.swift': 'swift',
+                    '.kt': 'kotlin', '.r': 'r', '.lua': 'lua',
+                    '.toml': 'toml', '.ini': 'ini', '.xml': 'xml',
+                }
+                if ext == '.md':
+                    content_type = 'markdown'  # Auto-render markdown files
+                else:
+                    language = ext_to_lang.get(ext, 'plaintext')
+                    content_type = 'code'
         except Exception as e:
             return jsonify({'error': f'Failed to read file: {str(e)}'}), 500
 
@@ -4989,6 +5479,219 @@ def api_terminal_display_clear():
     return jsonify({'success': True})
 
 
+# =============================================================================
+# TERMINAL CHAT API (Mobile Conversational Interface)
+# =============================================================================
+
+@app.route('/api/terminal/chat/buffer')
+def api_terminal_chat_buffer():
+    """Capture tmux buffer, parse Claude Code output, return structured messages.
+
+    Query params:
+        session: tmux session name (default: 'dashboard-top')
+        lines: number of lines to capture (default: 500)
+
+    Returns:
+        {
+            messages: [{type, content, tool_name, collapsed}, ...],
+            state: 'idle' | 'working' | 'done',
+            error: string | null
+        }
+    """
+    if not CLAUDE_PARSER_AVAILABLE:
+        return jsonify({
+            'messages': [],
+            'state': 'idle',
+            'error': 'Claude parser module not available'
+        }), 500
+
+    session = request.args.get('session', 'dashboard-top')
+    lines = request.args.get('lines', 500, type=int)
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({
+            'messages': [],
+            'state': 'idle',
+            'error': 'Invalid session name'
+        }), 400
+
+    result = get_chat_buffer(session, lines)
+    return jsonify(result)
+
+
+@app.route('/api/terminal/chat/send', methods=['POST'])
+def api_terminal_chat_send():
+    """Send user input to tmux session via send-keys.
+
+    Request body:
+        text: string - the message to send
+        session: string - tmux session name (default: 'dashboard-top')
+
+    Returns:
+        {success: boolean, error: string | null}
+    """
+    if not CLAUDE_PARSER_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Claude parser module not available'
+        }), 500
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'JSON body required'}), 400
+
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({'success': False, 'error': 'text is required'}), 400
+
+    session = data.get('session', 'dashboard-top')
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'success': False, 'error': 'Invalid session name'}), 400
+
+    # Send to tmux
+    success = send_to_tmux(session, text)
+
+    if success:
+        return jsonify({'success': True, 'error': None})
+    else:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to send to session: {session}'
+        }), 500
+
+
+@app.route('/api/terminal/keys', methods=['POST'])
+def api_terminal_send_keys():
+    """Send special key sequences to tmux session.
+
+    JSON body:
+        key: Key to send (e.g., 'S-Tab', 'Tab', 'Escape', 'Enter')
+        session: tmux session name (default: 'dashboard-top')
+
+    Returns:
+        {success: bool, error: string | null}
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'JSON body required'}), 400
+
+    key = data.get('key', '').strip()
+    if not key:
+        return jsonify({'success': False, 'error': 'key is required'}), 400
+
+    # Whitelist allowed keys for security
+    ALLOWED_KEYS = {'S-Tab', 'Tab', 'Escape', 'Enter', 'Up', 'Down'}
+    if key not in ALLOWED_KEYS:
+        return jsonify({'success': False, 'error': f'Key not allowed: {key}'}), 400
+
+    # Map user-friendly key names to tmux key names
+    TMUX_KEY_MAP = {
+        'S-Tab': 'BTab',  # Shift+Tab = Back Tab in tmux
+    }
+    tmux_key = TMUX_KEY_MAP.get(key, key)
+
+    session = data.get('session', 'dashboard-top')
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'success': False, 'error': 'Invalid session name'}), 400
+
+    try:
+        result = subprocess.run(
+            ['tmux', 'send-keys', '-t', session, tmux_key],
+            capture_output=True, timeout=5
+        )
+        return jsonify({'success': result.returncode == 0, 'error': None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/terminal/scroll', methods=['POST'])
+def api_terminal_scroll():
+    """Scroll terminal via tmux copy-mode.
+
+    This enters tmux copy-mode and scrolls. The terminal stays in copy-mode
+    so the user can see the scrolled content. User can press 'q' or 'Escape'
+    to exit copy-mode and return to normal terminal operation.
+
+    If already in copy-mode, additional scroll commands just scroll further.
+
+    JSON body:
+        session: tmux session name (e.g., 'dashboard-top', 'dashboard-bottom')
+        direction: 'up' or 'down'
+
+    Returns:
+        {success: bool, error: string | null}
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'JSON body required'}), 400
+
+    session = data.get('session', '').strip()
+    direction = data.get('direction', '').strip()
+
+    if not session:
+        return jsonify({'success': False, 'error': 'session is required'}), 400
+
+    if direction not in ('up', 'down'):
+        return jsonify({'success': False, 'error': 'direction must be "up" or "down"'}), 400
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'success': False, 'error': 'Invalid session name'}), 400
+
+    # tmux Page Up = PPage, Page Down = NPage
+    tmux_key = 'PPage' if direction == 'up' else 'NPage'
+
+    try:
+        # Enter copy-mode directly (not via send-keys)
+        subprocess.run(
+            ['tmux', 'copy-mode', '-t', session],
+            capture_output=True, timeout=2
+        )
+        time.sleep(0.05)
+
+        # Send page up/down to scroll within copy-mode
+        result = subprocess.run(
+            ['tmux', 'send-keys', '-t', session, tmux_key],
+            capture_output=True, timeout=2
+        )
+
+        # Don't exit copy-mode - let user see the scrolled content
+        # User can press 'q' or 'Escape' to exit copy-mode manually
+
+        return jsonify({'success': result.returncode == 0, 'error': None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/terminal/chat/state')
+def api_terminal_chat_state():
+    """Lightweight state check for fast polling.
+
+    Query params:
+        session: tmux session name (default: 'dashboard-top')
+
+    Returns:
+        {state: 'idle' | 'working' | 'done', error: string | null}
+    """
+    if not CLAUDE_PARSER_AVAILABLE:
+        return jsonify({
+            'state': 'idle',
+            'error': 'Claude parser module not available'
+        }), 500
+
+    session = request.args.get('session', 'dashboard-top')
+
+    # Validate session name to prevent command injection
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session):
+        return jsonify({'state': 'idle', 'error': 'Invalid session name'}), 400
+
+    result = get_terminal_state(session)
+    return jsonify(result)
+
+
 @app.route('/api/terminal/files/list')
 def api_terminal_files_list():
     """List files in a directory for the file browser."""
@@ -5006,9 +5709,6 @@ def api_terminal_files_list():
     items = []
     try:
         for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
-            # Skip hidden files
-            if item.name.startswith('.'):
-                continue
             items.append({
                 'name': item.name,
                 'path': str(item),
@@ -5088,6 +5788,49 @@ def api_terminal_files_search():
         return jsonify({'error': str(e)}), 500
 
     return jsonify({'results': results, 'query': query})
+
+
+@app.route('/api/terminal/files/upload', methods=['POST'])
+def terminal_file_upload():
+    """Upload file to specified directory."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    target_dir = request.form.get('target_dir', '/home/pds')
+
+    if not file.filename:
+        return jsonify({'error': 'No filename'}), 400
+
+    if not is_path_allowed(target_dir):
+        return jsonify({'error': 'Directory not allowed'}), 403
+
+    target_path = Path(target_dir)
+    if not target_path.exists() or not target_path.is_dir():
+        return jsonify({'error': 'Invalid directory'}), 400
+
+    filename = secure_filename(file.filename)
+    if not filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+
+    # Handle filename collisions
+    dest_path = target_path / filename
+    if dest_path.exists():
+        base, ext = os.path.splitext(filename)
+        counter = 1
+        while dest_path.exists():
+            filename = f"{base}_{counter}{ext}"
+            dest_path = target_path / filename
+            counter += 1
+
+    file.save(str(dest_path))
+
+    return jsonify({
+        'success': True,
+        'filename': filename,
+        'path': str(dest_path),
+        'size': dest_path.stat().st_size
+    })
 
 
 # ============================================
@@ -5373,6 +6116,518 @@ def api_kanban_reorder_tasks():
 
 
 # =============================================================================
+# Project Management Routes
+# =============================================================================
+
+@app.route('/projects')
+def projects():
+    """Main projects overview page"""
+    if not PROJECTS_AVAILABLE:
+        return render_template('projects.html',
+                             active_page='projects',
+                             error='Project management not available',
+                             areas=[], stats={},
+                             available_icons=[], default_colors=[],
+                             **get_common_context())
+
+    # Get areas (user-created, no auto-sync)
+    areas = get_all_areas()
+
+    # Get projects for each area
+    for area in areas:
+        area['projects'] = get_projects_by_area(area['id'])
+
+    stats = get_pm_stats()
+
+    return render_template('projects.html',
+                         active_page='projects',
+                         areas=areas,
+                         stats=stats,
+                         available_icons=AVAILABLE_ICONS,
+                         default_colors=DEFAULT_COLORS,
+                         **get_common_context())
+
+
+@app.route('/projects/<area_name>')
+def projects_area(area_name):
+    """Area detail page showing all projects"""
+    if not PROJECTS_AVAILABLE:
+        return redirect(url_for('projects'))
+
+    area = get_area_by_name(area_name)
+    if not area:
+        return redirect(url_for('projects'))
+
+    # Get projects (user-created, no auto-sync)
+    projects_list = get_projects_by_area(area['id'])
+
+    return render_template('projects.html',
+                         active_page='projects',
+                         current_area=area,
+                         projects=projects_list,
+                         areas=get_all_areas(),
+                         stats=get_pm_stats(),
+                         available_icons=AVAILABLE_ICONS,
+                         default_colors=DEFAULT_COLORS,
+                         **get_common_context())
+
+
+@app.route('/projects/<area_name>/<project_name>')
+def project_detail(area_name, project_name):
+    """Project detail page with kanban board"""
+    if not PROJECTS_AVAILABLE:
+        return redirect(url_for('projects'))
+
+    project = get_project_by_name(project_name, area_name)
+    if not project:
+        return redirect(url_for('projects'))
+
+    tasks = get_tasks_by_project(project['id'])
+
+    # Group tasks by status for kanban
+    task_columns = {
+        'backlog': [t for t in tasks if t['status'] == 'backlog'],
+        'todo': [t for t in tasks if t['status'] == 'todo'],
+        'in_progress': [t for t in tasks if t['status'] == 'in_progress'],
+        'done': [t for t in tasks if t['status'] == 'done']
+    }
+
+    return render_template('project_detail.html',
+                         active_page='projects',
+                         project=project,
+                         task_columns=task_columns,
+                         **get_common_context())
+
+
+@app.route('/lists')
+def lists():
+    """Personal lists page"""
+    if not PROJECTS_AVAILABLE:
+        return render_template('lists.html',
+                             active_page='lists',
+                             error='Lists not available',
+                             lists=[],
+                             **get_common_context())
+
+    all_lists = get_all_lists()
+    # Get items for each list
+    lists_with_items = []
+    for lst in all_lists:
+        full_list = get_list(lst['id'])
+        if full_list:
+            lists_with_items.append(full_list)
+
+    return render_template('lists.html',
+                         active_page='lists',
+                         lists=lists_with_items,
+                         **get_common_context())
+
+
+# =============================================================================
+# Project Management API
+# =============================================================================
+
+@app.route('/api/pm/areas')
+def api_pm_areas():
+    """Get all areas with stats"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+    return jsonify(get_all_areas())
+
+
+@app.route('/api/pm/areas', methods=['POST'])
+def api_pm_create_area():
+    """Create a new area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('name'):
+        return jsonify({'error': 'name is required'}), 400
+
+    area = create_area(
+        name=data['name'],
+        icon=data.get('icon', 'folder'),
+        color=data.get('color', '#6b7280'),
+        path=data.get('path')
+    )
+    return jsonify(area), 201
+
+
+@app.route('/api/pm/areas/<area_id>', methods=['GET'])
+def api_pm_get_area(area_id):
+    """Get a single area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    area = get_area(area_id)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+    return jsonify(area)
+
+
+@app.route('/api/pm/areas/<area_id>', methods=['PUT'])
+def api_pm_update_area(area_id):
+    """Update an area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    area = update_area(area_id, **data)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+    return jsonify(area)
+
+
+@app.route('/api/pm/areas/<area_id>', methods=['DELETE'])
+def api_pm_delete_area(area_id):
+    """Delete an area"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_area(area_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Area not found'}), 404
+
+
+@app.route('/api/pm/import', methods=['POST'])
+def api_pm_import():
+    """Import areas and projects from filesystem (optional convenience feature)"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    directory_names = data.get('directories')
+
+    # Import areas from directories
+    areas = import_areas_from_directory(directory_names)
+
+    # Optionally import projects for areas with paths
+    if data.get('include_projects', True):
+        for area in areas:
+            if area.get('path'):
+                import_projects_from_directory(area['id'])
+
+    return jsonify({'success': True, 'imported_areas': len(areas)})
+
+
+@app.route('/api/pm/areas/<area_id>/import-projects', methods=['POST'])
+def api_pm_import_area_projects(area_id):
+    """Import projects from an area's linked directory"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    area = get_area(area_id)
+    if not area:
+        return jsonify({'error': 'Area not found'}), 404
+
+    if not area.get('path'):
+        return jsonify({'error': 'Area has no linked directory'}), 400
+
+    projects = import_projects_from_directory(area_id)
+    return jsonify({'success': True, 'imported_projects': len(projects)})
+
+
+@app.route('/api/pm/projects')
+def api_pm_projects():
+    """Get all projects"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    area_id = request.args.get('area_id')
+    if area_id:
+        return jsonify(get_projects_by_area(area_id))
+    return jsonify(get_all_projects())
+
+
+@app.route('/api/pm/projects', methods=['POST'])
+def api_pm_create_project():
+    """Create a new project"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('name') or not data.get('area_id'):
+        return jsonify({'error': 'name and area_id required'}), 400
+
+    project = create_project(
+        area_id=data['area_id'],
+        name=data['name'],
+        description=data.get('description', ''),
+        path=data.get('path')
+    )
+    return jsonify(project), 201
+
+
+@app.route('/api/pm/projects/<project_id>', methods=['PUT'])
+def api_pm_update_project(project_id):
+    """Update a project"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    project = update_project(project_id, **data)
+    if not project:
+        return jsonify({'error': 'Project not found'}), 404
+    return jsonify(project)
+
+
+@app.route('/api/pm/projects/<project_id>', methods=['DELETE'])
+def api_pm_delete_project(project_id):
+    """Delete a project"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_project(project_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Project not found'}), 404
+
+
+@app.route('/api/pm/tasks')
+def api_pm_tasks():
+    """Get all tasks, optionally filtered"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    project_id = request.args.get('project_id')
+    status = request.args.get('status')
+    priority = request.args.get('priority')
+
+    if project_id:
+        return jsonify(get_tasks_by_project(project_id))
+    return jsonify(get_all_tasks(status=status, priority=priority))
+
+
+@app.route('/api/pm/tasks', methods=['POST'])
+def api_pm_create_task():
+    """Create a new task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('title') or not data.get('project_id'):
+        return jsonify({'error': 'title and project_id required'}), 400
+
+    task = create_task(
+        project_id=data['project_id'],
+        title=data['title'],
+        notes=data.get('notes', ''),
+        status=data.get('status', 'backlog'),
+        priority=data.get('priority', 'medium')
+    )
+    return jsonify(task), 201
+
+
+@app.route('/api/pm/tasks/<task_id>')
+def api_pm_get_task(task_id):
+    """Get a single task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    task = get_task(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    return jsonify(task)
+
+
+@app.route('/api/pm/tasks/<task_id>', methods=['PUT'])
+def api_pm_update_task(task_id):
+    """Update a task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    task = update_task(task_id, **data)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    return jsonify(task)
+
+
+@app.route('/api/pm/tasks/<task_id>', methods=['DELETE'])
+def api_pm_delete_task(task_id):
+    """Delete a task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_task(task_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Task not found'}), 404
+
+
+@app.route('/api/pm/tasks/reorder', methods=['POST'])
+def api_pm_reorder_tasks():
+    """Reorder tasks"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    task_orders = data.get('tasks', [])
+
+    if reorder_tasks(task_orders):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Failed to reorder'}), 500
+
+
+@app.route('/api/pm/browse-directories')
+def api_pm_browse_directories():
+    """Browse directories for linking to projects/areas"""
+    import os
+    from pathlib import Path
+
+    path = request.args.get('path', '/home/pds')
+
+    # Security: Only allow browsing within /home/pds
+    try:
+        requested = Path(path).resolve()
+        allowed_base = Path('/home/pds').resolve()
+        if not str(requested).startswith(str(allowed_base)):
+            return jsonify({'error': 'Access denied'}), 403
+    except Exception:
+        return jsonify({'error': 'Invalid path'}), 400
+
+    if not requested.exists():
+        return jsonify({'error': 'Path does not exist'}), 404
+
+    if not requested.is_dir():
+        return jsonify({'error': 'Not a directory'}), 400
+
+    # Get directory contents
+    entries = []
+    try:
+        for entry in sorted(requested.iterdir()):
+            # Skip hidden files and common non-project directories
+            if entry.name.startswith('.'):
+                continue
+            if entry.name in ('node_modules', '__pycache__', '.venv', 'venv', '.git'):
+                continue
+
+            if entry.is_dir():
+                entries.append({
+                    'name': entry.name,
+                    'path': str(entry),
+                    'type': 'directory'
+                })
+    except PermissionError:
+        return jsonify({'error': 'Permission denied'}), 403
+
+    # Get parent path for navigation
+    parent = str(requested.parent) if requested != allowed_base else None
+
+    return jsonify({
+        'current': str(requested),
+        'parent': parent,
+        'entries': entries
+    })
+
+
+@app.route('/api/pm/lists')
+def api_pm_lists():
+    """Get all lists"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+    return jsonify(get_all_lists())
+
+
+@app.route('/api/pm/lists', methods=['POST'])
+def api_pm_create_list():
+    """Create a new list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('name'):
+        return jsonify({'error': 'name required'}), 400
+
+    lst = create_list(
+        name=data['name'],
+        icon=data.get('icon', 'list')
+    )
+    return jsonify(lst), 201
+
+
+@app.route('/api/pm/lists/<list_id>')
+def api_pm_get_list(list_id):
+    """Get a list with its items"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    lst = get_list(list_id)
+    if not lst:
+        return jsonify({'error': 'List not found'}), 404
+    return jsonify(lst)
+
+
+@app.route('/api/pm/lists/<list_id>', methods=['PUT'])
+def api_pm_update_list(list_id):
+    """Update a list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    lst = update_list(list_id, **data)
+    if not lst:
+        return jsonify({'error': 'List not found'}), 404
+    return jsonify(lst)
+
+
+@app.route('/api/pm/lists/<list_id>', methods=['DELETE'])
+def api_pm_delete_list(list_id):
+    """Delete a list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_list(list_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'List not found'}), 404
+
+
+@app.route('/api/pm/lists/<list_id>/items', methods=['POST'])
+def api_pm_add_list_item(list_id):
+    """Add an item to a list"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    if not data.get('content'):
+        return jsonify({'error': 'content required'}), 400
+
+    item = add_list_item(list_id, data['content'])
+    return jsonify(item), 201
+
+
+@app.route('/api/pm/lists/<list_id>/items/<item_id>', methods=['PUT'])
+def api_pm_update_list_item(list_id, item_id):
+    """Update a list item"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    data = request.get_json() or {}
+    item = update_list_item(item_id, **data)
+    if not item:
+        return jsonify({'error': 'Item not found'}), 404
+    return jsonify(item)
+
+
+@app.route('/api/pm/lists/<list_id>/items/<item_id>', methods=['DELETE'])
+def api_pm_delete_list_item(list_id, item_id):
+    """Delete a list item"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    if delete_list_item(item_id):
+        return jsonify({'success': True})
+    return jsonify({'error': 'Item not found'}), 404
+
+
+@app.route('/api/pm/stats')
+def api_pm_stats():
+    """Get project management statistics"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+    return jsonify(get_pm_stats())
+
+
+# =============================================================================
 # Dev Port Manager API
 # =============================================================================
 
@@ -5403,6 +6658,215 @@ def api_dev_port_list():
             ports.append({'port': port, 'in_use': in_use})
 
     return jsonify({'ports': ports, 'range': list(PORT_RANGE)})
+
+
+def get_pm2_pids() -> set[int]:
+    """Get set of PIDs managed by PM2."""
+    try:
+        result = subprocess.run(['pm2', 'jlist'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            pm2_list = json.loads(result.stdout)
+            return {proc['pid'] for proc in pm2_list if proc.get('pid')}
+    except Exception:
+        pass
+    return set()
+
+
+def is_dev_port(port: int) -> tuple[bool, str | None]:
+    """Check if port is in any monitored dev range."""
+    if port in EXCLUDED_PORTS:
+        return False, None
+    for start, end, category in DEV_PORT_RANGES:
+        if start <= port <= end:
+            return True, category
+    return False, None
+
+
+@app.route('/api/dev-port/active')
+def api_dev_port_active():
+    """List active dev servers with process info across all monitored port ranges."""
+    active = []
+    pm2_pids = get_pm2_pids()
+
+    # Use ss to get all listening ports with PIDs (works for IPv4 and IPv6)
+    try:
+        result = subprocess.run(
+            ['ss', '-tlnp'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            return jsonify({
+                'active': [],
+                'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES],
+                'error': 'ss command failed'
+            })
+
+        # Parse ss output to find ports in our ranges
+        # Format: LISTEN 0 511 127.0.0.1:4010 0.0.0.0:* users:(("node",pid=1474380,fd=22))
+        # Or:     LISTEN 0 511 *:4000 *:* users:(("next-server",pid=3139079,fd=22))
+        for line in result.stdout.split('\n'):
+            if 'LISTEN' not in line:
+                continue
+
+            # Extract port from local address (4th column)
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+
+            local_addr = parts[3]
+            # Handle formats: 127.0.0.1:4010, *:4000, [::]:4000, 0.0.0.0:4000
+            if ':' in local_addr:
+                port_str = local_addr.rsplit(':', 1)[-1]
+                try:
+                    port = int(port_str)
+                except ValueError:
+                    continue
+
+                # Check if port is in any monitored range
+                is_monitored, category = is_dev_port(port)
+                if not is_monitored:
+                    continue
+
+                # Extract PID from users:(("name",pid=XXXX,fd=YY))
+                pid_match = re.search(r'pid=(\d+)', line)
+                pid = pid_match.group(1) if pid_match else ''
+
+                if pid:
+                    pid_int = int(pid)
+                    is_managed = pid_int in pm2_pids
+
+                    # Get working directory
+                    cwd = ''
+                    try:
+                        cwd_result = subprocess.run(
+                            ['readlink', '-f', f'/proc/{pid}/cwd'],
+                            capture_output=True, text=True, timeout=2
+                        )
+                        if cwd_result.returncode == 0:
+                            cwd = cwd_result.stdout.strip()
+                    except Exception:
+                        pass
+
+                    # Get command
+                    cmd = ''
+                    try:
+                        cmd_result = subprocess.run(
+                            ['ps', '-p', pid, '-o', 'args='],
+                            capture_output=True, text=True, timeout=2
+                        )
+                        if cmd_result.returncode == 0:
+                            cmd = cmd_result.stdout.strip()
+                    except Exception:
+                        pass
+
+                    # Extract project name from cwd or command
+                    project = cwd.split('/')[-1] if cwd else f'Port {port}'
+                    # Try to get a better name from pm2 or command
+                    if is_managed:
+                        # Try to find pm2 name
+                        try:
+                            pm2_result = subprocess.run(['pm2', 'jlist'], capture_output=True, text=True, timeout=5)
+                            if pm2_result.returncode == 0:
+                                pm2_list = json.loads(pm2_result.stdout)
+                                for proc in pm2_list:
+                                    if proc.get('pid') == pid_int:
+                                        project = proc.get('name', project)
+                                        break
+                        except Exception:
+                            pass
+
+                    # Avoid duplicates (IPv4 and IPv6 might both show)
+                    if not any(s['port'] == port for s in active):
+                        active.append({
+                            'port': port,
+                            'project': project,
+                            'cwd': cwd,
+                            'command': cmd[:100],  # Truncate long commands
+                            'pid': pid,
+                            'category': category,
+                            'managed': is_managed
+                        })
+
+    except Exception as e:
+        return jsonify({
+            'active': [],
+            'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES],
+            'error': str(e)
+        })
+
+    # Sort by port number
+    active.sort(key=lambda x: x['port'])
+
+    return jsonify({
+        'active': active,
+        'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES]
+    })
+
+
+# ============================================
+# Mobile Routes
+# ============================================
+
+@app.route('/m')
+@app.route('/m/')
+def mobile_home():
+    """Mobile home page"""
+    return render_template('mobile/home.html', active_page='home', **get_common_context())
+
+@app.route('/m/workshop')
+def mobile_workshop():
+    """Mobile workshop hub"""
+    return render_template('mobile/workshop/index.html', active_page='workshop', active_category='workshop', **get_common_context())
+
+@app.route('/m/workshop/kanban')
+def mobile_workshop_kanban():
+    """Mobile kanban board"""
+    return render_template('mobile/workshop/kanban.html', active_page='kanban', active_category='workshop', **get_common_context())
+
+@app.route('/m/workshop/agents')
+def mobile_workshop_agents():
+    """Mobile agent office"""
+    return render_template('mobile/workshop/agents.html', active_page='agents', active_category='workshop', **get_common_context())
+
+@app.route('/m/workshop/vibecraft')
+def mobile_workshop_vibecraft():
+    """Mobile vibecraft studio"""
+    return render_template('mobile/workshop/vibecraft.html', active_page='vibecraft', active_category='workshop', **get_common_context())
+
+@app.route('/m/automation')
+def mobile_automation():
+    """Mobile automation hub"""
+    return render_template('mobile/automation/index.html', active_page='automation', **get_common_context())
+
+@app.route('/m/reggie')
+def mobile_reggie():
+    """Mobile reggie overview"""
+    return render_template('mobile/reggie/index.html', active_page='reggie', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/control')
+def mobile_reggie_control():
+    """Mobile reggie control panel"""
+    return render_template('mobile/reggie/control.html', active_page='control', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/camera')
+def mobile_reggie_camera():
+    """Mobile reggie camera feed"""
+    return render_template('mobile/reggie/camera.html', active_page='camera', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/moves')
+def mobile_reggie_moves():
+    """Mobile reggie moves and emotions"""
+    return render_template('mobile/reggie/moves.html', active_page='moves', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/apps')
+def mobile_reggie_apps():
+    """Mobile reggie huggingface apps"""
+    return render_template('mobile/reggie/apps.html', active_page='apps', active_category='reggie', **get_common_context())
+
+@app.route('/m/reggie/settings')
+def mobile_reggie_settings():
+    """Mobile reggie settings"""
+    return render_template('mobile/reggie/settings.html', active_page='settings', active_category='reggie', **get_common_context())
 
 
 def main():

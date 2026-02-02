@@ -5,8 +5,31 @@
 {% block page_subtitle %}Configure dashboard preferences and system settings{% endblock %}
 
 {% block content %}
-<!-- Appearance Settings -->
+<!-- Admin Mode -->
 <div class="card">
+    <div class="card-header">
+        <span class="card-title">
+            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            Admin Mode
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="settings-section">
+            <div class="settings-item">
+                <div class="settings-item-info">
+                    <h4>Enable Admin View</h4>
+                    <p>Show admin-only sections like Precision Fleet Support</p>
+                </div>
+                <div class="toggle {% if is_admin %}active{% endif %}" data-setting="adminMode" onclick="toggleAdminMode(this)"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Appearance Settings -->
+<div class="card" style="margin-top: 24px;">
     <div class="card-header">
         <span class="card-title">
             <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -82,7 +105,7 @@
             <div class="job-item">
                 <div class="job-info">
                     <div class="job-name">Project Directory</div>
-                    <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace; color: var(--text-primary);">/home/pds/money_printing/polymarket</div>
+                    <div class="job-schedule" style="font-family: 'JetBrains Mono', monospace; color: var(--text-primary);">/home/pds/boomshakalaka/money_printing/polymarket</div>
                 </div>
             </div>
             <div class="job-item">
@@ -316,6 +339,33 @@
 // ============================================================================
 let allThemes = {};
 let activeThemeId = null;
+
+// ============================================================================
+// Admin Mode Toggle
+// ============================================================================
+async function toggleAdminMode(toggleElement) {
+    toggleElement.classList.toggle('active');
+    const enabled = toggleElement.classList.contains('active');
+
+    try {
+        const response = await fetch('/api/admin-mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(enabled ? 'Admin mode enabled' : 'Admin mode disabled');
+            // Reload page to update sidebar
+            setTimeout(() => window.location.reload(), 500);
+        }
+    } catch (error) {
+        console.error('Error toggling admin mode:', error);
+        toggleElement.classList.toggle('active'); // Revert
+        showToast('Failed to toggle admin mode', 'error');
+    }
+}
 
 // ============================================================================
 // Dark Mode Toggle
