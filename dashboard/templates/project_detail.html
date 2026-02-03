@@ -288,6 +288,21 @@
                     </select>
                 </div>
             </div>
+            <div class="form-group" id="attachments-section" style="display: none;">
+                <label>Attachments</label>
+                <div id="task-attachments-list" class="attachments-list"></div>
+                <div class="attachment-upload">
+                    <input type="file" id="task-attachment" multiple style="display: none;">
+                    <button type="button" class="btn btn-secondary btn-small" onclick="document.getElementById('task-attachment').click()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                        </svg>
+                        Add File
+                    </button>
+                    <span class="upload-hint">All file types allowed</span>
+                </div>
+                <div id="attachment-error" class="attachment-error" style="display: none;"></div>
+            </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" onclick="ProjectKanban.hideTaskModal()">Cancel</button>
                 <button type="button" class="btn btn-danger" id="delete-btn" onclick="ProjectKanban.deleteTask()" style="display: none;">Delete</button>
@@ -982,6 +997,145 @@
     margin-bottom: 16px;
 }
 
+/* Attachments */
+.attachments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.attachment-item svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.attachment-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.attachment-name {
+    color: var(--text-primary);
+    text-decoration: none;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attachment-name:hover {
+    color: var(--accent);
+}
+
+.attachment-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.attachment-delete {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.attachment-item:hover .attachment-delete {
+    opacity: 1;
+}
+
+.attachment-delete:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.attachment-upload {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.upload-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.attachment-error {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: #ef4444;
+    font-size: 13px;
+}
+
+.attachment-uploading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.attachment-uploading::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--accent);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.attachment-empty {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 8px 0;
+}
+
+.attachment-item.pending {
+    border: 1px dashed var(--border-color);
+    background: transparent;
+}
+
+.attachment-item.pending .attachment-meta {
+    color: var(--accent);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .kanban-board {
@@ -1009,14 +1163,71 @@
 <script>
 const ProjectKanban = {
     projectId: '{{ project.id }}',
+    projectHasPath: {{ 'true' if project.path else 'false' }},
     tasks: [],
     editingTaskId: null,
+    pendingFiles: [], // Files selected for new task (uploaded after task creation)
     currentView: localStorage.getItem('projectView') || 'board',
 
     async init() {
         await this.loadTasks();
         this.setupDragAndDrop();
+        this.setupAttachmentUpload();
         this.setView(this.currentView);
+    },
+
+    setupAttachmentUpload() {
+        const input = document.getElementById('task-attachment');
+        input.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                if (this.editingTaskId) {
+                    // Editing existing task - upload immediately
+                    this.uploadAttachments(files);
+                } else {
+                    // New task - queue files for upload after save
+                    this.pendingFiles.push(...files);
+                    this.renderPendingFiles();
+                }
+            }
+            input.value = ''; // Reset for next selection
+        });
+    },
+
+    renderPendingFiles() {
+        const listEl = document.getElementById('task-attachments-list');
+        listEl.innerHTML = '';
+
+        if (this.pendingFiles.length === 0) {
+            listEl.innerHTML = '<div class="attachment-empty">No files selected</div>';
+            return;
+        }
+
+        this.pendingFiles.forEach((file, index) => {
+            const div = document.createElement('div');
+            div.className = 'attachment-item pending';
+            div.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <div class="attachment-info">
+                    <span class="attachment-name">${file.name}</span>
+                    <div class="attachment-meta">${this.formatFileSize(file.size)} · Will upload on save</div>
+                </div>
+                <button type="button" class="attachment-delete" onclick="ProjectKanban.removePendingFile(${index})" title="Remove">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            `;
+            listEl.appendChild(div);
+        });
+    },
+
+    removePendingFile(index) {
+        this.pendingFiles.splice(index, 1);
+        this.renderPendingFiles();
     },
 
     setView(view) {
@@ -1125,9 +1336,24 @@ const ProjectKanban = {
 
     showTaskModal(taskId = null) {
         this.editingTaskId = taskId;
+        this.pendingFiles = []; // Reset pending files
         const modal = document.getElementById('task-modal');
         const title = document.getElementById('modal-title');
         const deleteBtn = document.getElementById('delete-btn');
+        const attachmentsSection = document.getElementById('attachments-section');
+        const attachmentsList = document.getElementById('task-attachments-list');
+        const attachmentError = document.getElementById('attachment-error');
+
+        // Reset attachments UI
+        attachmentsList.innerHTML = '';
+        attachmentError.style.display = 'none';
+
+        // Show attachments section if project has a path configured
+        if (this.projectHasPath) {
+            attachmentsSection.style.display = 'block';
+        } else {
+            attachmentsSection.style.display = 'none';
+        }
 
         if (taskId) {
             const task = this.tasks.find(t => t.id === taskId);
@@ -1139,6 +1365,11 @@ const ProjectKanban = {
                 document.getElementById('task-status').value = task.status;
                 document.getElementById('task-priority').value = task.priority;
                 deleteBtn.style.display = 'block';
+
+                // Load existing attachments
+                if (this.projectHasPath) {
+                    this.loadAttachments(taskId);
+                }
             }
         } else {
             title.textContent = 'Add Task';
@@ -1146,6 +1377,11 @@ const ProjectKanban = {
             document.getElementById('task-id').value = '';
             document.getElementById('task-project').value = this.projectId;
             deleteBtn.style.display = 'none';
+
+            // Show empty state for new task
+            if (this.projectHasPath) {
+                attachmentsList.innerHTML = '<div class="attachment-empty">No files selected</div>';
+            }
         }
 
         modal.classList.add('visible');
@@ -1176,17 +1412,25 @@ const ProjectKanban = {
 
         try {
             if (taskId) {
+                // Update existing task
                 await fetch(`/api/pm/tasks/${taskId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(taskData)
                 });
             } else {
-                await fetch('/api/pm/tasks', {
+                // Create new task
+                const resp = await fetch('/api/pm/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(taskData)
                 });
+
+                // Upload any pending files to the new task
+                if (this.pendingFiles.length > 0 && resp.ok) {
+                    const newTask = await resp.json();
+                    await this.uploadAttachments(this.pendingFiles, newTask.id);
+                }
             }
 
             this.hideTaskModal();
@@ -1208,6 +1452,144 @@ const ProjectKanban = {
             location.reload();
         } catch (err) {
             console.error('Failed to delete task:', err);
+        }
+    },
+
+    // ===== Attachment Management =====
+    async loadAttachments(taskId) {
+        const listEl = document.getElementById('task-attachments-list');
+        listEl.innerHTML = '';
+
+        try {
+            const resp = await fetch(`/api/pm/tasks/${taskId}/attachments`);
+            const attachments = await resp.json();
+
+            if (attachments.length === 0) {
+                listEl.innerHTML = '<div class="attachment-empty">No attachments</div>';
+                return;
+            }
+
+            attachments.forEach(att => {
+                listEl.appendChild(this.createAttachmentElement(att));
+            });
+        } catch (err) {
+            console.error('Failed to load attachments:', err);
+        }
+    },
+
+    createAttachmentElement(attachment) {
+        const div = document.createElement('div');
+        div.className = 'attachment-item';
+        div.dataset.id = attachment.id;
+
+        const size = attachment.file_size ? this.formatFileSize(attachment.file_size) : '';
+        const date = attachment.created_at ? attachment.created_at.substring(0, 10) : '';
+
+        div.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <div class="attachment-info">
+                <a href="/api/pm/attachments/${attachment.id}" class="attachment-name" title="${attachment.original_name}">${attachment.original_name}</a>
+                <div class="attachment-meta">${size}${size && date ? ' · ' : ''}${date}</div>
+            </div>
+            <button class="attachment-delete" onclick="ProjectKanban.deleteAttachment('${attachment.id}')" title="Delete">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+            </button>
+        `;
+        return div;
+    },
+
+    formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    },
+
+    async uploadAttachments(files, taskId = null) {
+        taskId = taskId || this.editingTaskId;
+        if (!taskId) return;
+
+        const errorEl = document.getElementById('attachment-error');
+        const listEl = document.getElementById('task-attachments-list');
+
+        // Hide previous errors
+        errorEl.style.display = 'none';
+
+        for (const file of files) {
+            // Show uploading indicator (only if modal is still visible)
+            let uploadingEl = null;
+            if (document.getElementById('task-modal').classList.contains('visible')) {
+                uploadingEl = document.createElement('div');
+                uploadingEl.className = 'attachment-uploading';
+                uploadingEl.textContent = `Uploading ${file.name}...`;
+                listEl.appendChild(uploadingEl);
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const resp = await fetch(`/api/pm/tasks/${taskId}/attachments`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (uploadingEl) uploadingEl.remove();
+
+                if (resp.ok) {
+                    const attachment = await resp.json();
+                    if (document.getElementById('task-modal').classList.contains('visible')) {
+                        listEl.appendChild(this.createAttachmentElement(attachment));
+                        // Remove empty/pending messages if present
+                        const emptyMsg = listEl.querySelector('.attachment-empty');
+                        if (emptyMsg) emptyMsg.remove();
+                        const pendingItems = listEl.querySelectorAll('.attachment-item.pending');
+                        pendingItems.forEach(el => el.remove());
+                    }
+                } else {
+                    const err = await resp.json();
+                    if (document.getElementById('task-modal').classList.contains('visible')) {
+                        errorEl.textContent = err.error || 'Upload failed';
+                        errorEl.style.display = 'block';
+                    }
+                }
+            } catch (err) {
+                if (uploadingEl) uploadingEl.remove();
+                if (document.getElementById('task-modal').classList.contains('visible')) {
+                    errorEl.textContent = 'Upload failed: ' + err.message;
+                    errorEl.style.display = 'block';
+                }
+            }
+        }
+    },
+
+    async deleteAttachment(attachmentId) {
+        if (!confirm('Delete this attachment?')) return;
+
+        const taskId = this.editingTaskId;
+        if (!taskId) return;
+
+        try {
+            const resp = await fetch(`/api/pm/tasks/${taskId}/attachments/${attachmentId}`, {
+                method: 'DELETE'
+            });
+
+            if (resp.ok) {
+                const item = document.querySelector(`.attachment-item[data-id="${attachmentId}"]`);
+                if (item) item.remove();
+
+                // Show empty message if no attachments left
+                const listEl = document.getElementById('task-attachments-list');
+                if (!listEl.querySelector('.attachment-item')) {
+                    listEl.innerHTML = '<div class="attachment-empty">No attachments</div>';
+                }
+            }
+        } catch (err) {
+            console.error('Failed to delete attachment:', err);
         }
     },
 

@@ -43,24 +43,143 @@
         </div>
     </div>
 
-    <!-- Area Stats -->
-    <div class="area-stats-grid">
-        <div class="area-stat-card">
-            <div class="area-stat-value">{{ projects|length }}</div>
-            <div class="area-stat-label">Projects</div>
+    <!-- Active Work Section -->
+    {% set total_tasks = (active_tasks.high|length) + (active_tasks.medium|length) + (active_tasks.low|length) if active_tasks else 0 %}
+    {% if total_tasks > 0 %}
+    <div class="area-active-work">
+        <div class="area-active-header">
+            <h3>Active Work</h3>
+            <span class="area-active-count">{{ total_tasks }} task{{ 's' if total_tasks != 1 else '' }}</span>
         </div>
-        <div class="area-stat-card">
-            <div class="area-stat-value">{{ stats.open_tasks }}</div>
-            <div class="area-stat-label">Open Tasks</div>
+
+        <!-- High Priority Section - expanded by default -->
+        {% if active_tasks.high %}
+        <div class="area-priority-section expanded" data-priority="high">
+            <div class="area-priority-header" onclick="AreaDetail.togglePrioritySection(this)">
+                <div class="area-priority-indicator high"></div>
+                <span class="area-priority-label">High Priority</span>
+                <span class="area-priority-count">{{ active_tasks.high|length }}</span>
+                <svg class="area-priority-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <div class="area-priority-tasks">
+                {% for task in active_tasks.high %}
+                <a href="{{ url_for('project_detail', area_name=area.name, project_name=task.project_name) }}" class="area-active-task">
+                    <div class="area-active-task-status">
+                        {% if task.status == 'in_progress' %}
+                        <span class="status-dot in-progress" title="In Progress"></span>
+                        {% else %}
+                        <span class="status-dot" title="To Do"></span>
+                        {% endif %}
+                    </div>
+                    <div class="area-active-task-content">
+                        <div class="area-active-task-title">{{ task.title }}</div>
+                        <div class="area-active-task-meta">{{ task.project_name }}</div>
+                    </div>
+                    <div class="area-active-task-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
         </div>
-        <div class="area-stat-card">
-            <div class="area-stat-value">{{ stats.in_progress }}</div>
-            <div class="area-stat-label">In Progress</div>
+        {% endif %}
+
+        <!-- Medium Priority Section - collapsed by default -->
+        {% if active_tasks.medium %}
+        <div class="area-priority-section" data-priority="medium">
+            <div class="area-priority-header" onclick="AreaDetail.togglePrioritySection(this)">
+                <div class="area-priority-indicator medium"></div>
+                <span class="area-priority-label">Medium Priority</span>
+                <span class="area-priority-count">{{ active_tasks.medium|length }}</span>
+                <svg class="area-priority-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <div class="area-priority-tasks">
+                {% for task in active_tasks.medium %}
+                <a href="{{ url_for('project_detail', area_name=area.name, project_name=task.project_name) }}" class="area-active-task">
+                    <div class="area-active-task-status">
+                        {% if task.status == 'in_progress' %}
+                        <span class="status-dot in-progress" title="In Progress"></span>
+                        {% else %}
+                        <span class="status-dot" title="To Do"></span>
+                        {% endif %}
+                    </div>
+                    <div class="area-active-task-content">
+                        <div class="area-active-task-title">{{ task.title }}</div>
+                        <div class="area-active-task-meta">{{ task.project_name }}</div>
+                    </div>
+                    <div class="area-active-task-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
         </div>
-        <div class="area-stat-card area-stat-highlight">
-            <div class="area-stat-value">{{ stats.done_tasks }}</div>
-            <div class="area-stat-label">Completed</div>
+        {% endif %}
+
+        <!-- Low Priority Section - collapsed by default -->
+        {% if active_tasks.low %}
+        <div class="area-priority-section" data-priority="low">
+            <div class="area-priority-header" onclick="AreaDetail.togglePrioritySection(this)">
+                <div class="area-priority-indicator low"></div>
+                <span class="area-priority-label">Low Priority</span>
+                <span class="area-priority-count">{{ active_tasks.low|length }}</span>
+                <svg class="area-priority-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <div class="area-priority-tasks">
+                {% for task in active_tasks.low %}
+                <a href="{{ url_for('project_detail', area_name=area.name, project_name=task.project_name) }}" class="area-active-task">
+                    <div class="area-active-task-status">
+                        {% if task.status == 'in_progress' %}
+                        <span class="status-dot in-progress" title="In Progress"></span>
+                        {% else %}
+                        <span class="status-dot" title="To Do"></span>
+                        {% endif %}
+                    </div>
+                    <div class="area-active-task-content">
+                        <div class="area-active-task-title">{{ task.title }}</div>
+                        <div class="area-active-task-meta">{{ task.project_name }}</div>
+                    </div>
+                    <div class="area-active-task-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
         </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Quick Add Task -->
+    <div class="area-quick-add">
+        <form id="quick-add-form" onsubmit="AreaDetail.quickAddTask(event)">
+            <input type="text" id="quick-task-title" placeholder="Quick add task..." autocomplete="off">
+            <select id="quick-task-project">
+                <option value="">Select project...</option>
+                {% for project in projects %}
+                <option value="{{ project.id }}">{{ project.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add
+            </button>
+        </form>
     </div>
 
     <!-- Projects Grid -->
@@ -391,37 +510,236 @@
     height: 18px;
 }
 
-/* Stats Grid */
-.area-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 32px;
-}
-
-.area-stat-card {
+/* Active Work Section */
+.area-active-work {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 12px;
-    padding: 20px;
-    text-align: center;
+    margin-bottom: 24px;
+    overflow: hidden;
 }
 
-.area-stat-value {
-    font-size: 28px;
-    font-weight: 700;
+.area-active-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.area-active-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--text-primary);
+}
+
+.area-active-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+/* Priority Sections */
+.area-priority-section {
+    border-top: 1px solid var(--border-color);
+}
+
+.area-priority-section:first-of-type {
+    border-top: none;
+}
+
+.area-priority-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+}
+
+.area-priority-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.area-priority-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.area-priority-indicator.high {
+    background: var(--error);
+}
+
+.area-priority-indicator.medium {
+    background: var(--warning, #f59e0b);
+}
+
+.area-priority-indicator.low {
+    background: var(--text-muted);
+}
+
+.area-priority-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+.area-priority-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: 10px;
     font-family: 'JetBrains Mono', monospace;
 }
 
-.area-stat-label {
-    font-size: 13px;
+.area-priority-chevron {
+    width: 16px;
+    height: 16px;
     color: var(--text-muted);
-    margin-top: 4px;
+    transition: transform 0.2s ease;
+    transform: rotate(-90deg);
 }
 
-.area-stat-highlight .area-stat-value {
-    color: var(--success);
+.area-priority-section.expanded .area-priority-chevron {
+    transform: rotate(0deg);
+}
+
+.area-priority-tasks {
+    display: none;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.area-priority-section.expanded .area-priority-tasks {
+    display: block;
+}
+
+/* Active Task Items */
+.area-active-task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px 12px 40px;
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s ease;
+}
+
+.area-active-task:last-child {
+    border-bottom: none;
+}
+
+.area-active-task:hover {
+    background: var(--bg-tertiary);
+}
+
+.area-active-task-status {
+    flex-shrink: 0;
+}
+
+.status-dot {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.status-dot.in-progress {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+}
+
+.area-active-task-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.area-active-task-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.area-active-task-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.area-active-task-arrow {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.area-active-task:hover .area-active-task-arrow {
+    opacity: 1;
+}
+
+.area-active-task-arrow svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Quick Add Task */
+.area-quick-add {
+    margin-bottom: 24px;
+}
+
+.area-quick-add form {
+    display: flex;
+    gap: 12px;
+}
+
+.area-quick-add input[type="text"] {
+    flex: 1;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.area-quick-add input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.area-quick-add select {
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    min-width: 180px;
+}
+
+.area-quick-add .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+}
+
+.area-quick-add .btn svg {
+    width: 16px;
+    height: 16px;
 }
 
 /* Section */
@@ -968,16 +1286,24 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-    .area-stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     .area-header {
         flex-direction: column;
     }
 
     .area-projects-grid {
         grid-template-columns: 1fr;
+    }
+
+    .area-quick-add form {
+        flex-direction: column;
+    }
+
+    .area-quick-add select {
+        min-width: auto;
+    }
+
+    .area-active-task-meta {
+        font-size: 11px;
     }
 }
 </style>
@@ -987,6 +1313,43 @@ const AreaDetail = {
     areaId: '{{ area.id }}',
     currentBrowsePath: '/home/pds',
     pathBrowserTarget: 'area',
+
+    togglePrioritySection(header) {
+        const section = header.closest('.area-priority-section');
+        section.classList.toggle('expanded');
+    },
+
+    async quickAddTask(e) {
+        e.preventDefault();
+
+        const title = document.getElementById('quick-task-title').value.trim();
+        const projectId = document.getElementById('quick-task-project').value;
+
+        if (!title || !projectId) {
+            alert('Please enter a task title and select a project');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/pm/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: title,
+                    project_id: projectId,
+                    status: 'todo',
+                    priority: 'medium'
+                })
+            });
+
+            if (resp.ok) {
+                document.getElementById('quick-task-title').value = '';
+                location.reload();
+            }
+        } catch (err) {
+            console.error('Failed to add task:', err);
+        }
+    },
 
     selectIcon(btn) {
         document.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));

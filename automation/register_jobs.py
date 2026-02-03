@@ -86,9 +86,9 @@ def register_florida_inventory_job(test_mode: bool = True):
         job_id="inventory_email_florida",
         name="Florida Inventory Email",
         location="Florida",
-        recipients=["steve@precisionfleetsupport.com"],
+        recipients=["nathan@truetracking.com"],
         form_urls={
-            "steve@precisionfleetsupport.com": "https://forms.gle/7zRwrhQ4s8sRkfpQ6"
+            "nathan@truetracking.com": "https://forms.gle/7zRwrhQ4s8sRkfpQ6"
         },
         test_mode=test_mode
     )
@@ -100,9 +100,9 @@ def register_michigan_inventory_job(test_mode: bool = True):
         job_id="inventory_email_michigan",
         name="Michigan Inventory Email",
         location="Michigan",
-        recipients=["nathan@truetracking.com"],
+        recipients=["steven@precisionfleetsupport.com"],
         form_urls={
-            "nathan@truetracking.com": "https://forms.gle/9kotkd7mEN2ppu7v5"
+            "steven@precisionfleetsupport.com": "https://forms.gle/9kotkd7mEN2ppu7v5"
         },
         test_mode=test_mode
     )

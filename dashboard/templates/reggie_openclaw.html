@@ -213,8 +213,9 @@
 <script>
 // Proxy through localhost for secure context (WebSocket requires secure context)
 // Direct URL is only used for "Open in New Tab" which works in its own context
-const OPENCLAW_URL = '/openclaw-proxy/';
-const OPENCLAW_DIRECT_URL = 'http://192.168.0.168:18789';
+const OPENCLAW_TOKEN = 'c424c9bb567e46dabf388b519688a21d';
+const OPENCLAW_URL = '/openclaw-proxy/?token=' + OPENCLAW_TOKEN;
+const OPENCLAW_DIRECT_URL = 'http://192.168.0.168:18789/?token=' + OPENCLAW_TOKEN;
 let openclawOnline = false;
 
 // Auto-retry with exponential backoff

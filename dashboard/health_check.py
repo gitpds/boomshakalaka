@@ -18,7 +18,7 @@ from pathlib import Path
 import argparse
 
 # Configuration - Updated 2026-01-27: money_printing moved into boomshakalaka
-PROJECT_ROOT = Path('/home/pds/boomshakalaka/money_printing')
+PROJECT_ROOT = Path('/home/pds/money_printing')
 POLYMARKET_DIR = PROJECT_ROOT / 'polymarket'
 
 # Log files to check

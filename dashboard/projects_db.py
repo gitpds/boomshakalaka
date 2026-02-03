@@ -125,11 +125,27 @@ def init_database() -> None:
         )
     ''')
 
+    # Task attachments table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS task_attachments (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_size INTEGER,
+            mime_type TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
+        )
+    ''')
+
     # Create indexes
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks (project_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_projects_area ON projects (area_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_list_items_list ON list_items (list_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments (task_id)')
 
     conn.commit()
     conn.close()
@@ -689,6 +705,78 @@ def reorder_tasks(task_orders: list[dict]) -> bool:
     return True
 
 
+def reorder_areas(area_orders: list[dict]) -> bool:
+    """Reorder areas by updating sort_order."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    for order_info in area_orders:
+        area_id = order_info.get('id')
+        sort_order = order_info.get('order', 0)
+        cursor.execute('UPDATE areas SET sort_order = ? WHERE id = ?', (sort_order, area_id))
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_all_active_tasks() -> list[dict]:
+    """Get all active tasks (todo/in_progress) across all projects, grouped by priority."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT t.*, p.name as project_name, a.name as area_name, a.color as area_color
+        FROM tasks t
+        JOIN projects p ON t.project_id = p.id
+        JOIN areas a ON p.area_id = a.id
+        WHERE t.status IN ('todo', 'in_progress')
+        ORDER BY
+            CASE t.status WHEN 'in_progress' THEN 0 ELSE 1 END,
+            t.created_at DESC
+    ''')
+
+    tasks = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    # Group by priority
+    grouped = {
+        'high': [t for t in tasks if t['priority'] == 'high'],
+        'medium': [t for t in tasks if t['priority'] == 'medium'],
+        'low': [t for t in tasks if t['priority'] == 'low']
+    }
+    return grouped
+
+
+def get_active_tasks_by_area(area_id: str) -> dict:
+    """Get all active tasks (todo/in_progress) for a specific area, grouped by priority."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT t.*, p.name as project_name, a.name as area_name, a.color as area_color
+        FROM tasks t
+        JOIN projects p ON t.project_id = p.id
+        JOIN areas a ON p.area_id = a.id
+        WHERE a.id = ?
+        AND t.status IN ('todo', 'in_progress')
+        ORDER BY
+            CASE t.status WHEN 'in_progress' THEN 0 ELSE 1 END,
+            t.created_at DESC
+    ''', (area_id,))
+
+    tasks = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    # Group by priority
+    grouped = {
+        'high': [t for t in tasks if t['priority'] == 'high'],
+        'medium': [t for t in tasks if t['priority'] == 'medium'],
+        'low': [t for t in tasks if t['priority'] == 'low']
+    }
+    return grouped
+
+
 # =============================================================================
 # List Functions
 # =============================================================================
@@ -894,6 +982,91 @@ def get_stats() -> dict:
         'projects': project_count,
         'tasks': task_stats
     }
+
+
+# =============================================================================
+# Task Attachment Functions
+# =============================================================================
+
+def create_task_attachment(task_id: str, filename: str, original_name: str,
+                           file_path: str, file_size: int = None,
+                           mime_type: str = None) -> dict:
+    """Create a new task attachment record."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+
+    attachment_id = str(uuid.uuid4())
+    cursor.execute('''
+        INSERT INTO task_attachments (id, task_id, filename, original_name, file_path, file_size, mime_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (attachment_id, task_id, filename, original_name, file_path, file_size, mime_type, now))
+
+    conn.commit()
+    conn.close()
+
+    return get_task_attachment(attachment_id)
+
+
+def get_task_attachment(attachment_id: str) -> Optional[dict]:
+    """Get a single attachment by ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM task_attachments WHERE id = ?', (attachment_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_task_attachments(task_id: str) -> list[dict]:
+    """Get all attachments for a task."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM task_attachments
+        WHERE task_id = ?
+        ORDER BY created_at DESC
+    ''', (task_id,))
+    attachments = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return attachments
+
+
+def delete_task_attachment(attachment_id: str) -> Optional[dict]:
+    """Delete an attachment and return its info (for file cleanup)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get attachment info first
+    cursor.execute('SELECT * FROM task_attachments WHERE id = ?', (attachment_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return None
+
+    attachment = dict(row)
+
+    # Delete from database
+    cursor.execute('DELETE FROM task_attachments WHERE id = ?', (attachment_id,))
+    conn.commit()
+    conn.close()
+
+    return attachment
+
+
+def get_project_for_task(task_id: str) -> Optional[dict]:
+    """Get the project associated with a task (for determining attachment storage path)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT p.* FROM projects p
+        JOIN tasks t ON t.project_id = p.id
+        WHERE t.id = ?
+    ''', (task_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 # Initialize database on import

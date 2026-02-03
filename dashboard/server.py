@@ -126,6 +126,8 @@ try:
         get_all_lists, get_list, create_list, update_list, delete_list,
         add_list_item, update_list_item, delete_list_item,
         get_stats as get_pm_stats,
+        create_task_attachment, get_task_attachment, get_task_attachments,
+        delete_task_attachment, get_project_for_task,
         AVAILABLE_ICONS, DEFAULT_COLORS
     )
     PROJECTS_AVAILABLE = True
@@ -164,7 +166,7 @@ if AUTH_AVAILABLE:
 # Configuration
 PROJECT_ROOT = Path('/home/pds/boomshakalaka')
 # Updated 2026-01-27: money_printing moved into boomshakalaka
-POLYMARKET_DIR = Path('/home/pds/boomshakalaka/money_printing/polymarket')
+POLYMARKET_DIR = Path('/home/pds/money_printing/polymarket')
 
 # AI Studio Configuration (100% local - no external calls)
 COMFY_HOST = '127.0.0.1'  # Localhost only - never exposed
@@ -2287,6 +2289,7 @@ def api_stats():
 REGGIE_ROBOT_URL = 'http://192.168.0.11:8000'
 REGGIE_DASHBOARD_URL = 'http://192.168.0.168:3008'  # Optional MacBook dashboard
 REGGIE_OPENCLAW_URL = 'http://192.168.0.168:18789'  # OpenClaw AI Gateway on MacBook
+REGGIE_OPENCLAW_TOKEN = 'c424c9bb567e46dabf388b519688a21d'  # Gateway auth token
 
 
 @app.route('/api/reggie/health')
@@ -2545,7 +2548,12 @@ def openclaw_ws_proxy(ws):
     openclaw_ws_url = REGGIE_OPENCLAW_URL.replace('http://', 'ws://')
 
     try:
-        target = ws_client.create_connection(openclaw_ws_url, timeout=30)
+        # Include auth token in WebSocket connection
+        target = ws_client.create_connection(
+            openclaw_ws_url,
+            timeout=30,
+            header=[f'Authorization: Bearer {REGGIE_OPENCLAW_TOKEN}']
+        )
     except Exception as e:
         logger.error(f"OpenClaw WebSocket connection failed: {e}")
         return
@@ -2582,7 +2590,12 @@ def openclaw_root_ws_proxy(ws):
     openclaw_ws_url = REGGIE_OPENCLAW_URL.replace('http://', 'ws://')
 
     try:
-        target = ws_client.create_connection(openclaw_ws_url, timeout=30)
+        # Include auth token in WebSocket connection
+        target = ws_client.create_connection(
+            openclaw_ws_url,
+            timeout=30,
+            header=[f'Authorization: Bearer {REGGIE_OPENCLAW_TOKEN}']
+        )
     except Exception as e:
         logger.error(f"OpenClaw root WebSocket connection failed: {e}")
         return
@@ -5709,7 +5722,12 @@ def api_terminal_files_list():
     if not is_path_allowed(dir_path):
         return jsonify({'error': 'Path not allowed'}), 403
 
-    path = Path(dir_path)
+    # Resolve the path to handle symlinks and relative components
+    try:
+        path = Path(dir_path).resolve()
+    except (OSError, ValueError):
+        return jsonify({'error': 'Invalid path'}), 400
+
     if not path.exists():
         return jsonify({'error': 'Directory not found'}), 404
     if not path.is_dir():
@@ -5718,17 +5736,25 @@ def api_terminal_files_list():
     items = []
     try:
         for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            # Handle broken symlinks and symlink loops gracefully
+            try:
+                item_path = str(item.resolve())
+                is_dir = item.is_dir()
+            except (OSError, RuntimeError):
+                # Broken symlink or symlink loop - use unresolved path
+                item_path = str(item)
+                is_dir = False
             items.append({
                 'name': item.name,
-                'path': str(item),
-                'is_dir': item.is_dir(),
-                'ext': item.suffix.lower() if item.is_file() else None
+                'path': item_path,
+                'is_dir': is_dir,
+                'ext': item.suffix.lower() if not is_dir else None
             })
     except PermissionError:
         return jsonify({'error': 'Permission denied'}), 403
 
-    # Get parent directory
-    parent = str(path.parent) if path != Path('/') else None
+    # Get parent directory (using resolved path)
+    parent = str(path.parent) if str(path) != '/' else None
     if parent and not is_path_allowed(parent):
         parent = None
 
@@ -6526,6 +6552,128 @@ def api_pm_reorder_tasks():
     if reorder_tasks(task_orders):
         return jsonify({'success': True})
     return jsonify({'error': 'Failed to reorder'}), 500
+
+
+# =============================================================================
+# Task Attachment APIs
+# =============================================================================
+
+@app.route('/api/pm/tasks/<task_id>/attachments', methods=['GET'])
+def api_pm_task_attachments(task_id):
+    """List all attachments for a task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    task = get_task(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+
+    return jsonify(get_task_attachments(task_id))
+
+
+@app.route('/api/pm/tasks/<task_id>/attachments', methods=['POST'])
+def api_pm_upload_attachment(task_id):
+    """Upload an attachment to a task"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    task = get_task(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+
+    # Get the project to check for path
+    project = get_project_for_task(task_id)
+    if not project:
+        return jsonify({'error': 'Project not found'}), 404
+
+    if not project.get('path'):
+        return jsonify({
+            'error': 'Project has no linked directory. Please configure a directory path in project settings.'
+        }), 400
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+
+    # Create attachments directory
+    project_path = Path(project['path'])
+    attachments_dir = project_path / 'attachments' / task_id
+    attachments_dir.mkdir(parents=True, exist_ok=True)
+
+    # Generate unique filename
+    original_name = secure_filename(file.filename)
+    unique_id = str(uuid.uuid4())[:8]
+    stored_filename = f"{unique_id}_{original_name}"
+    file_path = attachments_dir / stored_filename
+
+    # Save file
+    file.save(str(file_path))
+
+    # Get file info
+    file_size = file_path.stat().st_size
+    mime_type = file.content_type or 'application/octet-stream'
+
+    # Create database record
+    attachment = create_task_attachment(
+        task_id=task_id,
+        filename=stored_filename,
+        original_name=original_name,
+        file_path=str(file_path),
+        file_size=file_size,
+        mime_type=mime_type
+    )
+
+    return jsonify(attachment), 201
+
+
+@app.route('/api/pm/attachments/<attachment_id>')
+def api_pm_serve_attachment(attachment_id):
+    """Serve an attachment file for download"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    attachment = get_task_attachment(attachment_id)
+    if not attachment:
+        return jsonify({'error': 'Attachment not found'}), 404
+
+    file_path = Path(attachment['file_path'])
+    if not file_path.exists():
+        return jsonify({'error': 'File not found on disk'}), 404
+
+    return send_file(
+        str(file_path),
+        download_name=attachment['original_name'],
+        as_attachment=True
+    )
+
+
+@app.route('/api/pm/tasks/<task_id>/attachments/<attachment_id>', methods=['DELETE'])
+def api_pm_delete_attachment(task_id, attachment_id):
+    """Delete an attachment"""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Project management not available'}), 503
+
+    attachment = delete_task_attachment(attachment_id)
+    if not attachment:
+        return jsonify({'error': 'Attachment not found'}), 404
+
+    # Delete file from disk
+    file_path = Path(attachment['file_path'])
+    if file_path.exists():
+        file_path.unlink()
+
+    # Try to remove empty directories
+    try:
+        parent_dir = file_path.parent
+        if parent_dir.exists() and not any(parent_dir.iterdir()):
+            parent_dir.rmdir()
+    except Exception:
+        pass  # Ignore cleanup errors
+
+    return jsonify({'success': True})
 
 
 @app.route('/api/pm/browse-directories')
