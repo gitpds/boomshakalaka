@@ -25,25 +25,130 @@
         </button>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="pm-stats-grid">
-        <div class="pm-stat-card">
-            <div class="pm-stat-value">{{ stats.tasks.total - stats.tasks.done if stats.tasks else 0 }}</div>
-            <div class="pm-stat-label">Open Tasks</div>
+    <!-- Active Work Section -->
+    {% set total_tasks = (active_tasks.high|length) + (active_tasks.medium|length) + (active_tasks.low|length) if active_tasks else 0 %}
+    {% if total_tasks > 0 %}
+    <div class="pm-active-work">
+        <div class="pm-active-header">
+            <h3>Active Work</h3>
+            <span class="pm-active-count">{{ total_tasks }} task{{ 's' if total_tasks != 1 else '' }}</span>
         </div>
-        <div class="pm-stat-card">
-            <div class="pm-stat-value">{{ stats.tasks.todo if stats.tasks else 0 }}</div>
-            <div class="pm-stat-label">To Do</div>
+
+        <!-- High Priority Section - expanded by default -->
+        {% if active_tasks.high %}
+        <div class="pm-priority-section expanded" data-priority="high">
+            <div class="pm-priority-header" onclick="Projects.togglePrioritySection(this)">
+                <div class="pm-priority-indicator high"></div>
+                <span class="pm-priority-label">High Priority</span>
+                <span class="pm-priority-count">{{ active_tasks.high|length }}</span>
+                <svg class="pm-priority-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <div class="pm-priority-tasks">
+                {% for task in active_tasks.high %}
+                <a href="{{ url_for('project_detail', area_name=task.area_name, project_name=task.project_name) }}" class="pm-active-task">
+                    <div class="pm-active-task-status">
+                        {% if task.status == 'in_progress' %}
+                        <span class="status-dot in-progress" title="In Progress"></span>
+                        {% else %}
+                        <span class="status-dot" title="To Do"></span>
+                        {% endif %}
+                    </div>
+                    <div class="pm-active-task-content">
+                        <div class="pm-active-task-title">{{ task.title }}</div>
+                        <div class="pm-active-task-meta">
+                            <span class="pm-active-task-project" style="color: {{ task.area_color }};">{{ task.area_name }}/{{ task.project_name }}</span>
+                        </div>
+                    </div>
+                    <div class="pm-active-task-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
         </div>
-        <div class="pm-stat-card">
-            <div class="pm-stat-value">{{ stats.tasks.in_progress if stats.tasks else 0 }}</div>
-            <div class="pm-stat-label">In Progress</div>
+        {% endif %}
+
+        <!-- Medium Priority Section - collapsed by default -->
+        {% if active_tasks.medium %}
+        <div class="pm-priority-section" data-priority="medium">
+            <div class="pm-priority-header" onclick="Projects.togglePrioritySection(this)">
+                <div class="pm-priority-indicator medium"></div>
+                <span class="pm-priority-label">Medium Priority</span>
+                <span class="pm-priority-count">{{ active_tasks.medium|length }}</span>
+                <svg class="pm-priority-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <div class="pm-priority-tasks">
+                {% for task in active_tasks.medium %}
+                <a href="{{ url_for('project_detail', area_name=task.area_name, project_name=task.project_name) }}" class="pm-active-task">
+                    <div class="pm-active-task-status">
+                        {% if task.status == 'in_progress' %}
+                        <span class="status-dot in-progress" title="In Progress"></span>
+                        {% else %}
+                        <span class="status-dot" title="To Do"></span>
+                        {% endif %}
+                    </div>
+                    <div class="pm-active-task-content">
+                        <div class="pm-active-task-title">{{ task.title }}</div>
+                        <div class="pm-active-task-meta">
+                            <span class="pm-active-task-project" style="color: {{ task.area_color }};">{{ task.area_name }}/{{ task.project_name }}</span>
+                        </div>
+                    </div>
+                    <div class="pm-active-task-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
         </div>
-        <div class="pm-stat-card pm-stat-highlight">
-            <div class="pm-stat-value">{{ stats.tasks.high_priority if stats.tasks else 0 }}</div>
-            <div class="pm-stat-label">High Priority</div>
+        {% endif %}
+
+        <!-- Low Priority Section - collapsed by default -->
+        {% if active_tasks.low %}
+        <div class="pm-priority-section" data-priority="low">
+            <div class="pm-priority-header" onclick="Projects.togglePrioritySection(this)">
+                <div class="pm-priority-indicator low"></div>
+                <span class="pm-priority-label">Low Priority</span>
+                <span class="pm-priority-count">{{ active_tasks.low|length }}</span>
+                <svg class="pm-priority-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+            </div>
+            <div class="pm-priority-tasks">
+                {% for task in active_tasks.low %}
+                <a href="{{ url_for('project_detail', area_name=task.area_name, project_name=task.project_name) }}" class="pm-active-task">
+                    <div class="pm-active-task-status">
+                        {% if task.status == 'in_progress' %}
+                        <span class="status-dot in-progress" title="In Progress"></span>
+                        {% else %}
+                        <span class="status-dot" title="To Do"></span>
+                        {% endif %}
+                    </div>
+                    <div class="pm-active-task-content">
+                        <div class="pm-active-task-title">{{ task.title }}</div>
+                        <div class="pm-active-task-meta">
+                            <span class="pm-active-task-project" style="color: {{ task.area_color }};">{{ task.area_name }}/{{ task.project_name }}</span>
+                        </div>
+                    </div>
+                    <div class="pm-active-task-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
         </div>
+        {% endif %}
     </div>
+    {% endif %}
 
     <!-- Quick Add Task -->
     <div class="pm-quick-add">
@@ -70,50 +175,62 @@
     <!-- Areas List -->
     <div class="pm-areas-list" id="areas-list">
         {% for area in areas %}
-        <div class="pm-area" data-area-id="{{ area.id }}">
+        <div class="pm-area" data-area-id="{{ area.id }}" data-sort-order="{{ area.sort_order or loop.index0 }}" draggable="true">
             <div class="pm-area-header" onclick="Projects.toggleArea(this)">
-                <div class="pm-area-icon" style="background: {{ area.color }}20; color: {{ area.color }};">
-                    {% if area.icon == 'briefcase' %}
+                <div class="pm-area-drag-handle" draggable="true" onclick="event.stopPropagation()" title="Drag to reorder">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                        <line x1="8" y1="6" x2="21" y2="6"/>
+                        <line x1="8" y1="12" x2="21" y2="12"/>
+                        <line x1="8" y1="18" x2="21" y2="18"/>
+                        <line x1="3" y1="6" x2="3.01" y2="6"/>
+                        <line x1="3" y1="12" x2="3.01" y2="12"/>
+                        <line x1="3" y1="18" x2="3.01" y2="18"/>
                     </svg>
-                    {% elif area.icon == 'cpu' %}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
-                        <rect x="9" y="9" width="6" height="6"/>
-                        <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
-                        <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
-                        <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
-                        <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
-                    </svg>
-                    {% elif area.icon == 'zap' %}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                    </svg>
-                    {% elif area.icon == 'brain' %}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
-                        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
-                        <path d="M12 5v13"/>
-                    </svg>
-                    {% elif area.icon == 'server' %}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-                        <line x1="6" y1="6" x2="6.01" y2="6"/>
-                        <line x1="6" y1="18" x2="6.01" y2="18"/>
-                    </svg>
-                    {% else %}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    {% endif %}
                 </div>
-                <div class="pm-area-info">
-                    <span class="pm-area-name">{{ area.name }}</span>
-                    <span class="pm-area-stats">{{ area.project_count }} projects, {{ area.task_count }} tasks</span>
-                </div>
+                <a href="{{ url_for('projects_area', area_name=area.name) }}" class="pm-area-link" onclick="event.stopPropagation()">
+                    <div class="pm-area-icon" style="background: {{ area.color }}20; color: {{ area.color }};">
+                        {% if area.icon == 'briefcase' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                        </svg>
+                        {% elif area.icon == 'cpu' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+                            <rect x="9" y="9" width="6" height="6"/>
+                            <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+                            <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+                            <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
+                            <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+                        </svg>
+                        {% elif area.icon == 'zap' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                        {% elif area.icon == 'brain' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+                            <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+                            <path d="M12 5v13"/>
+                        </svg>
+                        {% elif area.icon == 'server' %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                            <line x1="6" y1="6" x2="6.01" y2="6"/>
+                            <line x1="6" y1="18" x2="6.01" y2="18"/>
+                        </svg>
+                        {% else %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <div class="pm-area-info">
+                        <span class="pm-area-name">{{ area.name }}</span>
+                        <span class="pm-area-stats">{{ area.project_count }} projects, {{ area.task_count }} tasks</span>
+                    </div>
+                </a>
                 <button class="pm-area-edit" onclick="event.stopPropagation(); Projects.editArea('{{ area.id }}', '{{ area.name }}', '{{ area.icon }}', '{{ area.color }}', '{{ area.path or '' }}')" title="Edit area">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
@@ -367,6 +484,22 @@
                     </svg>
                 </button>
                 <div class="path-browser-current" id="path-browser-current">/home/pds</div>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="Projects.showNewFolderInput()" title="New Folder" id="new-folder-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        <line x1="12" y1="11" x2="12" y2="17"/>
+                        <line x1="9" y1="14" x2="15" y2="14"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="path-browser-new-folder" id="path-browser-new-folder" style="display: none;">
+                <input type="text" id="new-folder-name" placeholder="New folder name..." onkeydown="Projects.handleNewFolderKey(event)">
+                <button type="button" class="btn btn-primary btn-sm" onclick="Projects.createNewFolder()">Create</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="Projects.hideNewFolderInput()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
             </div>
             <div class="path-browser-list" id="path-browser-list">
                 <!-- Directory entries will be loaded here -->
@@ -462,15 +595,15 @@
     height: 16px;
 }
 
-/* Stats Grid */
-.pm-stats-grid {
+/* Stats Grid - deprecated, kept for reference */
+.pm-stats-grid-deprecated {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     margin-bottom: 24px;
 }
 
-.pm-stat-card {
+.pm-stat-card-deprecated {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 12px;
@@ -478,21 +611,260 @@
     text-align: center;
 }
 
-.pm-stat-value {
-    font-size: 32px;
-    font-weight: 700;
+/* Active Work Section */
+.pm-active-work {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.pm-active-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pm-active-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--text-primary);
+}
+
+.pm-active-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.pm-active-list {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.pm-active-task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s ease;
+}
+
+.pm-active-task:last-child {
+    border-bottom: none;
+}
+
+.pm-active-task:hover {
+    background: var(--bg-tertiary);
+}
+
+.pm-active-task-status {
+    flex-shrink: 0;
+}
+
+.status-dot {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.status-dot.in-progress {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+}
+
+.status-dot.high-priority {
+    background: var(--error);
+}
+
+.pm-active-task-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.pm-active-task-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pm-active-task-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+    font-size: 12px;
+}
+
+.pm-active-task-project {
+    opacity: 0.8;
+}
+
+.pm-active-task-priority {
+    color: var(--error);
+    font-weight: 500;
+}
+
+.pm-active-task-arrow {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.pm-active-task:hover .pm-active-task-arrow {
+    opacity: 1;
+}
+
+.pm-active-task-arrow svg {
+    width: 16px;
+    height: 16px;
+}
+
+.pm-active-more {
+    padding: 12px 20px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+}
+
+/* Priority Sections */
+.pm-priority-section {
+    border-top: 1px solid var(--border-color);
+}
+
+.pm-priority-section:first-of-type {
+    border-top: none;
+}
+
+.pm-priority-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+}
+
+.pm-priority-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.pm-priority-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.pm-priority-indicator.high {
+    background: var(--error);
+}
+
+.pm-priority-indicator.medium {
+    background: var(--warning, #f59e0b);
+}
+
+.pm-priority-indicator.low {
+    background: var(--text-muted);
+}
+
+.pm-priority-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+.pm-priority-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: 10px;
     font-family: 'JetBrains Mono', monospace;
 }
 
-.pm-stat-label {
-    font-size: 13px;
+.pm-priority-chevron {
+    width: 16px;
+    height: 16px;
     color: var(--text-muted);
-    margin-top: 4px;
+    transition: transform 0.2s ease;
+    transform: rotate(-90deg);
 }
 
-.pm-stat-highlight .pm-stat-value {
-    color: var(--error);
+.pm-priority-section.expanded .pm-priority-chevron {
+    transform: rotate(0deg);
+}
+
+.pm-priority-tasks {
+    display: none;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.pm-priority-section.expanded .pm-priority-tasks {
+    display: block;
+}
+
+.pm-priority-tasks .pm-active-task {
+    padding-left: 40px;
+}
+
+.pm-priority-tasks .pm-active-task:last-child {
+    border-bottom: none;
+}
+
+/* Drag and Drop for Areas */
+.pm-area.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+}
+
+.pm-area.drag-over {
+    border-color: var(--accent);
+    border-style: dashed;
+}
+
+.pm-area-drag-handle {
+    cursor: grab;
+    color: var(--text-muted);
+    padding: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.pm-area-header:hover .pm-area-drag-handle {
+    opacity: 0.5;
+}
+
+.pm-area-drag-handle:hover {
+    opacity: 1 !important;
+    color: var(--text-secondary);
+}
+
+.pm-area-drag-handle:active {
+    cursor: grabbing;
+}
+
+.pm-area-drag-handle svg {
+    width: 16px;
+    height: 16px;
 }
 
 /* Quick Add */
@@ -587,6 +959,23 @@
 .pm-area-icon svg {
     width: 20px;
     height: 20px;
+}
+
+.pm-area-link {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    text-decoration: none;
+    color: inherit;
+    border-radius: 8px;
+    padding: 4px;
+    margin: -4px;
+    transition: background 0.15s ease;
+}
+
+.pm-area-link:hover {
+    background: var(--bg-primary);
 }
 
 .pm-area-info {
@@ -1147,10 +1536,35 @@
     color: var(--text-muted);
 }
 
+.path-browser-new-folder {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.path-browser-new-folder input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.path-browser-new-folder input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
-    .pm-stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .pm-active-task-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
     }
 
     .pm-quick-add form {
@@ -1159,6 +1573,10 @@
 
     .pm-quick-add select {
         min-width: auto;
+    }
+
+    .pm-area-drag-handle {
+        opacity: 0.5;
     }
 
     .pm-projects-grid {
@@ -1175,6 +1593,7 @@
 const Projects = {
     editingAreaId: null,
     editingProjectId: null,
+    draggedArea: null,
 
     async init() {
         // Expand first area by default
@@ -1182,11 +1601,108 @@ const Projects = {
         if (firstArea) {
             firstArea.classList.add('expanded');
         }
+
+        // Initialize drag and drop for areas
+        this.initDragAndDrop();
+    },
+
+    // ===== Drag and Drop =====
+    initDragAndDrop() {
+        const areasList = document.getElementById('areas-list');
+        if (!areasList) return;
+
+        const areas = areasList.querySelectorAll('.pm-area');
+
+        areas.forEach(area => {
+            area.addEventListener('dragstart', (e) => this.handleDragStart(e, area));
+            area.addEventListener('dragend', (e) => this.handleDragEnd(e, area));
+            area.addEventListener('dragover', (e) => this.handleDragOver(e, area));
+            area.addEventListener('dragleave', (e) => this.handleDragLeave(e, area));
+            area.addEventListener('drop', (e) => this.handleDrop(e, area));
+        });
+    },
+
+    handleDragStart(e, area) {
+        this.draggedArea = area;
+        area.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', area.dataset.areaId);
+    },
+
+    handleDragEnd(e, area) {
+        area.classList.remove('dragging');
+        this.draggedArea = null;
+
+        // Remove drag-over class from all areas
+        document.querySelectorAll('.pm-area').forEach(a => a.classList.remove('drag-over'));
+    },
+
+    handleDragOver(e, area) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        if (this.draggedArea && this.draggedArea !== area) {
+            area.classList.add('drag-over');
+        }
+    },
+
+    handleDragLeave(e, area) {
+        area.classList.remove('drag-over');
+    },
+
+    handleDrop(e, targetArea) {
+        e.preventDefault();
+        targetArea.classList.remove('drag-over');
+
+        if (!this.draggedArea || this.draggedArea === targetArea) return;
+
+        const areasList = document.getElementById('areas-list');
+        const areas = [...areasList.querySelectorAll('.pm-area')];
+
+        const draggedIdx = areas.indexOf(this.draggedArea);
+        const targetIdx = areas.indexOf(targetArea);
+
+        // Move the dragged element
+        if (draggedIdx < targetIdx) {
+            targetArea.after(this.draggedArea);
+        } else {
+            targetArea.before(this.draggedArea);
+        }
+
+        // Save the new order
+        this.saveAreaOrder();
+    },
+
+    async saveAreaOrder() {
+        const areas = document.querySelectorAll('.pm-area');
+        const areaOrders = [];
+
+        areas.forEach((area, index) => {
+            areaOrders.push({
+                id: area.dataset.areaId,
+                order: index
+            });
+        });
+
+        try {
+            await fetch('/api/pm/areas/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ areas: areaOrders })
+            });
+        } catch (err) {
+            console.error('Failed to save area order:', err);
+        }
     },
 
     toggleArea(btn) {
         const area = btn.closest('.pm-area');
         area.classList.toggle('expanded');
+    },
+
+    togglePrioritySection(header) {
+        const section = header.closest('.pm-priority-section');
+        section.classList.toggle('expanded');
     },
 
     // ===== Area Modal =====
@@ -1470,6 +1986,61 @@ const Projects = {
     clearPath(target) {
         const targetId = target === 'area' ? 'area-path' : 'project-path';
         document.getElementById(targetId).value = '';
+    },
+
+    showNewFolderInput() {
+        document.getElementById('path-browser-new-folder').style.display = 'flex';
+        document.getElementById('new-folder-btn').style.display = 'none';
+        setTimeout(() => document.getElementById('new-folder-name').focus(), 50);
+    },
+
+    hideNewFolderInput() {
+        document.getElementById('path-browser-new-folder').style.display = 'none';
+        document.getElementById('new-folder-btn').style.display = 'block';
+        document.getElementById('new-folder-name').value = '';
+    },
+
+    handleNewFolderKey(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            this.createNewFolder();
+        } else if (e.key === 'Escape') {
+            this.hideNewFolderInput();
+        }
+    },
+
+    async createNewFolder() {
+        const nameInput = document.getElementById('new-folder-name');
+        const folderName = nameInput.value.trim();
+
+        if (!folderName) {
+            alert('Please enter a folder name');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/pm/create-directory', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    parent: this.currentBrowsePath,
+                    name: folderName
+                })
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok) {
+                this.hideNewFolderInput();
+                // Navigate into the new folder
+                await this.loadDirectory(data.path);
+            } else {
+                alert(data.error || 'Failed to create folder');
+            }
+        } catch (err) {
+            console.error('Failed to create folder:', err);
+            alert('Failed to create folder');
+        }
     },
 
     // ===== Task Functions =====

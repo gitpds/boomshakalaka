@@ -1,0 +1,329 @@
+{% extends "reggie_base.html" %}
+{% block reggie_content %}
+<div class="openclaw-container">
+    <!-- Connection Status Banner -->
+    <div class="openclaw-status-banner" id="openclaw-banner">
+        <div class="banner-content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span id="openclaw-status-text">Checking OpenClaw Gateway...</span>
+        </div>
+        <button class="banner-action" id="openclaw-retry-btn" style="display: none;" onclick="checkOpenClawStatus()">
+            Retry Connection
+        </button>
+    </div>
+
+    <!-- OpenClaw iframe container -->
+    <div class="openclaw-frame-container" id="openclaw-frame-container">
+        <div class="openclaw-loading" id="openclaw-loading">
+            <div class="loading-spinner"></div>
+            <p>Connecting to OpenClaw Gateway...</p>
+            <p class="loading-subtitle">MacBook Brain (192.168.0.168:18789)</p>
+        </div>
+        <iframe
+            id="openclaw-frame"
+            class="openclaw-frame"
+            src=""
+            allow="microphone; camera; clipboard-read; clipboard-write"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+            style="display: none;"
+        ></iframe>
+    </div>
+
+    <!-- Quick Actions Bar -->
+    <div class="openclaw-quickbar">
+        <div class="quickbar-info">
+            <span class="quickbar-label">OpenClaw AI Gateway</span>
+            <span class="quickbar-status" id="quickbar-status">Disconnected</span>
+        </div>
+        <div class="quickbar-actions">
+            <button class="reggie-btn reggie-btn-sm" onclick="openInNewTab()" title="Open in new tab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                New Tab
+            </button>
+            <button class="reggie-btn reggie-btn-sm" onclick="refreshFrame()" title="Refresh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.openclaw-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 12px;
+}
+
+.openclaw-status-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.openclaw-status-banner.online {
+    background: rgba(var(--success-rgb, 34, 197, 94), 0.1);
+    border-color: var(--success);
+}
+
+.openclaw-status-banner.offline {
+    background: rgba(var(--error-rgb, 239, 68, 68), 0.1);
+    border-color: var(--error);
+}
+
+.banner-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+}
+
+.openclaw-status-banner.online .banner-content {
+    color: var(--success);
+}
+
+.openclaw-status-banner.offline .banner-content {
+    color: var(--error);
+}
+
+.banner-action {
+    padding: 6px 12px;
+    background: var(--accent);
+    border: none;
+    border-radius: 4px;
+    color: var(--bg-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.openclaw-frame-container {
+    flex: 1;
+    position: relative;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 400px;
+}
+
+.openclaw-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--text-secondary);
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.openclaw-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: var(--bg-primary);
+}
+
+.openclaw-quickbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.quickbar-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.quickbar-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.quickbar-status {
+    font-size: 11px;
+    padding: 2px 8px;
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    color: var(--text-muted);
+}
+
+.quickbar-status.online {
+    background: rgba(var(--success-rgb, 34, 197, 94), 0.2);
+    color: var(--success);
+}
+
+.quickbar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.quickbar-actions .reggie-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+</style>
+
+<script>
+// Proxy through localhost for secure context (WebSocket requires secure context)
+// Direct URL is only used for "Open in New Tab" which works in its own context
+const OPENCLAW_TOKEN = 'c424c9bb567e46dabf388b519688a21d';
+const OPENCLAW_URL = '/openclaw-proxy/?token=' + OPENCLAW_TOKEN;
+const OPENCLAW_DIRECT_URL = 'http://192.168.0.168:18789/?token=' + OPENCLAW_TOKEN;
+let openclawOnline = false;
+
+// Auto-retry with exponential backoff
+let retryCount = 0;
+const maxRetries = 3;
+
+async function checkOpenClawStatus(isAutoRetry = false) {
+    const banner = document.getElementById('openclaw-banner');
+    const statusText = document.getElementById('openclaw-status-text');
+    const retryBtn = document.getElementById('openclaw-retry-btn');
+    const loading = document.getElementById('openclaw-loading');
+    const frame = document.getElementById('openclaw-frame');
+    const quickbarStatus = document.getElementById('quickbar-status');
+
+    // Reset retry count on manual retry
+    if (!isAutoRetry) {
+        retryCount = 0;
+    }
+
+    statusText.textContent = retryCount > 0
+        ? `Retrying connection (${retryCount}/${maxRetries})...`
+        : 'Checking OpenClaw Gateway...';
+    banner.className = 'openclaw-status-banner';
+    retryBtn.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/reggie/health', {
+            signal: AbortSignal.timeout(15000)  // 15s timeout for health check with retry
+        });
+        if (response.ok) {
+            const data = await response.json();
+            openclawOnline = data.openclaw;
+
+            if (data.openclaw) {
+                statusText.textContent = 'Connected to OpenClaw Gateway';
+                banner.classList.add('online');
+                quickbarStatus.textContent = 'Connected';
+                quickbarStatus.classList.add('online');
+                retryCount = 0;  // Reset on success
+
+                // Load the iframe
+                loading.style.display = 'none';
+                frame.style.display = 'block';
+                frame.src = OPENCLAW_URL;
+            } else {
+                throw new Error('OpenClaw not responding');
+            }
+        } else {
+            throw new Error('Health check failed');
+        }
+    } catch (err) {
+        console.error('OpenClaw check failed:', err);
+        retryCount++;
+
+        // Auto-retry with exponential backoff
+        if (retryCount < maxRetries) {
+            const delay = 2000 * retryCount;  // 2s, 4s, 6s
+            statusText.textContent = `Connection failed, retrying in ${delay/1000}s (${retryCount}/${maxRetries})...`;
+            banner.classList.add('offline');
+            setTimeout(() => checkOpenClawStatus(true), delay);
+            return;
+        }
+
+        // Show offline state after max retries
+        statusText.textContent = 'OpenClaw Gateway offline - Start it on MacBook (192.168.0.168)';
+        banner.classList.add('offline');
+        retryBtn.style.display = 'block';
+        quickbarStatus.textContent = 'Disconnected';
+        quickbarStatus.classList.remove('online');
+
+        loading.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="color: var(--error);">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            <p style="color: var(--text-primary); font-weight: 500;">OpenClaw Gateway Offline</p>
+            <p class="loading-subtitle">Service should auto-restart. If not, SSH into MacBook and run: <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">launchctl start com.reggie.openclaw</code></p>
+        `;
+    }
+}
+
+function openInNewTab() {
+    if (openclawOnline) {
+        // Open direct URL - works in its own tab as same-origin secure context
+        window.open(OPENCLAW_DIRECT_URL, '_blank');
+    } else {
+        alert('OpenClaw is not connected. Start the gateway first.');
+    }
+}
+
+function refreshFrame() {
+    const frame = document.getElementById('openclaw-frame');
+    if (openclawOnline && frame.src) {
+        frame.src = frame.src;
+    } else {
+        checkOpenClawStatus();
+    }
+}
+
+// Check status on page load
+document.addEventListener('DOMContentLoaded', checkOpenClawStatus);
+
+// Recheck every 30 seconds
+setInterval(() => {
+    if (!openclawOnline) {
+        checkOpenClawStatus();
+    }
+}, 30000);
+</script>
+{% endblock %}

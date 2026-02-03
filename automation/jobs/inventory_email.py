@@ -34,10 +34,10 @@ class InventoryEmailJob(BaseJob):
 
     Example config:
         {
-            "recipients": ["nathan@truetracking.com", "steve@precisionfleetsupport.com"],
+            "recipients": ["nathan@truetracking.com", "steven@precisionfleetsupport.com"],
             "form_urls": {
                 "nathan@truetracking.com": "https://forms.gle/7zRwrhQ4s8sRkfpQ6",
-                "steve@precisionfleetsupport.com": "https://forms.gle/9kotkd7mEN2ppu7v5"
+                "steven@precisionfleetsupport.com": "https://forms.gle/9kotkd7mEN2ppu7v5"
             }
         }
     """
