@@ -18,3 +18,12 @@ anthropic>=0.18
 
 # Firebase Authentication
 firebase-admin>=6.0
+
+# Twilio SMS
+twilio>=8.0
+
+# WebSocket client (for OpenClaw proxy)
+websocket-client>=1.0
+
+# Flask WebSocket (for proxies)
+flask-sock>=0.6

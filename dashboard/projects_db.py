@@ -140,12 +140,36 @@ def init_database() -> None:
         )
     ''')
 
+    # SMS Allowlist table - for Twilio bidirectional SMS
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sms_allowlist (
+            phone_number TEXT PRIMARY KEY,
+            added_at TEXT NOT NULL,
+            added_by TEXT,
+            name TEXT
+        )
+    ''')
+
+    # SMS Conversations table - store message history
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sms_conversations (
+            id TEXT PRIMARY KEY,
+            phone_number TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            message TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            twilio_sid TEXT
+        )
+    ''')
+
     # Create indexes
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks (project_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_projects_area ON projects (area_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_list_items_list ON list_items (list_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_attachments_task ON task_attachments (task_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sms_conversations_phone ON sms_conversations (phone_number)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sms_conversations_timestamp ON sms_conversations (timestamp)')
 
     conn.commit()
     conn.close()
@@ -1067,6 +1091,177 @@ def get_project_for_task(task_id: str) -> Optional[dict]:
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+# =============================================================================
+# SMS Allowlist Functions
+# =============================================================================
+
+def normalize_phone_number(phone: str) -> str:
+    """Normalize phone number to E.164 format (+1XXXXXXXXXX)."""
+    # Remove all non-digit characters
+    digits = ''.join(c for c in phone if c.isdigit())
+
+    # Handle US numbers
+    if len(digits) == 10:
+        return f'+1{digits}'
+    elif len(digits) == 11 and digits.startswith('1'):
+        return f'+{digits}'
+    elif len(digits) > 10:
+        return f'+{digits}'
+    else:
+        return f'+{digits}'
+
+
+def add_to_sms_allowlist(phone_number: str, added_by: str = 'manual',
+                          name: Optional[str] = None) -> dict:
+    """Add a phone number to the SMS allowlist."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+
+    normalized = normalize_phone_number(phone_number)
+
+    # Use INSERT OR REPLACE to handle duplicates
+    cursor.execute('''
+        INSERT OR REPLACE INTO sms_allowlist (phone_number, added_at, added_by, name)
+        VALUES (?, ?, ?, ?)
+    ''', (normalized, now, added_by, name))
+
+    conn.commit()
+    conn.close()
+
+    return get_sms_allowlist_entry(normalized)
+
+
+def get_sms_allowlist_entry(phone_number: str) -> Optional[dict]:
+    """Get a single allowlist entry by phone number."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    normalized = normalize_phone_number(phone_number)
+    cursor.execute('SELECT * FROM sms_allowlist WHERE phone_number = ?', (normalized,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return dict(row) if row else None
+
+
+def is_phone_allowed(phone_number: str) -> bool:
+    """Check if a phone number is on the allowlist."""
+    return get_sms_allowlist_entry(phone_number) is not None
+
+
+def get_sms_allowlist() -> list[dict]:
+    """Get all allowlist entries."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM sms_allowlist ORDER BY added_at DESC')
+    entries = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return entries
+
+
+def remove_from_sms_allowlist(phone_number: str) -> bool:
+    """Remove a phone number from the allowlist."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    normalized = normalize_phone_number(phone_number)
+    cursor.execute('DELETE FROM sms_allowlist WHERE phone_number = ?', (normalized,))
+    deleted = cursor.rowcount > 0
+
+    conn.commit()
+    conn.close()
+    return deleted
+
+
+def update_sms_allowlist_name(phone_number: str, name: str) -> Optional[dict]:
+    """Update the name for an allowlist entry."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    normalized = normalize_phone_number(phone_number)
+    cursor.execute('UPDATE sms_allowlist SET name = ? WHERE phone_number = ?',
+                   (name, normalized))
+
+    conn.commit()
+    conn.close()
+
+    return get_sms_allowlist_entry(normalized)
+
+
+# =============================================================================
+# SMS Conversation Functions
+# =============================================================================
+
+def log_sms_message(phone_number: str, direction: str, message: str,
+                    twilio_sid: Optional[str] = None) -> dict:
+    """Log an SMS message to the conversation history."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+
+    normalized = normalize_phone_number(phone_number)
+    msg_id = str(uuid.uuid4())
+
+    cursor.execute('''
+        INSERT INTO sms_conversations (id, phone_number, direction, message, timestamp, twilio_sid)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (msg_id, normalized, direction, message, now, twilio_sid))
+
+    conn.commit()
+    conn.close()
+
+    return {
+        'id': msg_id,
+        'phone_number': normalized,
+        'direction': direction,
+        'message': message,
+        'timestamp': now,
+        'twilio_sid': twilio_sid
+    }
+
+
+def get_sms_conversation(phone_number: str, limit: int = 50) -> list[dict]:
+    """Get conversation history for a phone number."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    normalized = normalize_phone_number(phone_number)
+    cursor.execute('''
+        SELECT * FROM sms_conversations
+        WHERE phone_number = ?
+        ORDER BY timestamp DESC
+        LIMIT ?
+    ''', (normalized, limit))
+
+    messages = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    # Return in chronological order
+    return list(reversed(messages))
+
+
+def get_recent_sms_messages(limit: int = 100) -> list[dict]:
+    """Get recent SMS messages across all conversations."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT c.*, a.name as contact_name
+        FROM sms_conversations c
+        LEFT JOIN sms_allowlist a ON c.phone_number = a.phone_number
+        ORDER BY c.timestamp DESC
+        LIMIT ?
+    ''', (limit,))
+
+    messages = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return messages
 
 
 # Initialize database on import

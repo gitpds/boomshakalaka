@@ -128,12 +128,26 @@ try:
         get_stats as get_pm_stats,
         create_task_attachment, get_task_attachment, get_task_attachments,
         delete_task_attachment, get_project_for_task,
+        # SMS Allowlist functions
+        add_to_sms_allowlist, get_sms_allowlist_entry, is_phone_allowed,
+        get_sms_allowlist, remove_from_sms_allowlist, update_sms_allowlist_name,
+        log_sms_message, get_sms_conversation, get_recent_sms_messages,
+        normalize_phone_number,
         AVAILABLE_ICONS, DEFAULT_COLORS
     )
     PROJECTS_AVAILABLE = True
 except ImportError as e:
     print(f"Projects import failed: {e}")
     PROJECTS_AVAILABLE = False
+
+# Twilio SMS Client
+try:
+    from twilio.rest import Client as TwilioClient
+    from twilio.twiml.messaging_response import MessagingResponse
+    TWILIO_AVAILABLE = True
+except ImportError:
+    print("Twilio import failed - SMS features disabled")
+    TWILIO_AVAILABLE = False
 
 # Setup logging for AI Studio debugging
 logging.basicConfig(
@@ -176,6 +190,23 @@ MODELS_DIR = PROJECT_ROOT / 'models'  # Symlink to ComfyUI models
 GENERATIONS_DIR = PROJECT_ROOT / 'data' / 'generations'
 DATABASES_DIR = PROJECT_ROOT / 'data' / 'databases'
 THEMES_FILE = PROJECT_ROOT / 'data' / 'themes.json'
+
+# Twilio SMS Configuration
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '+16122559398')
+
+# Initialize Twilio client
+twilio_client = None
+if TWILIO_AVAILABLE and TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    try:
+        twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        print(f"Twilio client initialized for {TWILIO_PHONE_NUMBER}")
+    except Exception as e:
+        print(f"Failed to initialize Twilio client: {e}")
+
+# OpenClaw Gateway for AI responses
+OPENCLAW_GATEWAY_URL = 'http://192.168.0.168:18789'
 
 # Dev server port ranges to monitor
 # Each tuple: (start, end, category_name)
@@ -7055,6 +7086,350 @@ def api_dev_port_active():
     return jsonify({
         'active': active,
         'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES]
+    })
+
+
+# ============================================
+# SMS / Twilio Routes
+# ============================================
+
+def send_to_openclaw(message: str, phone_number: str, channel: str = 'sms', contact_name: str = None) -> str:
+    """Send a message to OpenClaw via CLI and get a response with session persistence.
+
+    Uses the OpenClaw CLI on the MacBook (Reggie's brain) via SSH. This maintains
+    conversation context across all channels through OpenClaw's native session system.
+
+    Args:
+        message: The user's message
+        phone_number: The sender's phone number (used for session key)
+        channel: The channel name (sms, whatsapp, etc.)
+        contact_name: Optional contact name to include in context
+    """
+    import subprocess
+    import json
+    import shlex
+
+    try:
+        # Normalize phone number for session key
+        normalized_phone = normalize_phone_number(phone_number)
+
+        # Build the message with channel context
+        # Include channel and contact info so Reggie knows who's messaging
+        context_prefix = f"[{channel.upper()}]"
+        if contact_name:
+            context_prefix += f" [From: {contact_name}]"
+
+        # Format: [SMS] [From: Paul] Hey Reggie
+        full_message = f"{context_prefix} {message}"
+
+        # Escape the message for shell
+        escaped_message = shlex.quote(full_message)
+
+        # Build the OpenClaw CLI command
+        # Uses --to to maintain session persistence based on phone number
+        # The session is shared with iMessage/WebChat via agent:main:main
+        cmd = f'''ssh reggiembp "source ~/.nvm/nvm.sh && nvm use node >/dev/null 2>&1 && openclaw agent --to {normalized_phone} --message {escaped_message} --json --timeout 60"'''
+
+        logger.info(f"Calling OpenClaw for {channel} from {normalized_phone}")
+
+        # Execute the command
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=90  # Allow time for AI response
+        )
+
+        if result.returncode != 0:
+            logger.error(f"OpenClaw CLI error: {result.stderr}")
+            return "I'm having trouble connecting to my brain. Try again in a bit!"
+
+        # Parse the JSON response
+        # Find the JSON object in the output (skip nvm messages)
+        output = result.stdout.strip()
+        json_start = output.find('{')
+        if json_start == -1:
+            logger.error(f"No JSON in OpenClaw response: {output[:200]}")
+            return "I'm having trouble thinking right now. Try again later!"
+
+        json_str = output[json_start:]
+        data = json.loads(json_str)
+
+        # Extract the response text
+        if data.get('status') == 'ok' and 'result' in data:
+            payloads = data['result'].get('payloads', [])
+            if payloads and payloads[0].get('text'):
+                response_text = payloads[0]['text']
+                logger.info(f"OpenClaw response for {channel}: {response_text[:50]}...")
+                return response_text
+
+        # Handle error status
+        if data.get('status') == 'error':
+            logger.error(f"OpenClaw returned error: {data.get('error', 'unknown')}")
+            return "Something went wrong on my end. Try again later!"
+
+        logger.error(f"Unexpected OpenClaw response format: {json_str[:200]}")
+        return "I'm having trouble thinking right now. Try again later!"
+
+    except subprocess.TimeoutExpired:
+        logger.error("OpenClaw request timed out")
+        return "I'm thinking too hard! Give me a moment and try again."
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse OpenClaw response: {e}")
+        return "I'm having trouble thinking right now. Try again later!"
+    except Exception as e:
+        logger.error(f"Error calling OpenClaw: {e}")
+        return "Something went wrong on my end. Try again later!"
+
+
+@app.route('/sms/webhook', methods=['POST'])
+def sms_webhook():
+    """Receive inbound SMS from Twilio.
+
+    Routes messages through OpenClaw for unified context across all channels.
+    """
+    if not TWILIO_AVAILABLE:
+        return 'SMS not available', 503
+
+    # Get message details from Twilio
+    from_number = request.form.get('From', '')
+    to_number = request.form.get('To', '')
+    body = request.form.get('Body', '').strip()
+    message_sid = request.form.get('MessageSid', '')
+
+    logger.info(f"SMS received from {from_number}: {body[:50]}...")
+
+    # Log the inbound message
+    log_sms_message(from_number, 'inbound', body, message_sid)
+
+    # Check if sender is on allowlist
+    allowlist_entry = get_sms_allowlist_entry(from_number)
+    if not allowlist_entry:
+        logger.info(f"Ignoring SMS from non-allowlisted number: {from_number}")
+        # Return empty TwiML response (no reply)
+        resp = MessagingResponse()
+        return str(resp), 200, {'Content-Type': 'text/xml'}
+
+    # Get contact name for context
+    contact_name = allowlist_entry.get('name') if allowlist_entry else None
+
+    # Get AI response from OpenClaw (with session persistence)
+    ai_response = send_to_openclaw(
+        message=body,
+        phone_number=from_number,
+        channel='sms',
+        contact_name=contact_name
+    )
+
+    # Log the outbound response
+    log_sms_message(from_number, 'outbound', ai_response)
+
+    # Send response via TwiML
+    resp = MessagingResponse()
+    resp.message(ai_response)
+
+    return str(resp), 200, {'Content-Type': 'text/xml'}
+
+
+@app.route('/whatsapp/webhook', methods=['POST'])
+def whatsapp_webhook():
+    """Receive inbound WhatsApp messages from Twilio.
+
+    Uses same allowlist as SMS. Routes through OpenClaw for unified context.
+    """
+    if not TWILIO_AVAILABLE:
+        return 'WhatsApp not available', 503
+
+    # Get message details from Twilio
+    # WhatsApp numbers come as "whatsapp:+15551234567"
+    from_number_raw = request.form.get('From', '')
+    from_number = from_number_raw.replace('whatsapp:', '')
+    to_number = request.form.get('To', '').replace('whatsapp:', '')
+    body = request.form.get('Body', '').strip()
+    message_sid = request.form.get('MessageSid', '')
+
+    logger.info(f"WhatsApp received from {from_number}: {body[:50]}...")
+
+    # Log the inbound message (reuse SMS logging)
+    log_sms_message(from_number, 'inbound', body, message_sid)
+
+    # Check if sender is on allowlist (shared with SMS)
+    allowlist_entry = get_sms_allowlist_entry(from_number)
+    if not allowlist_entry:
+        logger.info(f"Ignoring WhatsApp from non-allowlisted number: {from_number}")
+        resp = MessagingResponse()
+        return str(resp), 200, {'Content-Type': 'text/xml'}
+
+    # Get contact name for context
+    contact_name = allowlist_entry.get('name') if allowlist_entry else None
+
+    # Get AI response from OpenClaw (with session persistence)
+    ai_response = send_to_openclaw(
+        message=body,
+        phone_number=from_number,
+        channel='whatsapp',
+        contact_name=contact_name
+    )
+
+    # Log the outbound response
+    log_sms_message(from_number, 'outbound', ai_response)
+
+    # Send response via TwiML
+    resp = MessagingResponse()
+    resp.message(ai_response)
+
+    return str(resp), 200, {'Content-Type': 'text/xml'}
+
+
+@app.route('/api/sms/send', methods=['POST'])
+def api_sms_send():
+    """Send an outbound SMS (adds recipient to allowlist)."""
+    if not twilio_client:
+        return jsonify({'error': 'Twilio not configured'}), 503
+
+    data = request.get_json() or {}
+    to_number = data.get('to', '')
+    message = data.get('message', '')
+    name = data.get('name')  # Optional contact name
+
+    if not to_number or not message:
+        return jsonify({'error': 'Missing required fields: to, message'}), 400
+
+    try:
+        # Normalize the phone number
+        normalized = normalize_phone_number(to_number)
+
+        # Send the SMS
+        sent_message = twilio_client.messages.create(
+            body=message,
+            from_=TWILIO_PHONE_NUMBER,
+            to=normalized
+        )
+
+        # Add to allowlist (auto-allow anyone Reggie texts first)
+        add_to_sms_allowlist(normalized, added_by='outbound', name=name)
+
+        # Log the outbound message
+        log_sms_message(normalized, 'outbound', message, sent_message.sid)
+
+        logger.info(f"SMS sent to {normalized}: {message[:50]}...")
+
+        return jsonify({
+            'success': True,
+            'sid': sent_message.sid,
+            'to': normalized,
+            'message': message,
+            'status': sent_message.status
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to send SMS: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sms/allowlist', methods=['GET'])
+def api_sms_allowlist_get():
+    """Get the SMS allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    allowlist = get_sms_allowlist()
+    return jsonify({'allowlist': allowlist})
+
+
+@app.route('/api/sms/allowlist', methods=['POST'])
+def api_sms_allowlist_add():
+    """Add a phone number to the allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    data = request.get_json() or {}
+    phone_number = data.get('phone_number', '')
+    name = data.get('name')
+
+    if not phone_number:
+        return jsonify({'error': 'Missing required field: phone_number'}), 400
+
+    entry = add_to_sms_allowlist(phone_number, added_by='manual', name=name)
+    return jsonify({'success': True, 'entry': entry})
+
+
+@app.route('/api/sms/allowlist/<path:phone_number>', methods=['DELETE'])
+def api_sms_allowlist_remove(phone_number):
+    """Remove a phone number from the allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    # URL decode the phone number (+ becomes %2B)
+    from urllib.parse import unquote
+    phone_number = unquote(phone_number)
+
+    removed = remove_from_sms_allowlist(phone_number)
+    if removed:
+        return jsonify({'success': True, 'removed': phone_number})
+    else:
+        return jsonify({'error': 'Phone number not found'}), 404
+
+
+@app.route('/api/sms/allowlist/<path:phone_number>', methods=['PUT'])
+def api_sms_allowlist_update(phone_number):
+    """Update a phone number's name on the allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    from urllib.parse import unquote
+    phone_number = unquote(phone_number)
+
+    data = request.get_json() or {}
+    name = data.get('name', '')
+
+    entry = update_sms_allowlist_name(phone_number, name)
+    if entry:
+        return jsonify({'success': True, 'entry': entry})
+    else:
+        return jsonify({'error': 'Phone number not found'}), 404
+
+
+@app.route('/api/sms/conversations', methods=['GET'])
+def api_sms_conversations():
+    """Get recent SMS conversations."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    limit = request.args.get('limit', 100, type=int)
+    messages = get_recent_sms_messages(limit)
+    return jsonify({'messages': messages})
+
+
+@app.route('/api/sms/conversation/<path:phone_number>', methods=['GET'])
+def api_sms_conversation(phone_number):
+    """Get conversation history with a specific phone number."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    from urllib.parse import unquote
+    phone_number = unquote(phone_number)
+
+    limit = request.args.get('limit', 50, type=int)
+    messages = get_sms_conversation(phone_number, limit)
+    allowlist_entry = get_sms_allowlist_entry(phone_number)
+
+    return jsonify({
+        'phone_number': normalize_phone_number(phone_number),
+        'contact': allowlist_entry,
+        'messages': messages
+    })
+
+
+@app.route('/api/sms/status', methods=['GET'])
+def api_sms_status():
+    """Get SMS system status."""
+    return jsonify({
+        'twilio_available': TWILIO_AVAILABLE,
+        'twilio_configured': twilio_client is not None,
+        'phone_number': TWILIO_PHONE_NUMBER if twilio_client else None,
+        'openclaw_url': OPENCLAW_GATEWAY_URL
     })
 
 
