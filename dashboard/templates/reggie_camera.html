@@ -640,8 +640,12 @@ const CameraPage = {
 
             this.ws.onmessage = async (event) => {
                 console.log('[Camera] <<< RECV:', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
-                const msg = JSON.parse(event.data);
-                await this.handleMessage(msg);
+                try {
+                    const msg = JSON.parse(event.data);
+                    await this.handleMessage(msg);
+                } catch (e) {
+                    console.warn('[Camera] Failed to parse message:', e);
+                }
             };
 
             this.ws.onerror = (err) => {
@@ -740,8 +744,17 @@ const CameraPage = {
                 break;
 
             case 'error':
-                console.error('[Camera] Signaling error:', msg.details);
-                statusText.textContent = 'Error: ' + msg.details;
+                const errorMsg = msg.message || msg.details || 'Unknown error';
+                // Signaling WebSocket closing after WebRTC connects is NORMAL
+                // Only treat as error if peer connection isn't already working
+                if (this.pc && (this.pc.iceConnectionState === 'connected' || this.pc.iceConnectionState === 'completed')) {
+                    console.log('[Camera] Signaling closed (normal after WebRTC connects):', errorMsg);
+                    // Don't tear down - video is working!
+                } else {
+                    console.error('[Camera] Signaling error:', errorMsg);
+                    statusText.textContent = 'Error: ' + errorMsg;
+                    this.handleDisconnect();
+                }
                 break;
 
             default:

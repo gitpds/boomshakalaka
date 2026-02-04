@@ -853,8 +853,12 @@ const ControlPage = {
             };
 
             this.ws.onmessage = async (event) => {
-                const msg = JSON.parse(event.data);
-                await this.handleCameraMessage(msg);
+                try {
+                    const msg = JSON.parse(event.data);
+                    await this.handleCameraMessage(msg);
+                } catch (e) {
+                    console.warn('[Control] Failed to parse camera message:', e);
+                }
             };
 
             this.ws.onerror = (err) => {
@@ -933,8 +937,17 @@ const ControlPage = {
                 break;
 
             case 'error':
-                console.error('[Control] Signaling error:', msg.details);
-                statusText.textContent = 'Error: ' + msg.details;
+                const errorMsg = msg.message || msg.details || 'Unknown error';
+                // Signaling WebSocket closing after WebRTC connects is NORMAL
+                // Only treat as error if peer connection isn't already working
+                if (this.pc && (this.pc.iceConnectionState === 'connected' || this.pc.iceConnectionState === 'completed')) {
+                    console.log('[Control] Signaling closed (normal after WebRTC connects):', errorMsg);
+                    // Don't tear down - video is working!
+                } else {
+                    console.error('[Control] Signaling error:', errorMsg);
+                    statusText.textContent = 'Error: ' + errorMsg;
+                    this.cleanupCamera();
+                }
                 break;
         }
     },

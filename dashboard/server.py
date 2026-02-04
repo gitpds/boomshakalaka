@@ -140,7 +140,7 @@ except ImportError as e:
     print(f"Projects import failed: {e}")
     PROJECTS_AVAILABLE = False
 
-# Twilio SMS Client
+# Twilio SMS Client (voice is handled by MacBook)
 try:
     from twilio.rest import Client as TwilioClient
     from twilio.twiml.messaging_response import MessagingResponse
@@ -191,7 +191,7 @@ GENERATIONS_DIR = PROJECT_ROOT / 'data' / 'generations'
 DATABASES_DIR = PROJECT_ROOT / 'data' / 'databases'
 THEMES_FILE = PROJECT_ROOT / 'data' / 'themes.json'
 
-# Twilio SMS Configuration
+# Twilio SMS/Voice Configuration
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
 TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '+16122559398')
@@ -2228,6 +2228,16 @@ def reggie_openclaw():
                          **get_common_context())
 
 
+@app.route('/reggie/voice')
+def reggie_voice():
+    """Voice conversation interface for Reggie"""
+    return render_template('reggie_voice.html',
+                         active_page='reggie',
+                         reggie_page='voice',
+                         page_name='Voice',
+                         **get_common_context())
+
+
 # Keep old routes for backwards compatibility
 @app.route('/overview')
 def overview():
@@ -2676,6 +2686,37 @@ def openclaw_root_ws_proxy(ws):
 
 
 # ============================================
+# WebSocket Proxy Helpers
+# ============================================
+def send_ws_error_and_close(ws, code, msg, close_status=1011, close_reason='proxy error'):
+    """Send a JSON error frame and then a proper WebSocket close frame.
+
+    This prevents 'Invalid frame header' errors by ensuring the WebSocket
+    is closed with proper RFC-6455 framing instead of HTTP response bytes.
+    """
+    try:
+        ws.send(json.dumps({"error": code, "message": msg}))
+    except Exception:
+        pass  # Client may already be gone
+    try:
+        ws.close(close_status, close_reason)
+    except Exception:
+        pass
+
+
+def send_ws_error_and_close_typed(ws, error_type, code, msg, close_status=1011, close_reason='proxy error'):
+    """Send a typed JSON error frame (for camera signaling) and close properly."""
+    try:
+        ws.send(json.dumps({"type": error_type, "error": code, "message": msg}))
+    except Exception:
+        pass
+    try:
+        ws.close(close_status, close_reason)
+    except Exception:
+        pass
+
+
+# ============================================
 # Camera Signaling Proxy (SSH Tunnel Support)
 # ============================================
 REGGIE_CAMERA_SIGNALING_URL = 'ws://192.168.0.11:8443'
@@ -2694,13 +2735,19 @@ def reggie_camera_signaling_proxy(ws):
         target = ws_client.create_connection(REGGIE_CAMERA_SIGNALING_URL, timeout=30)
         logger.info("[CameraProxy] Connected to robot signaling server")
     except Exception as e:
-        logger.error(f"[CameraProxy] Failed to connect to robot: {e}")
+        error_msg = str(e)
+        logger.error(f"[CameraProxy] Failed to connect to robot: {error_msg}")
+        # Send error and close with proper WebSocket close frame
+        send_ws_error_and_close_typed(ws, "error", "connection_failed",
+                                       f"Failed to connect to camera server: {error_msg}")
         return
 
     running = True
+    connection_error = None
+    ws_closed = False
 
     def forward_to_client():
-        nonlocal running
+        nonlocal running, connection_error, ws_closed
         try:
             while running:
                 opcode, data = target.recv_data(control_frame=True)
@@ -2720,9 +2767,15 @@ def reggie_camera_signaling_proxy(ws):
                 elif opcode == ws_client.ABNF.OPCODE_PONG:
                     pass
         except Exception as e:
+            connection_error = str(e)
             logger.info(f"[CameraProxy] Forward thread ended: {e}")
         finally:
             running = False
+            # Notify client and close properly
+            if connection_error and not ws_closed:
+                ws_closed = True
+                send_ws_error_and_close_typed(ws, "error", "connection_lost",
+                                               f"Connection to camera server lost: {connection_error}")
 
     thread = threading.Thread(target=forward_to_client, daemon=True)
     thread.start()
@@ -2749,6 +2802,100 @@ def reggie_camera_signaling_proxy(ws):
             target.close()
         except Exception:
             pass
+        # Close browser WebSocket properly if not already closed
+        if not ws_closed:
+            ws_closed = True
+            try:
+                ws.close()
+            except Exception:
+                pass
+
+
+# ============================================
+# Robot State WebSocket Proxy (SSH Tunnel Support)
+# ============================================
+REGGIE_STATE_WS_URL = 'ws://192.168.0.11:8000/api/state/ws/full'
+
+@sock.route('/reggie/state-ws')
+def reggie_state_ws_proxy(ws):
+    """Proxy robot state WebSocket for SSH tunnel access.
+
+    This enables real-time state updates when connecting via localhost:3003
+    since the robot at 192.168.0.11 isn't directly reachable.
+    """
+    logger.info("[StateProxy] Client connected, connecting to robot...")
+
+    try:
+        target = ws_client.create_connection(REGGIE_STATE_WS_URL, timeout=10)
+        logger.info("[StateProxy] Connected to robot state WebSocket")
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"[StateProxy] Failed to connect to robot: {error_msg}")
+        # Send error and close with proper WebSocket close frame
+        if "503" in error_msg or "Backend not running" in error_msg:
+            send_ws_error_and_close(ws, "robot_daemon_not_running",
+                                    "Robot daemon is not running. Please start it from the Control page.")
+        else:
+            send_ws_error_and_close(ws, "connection_failed",
+                                    f"Failed to connect to robot: {error_msg}")
+        return
+
+    running = True
+    connection_error = None
+    ws_closed = False
+
+    def forward_to_client():
+        nonlocal running, connection_error, ws_closed
+        try:
+            while running:
+                opcode, data = target.recv_data(control_frame=True)
+                if opcode == ws_client.ABNF.OPCODE_TEXT:
+                    ws.send(data.decode('utf-8'))
+                elif opcode == ws_client.ABNF.OPCODE_BINARY:
+                    ws.send(data)
+                elif opcode == ws_client.ABNF.OPCODE_CLOSE:
+                    logger.info("[StateProxy] Robot closed connection")
+                    break
+                elif opcode == ws_client.ABNF.OPCODE_PING:
+                    target.pong(data)
+        except Exception as e:
+            connection_error = str(e)
+            logger.debug(f"[StateProxy] Forward thread ended: {e}")
+        finally:
+            running = False
+            # Notify client and close properly
+            if connection_error and not ws_closed:
+                ws_closed = True
+                send_ws_error_and_close(ws, "connection_lost",
+                                        f"Connection to robot lost: {connection_error}")
+
+    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread.start()
+
+    try:
+        while running:
+            msg = ws.receive(timeout=1)
+            if msg is None:
+                continue
+            if isinstance(msg, bytes):
+                target.send_binary(msg)
+            else:
+                target.send(msg)
+    except Exception as e:
+        logger.debug(f"[StateProxy] Main loop ended: {e}")
+    finally:
+        running = False
+        try:
+            target.close()
+        except Exception:
+            pass
+        # Close browser WebSocket properly if not already closed
+        if not ws_closed:
+            ws_closed = True
+            try:
+                ws.close()
+            except Exception:
+                pass
 
 
 @app.route('/api/team-videos/<team>')
