@@ -17,8 +17,10 @@ import json
 import uuid
 import logging
 import sqlite3
+import socket
 import threading
 import time
+from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import websocket as ws_client
@@ -2689,10 +2691,12 @@ def openclaw_root_ws_proxy(ws):
 # WebSocket Proxy Helpers
 # ============================================
 def send_ws_error_and_close(ws, code, msg, close_status=1011, close_reason='proxy error'):
-    """Send a JSON error frame and then a proper WebSocket close frame.
+    """Send a JSON error frame and then properly close the WebSocket.
 
-    This prevents 'Invalid frame header' errors by ensuring the WebSocket
-    is closed with proper RFC-6455 framing instead of HTTP response bytes.
+    This prevents 'Invalid frame header' errors by:
+    1. Sending a JSON error message
+    2. Sending a proper WebSocket close frame
+    3. Closing the underlying socket (prevents Flask from sending HTTP bytes)
     """
     try:
         ws.send(json.dumps({"error": code, "message": msg}))
@@ -2700,6 +2704,13 @@ def send_ws_error_and_close(ws, code, msg, close_status=1011, close_reason='prox
         pass  # Client may already be gone
     try:
         ws.close(close_status, close_reason)
+    except Exception:
+        pass
+    # CRITICAL: Close underlying socket to prevent Flask/Werkzeug
+    # from writing HTTP response bytes on the WebSocket connection
+    try:
+        ws.sock.shutdown(socket.SHUT_RDWR)
+        ws.sock.close()
     except Exception:
         pass
 
@@ -2712,6 +2723,13 @@ def send_ws_error_and_close_typed(ws, error_type, code, msg, close_status=1011, 
         pass
     try:
         ws.close(close_status, close_reason)
+    except Exception:
+        pass
+    # CRITICAL: Close underlying socket to prevent Flask/Werkzeug
+    # from writing HTTP response bytes on the WebSocket connection
+    try:
+        ws.sock.shutdown(socket.SHUT_RDWR)
+        ws.sock.close()
     except Exception:
         pass
 
@@ -2727,6 +2745,10 @@ def reggie_camera_signaling_proxy(ws):
 
     This enables camera access when connecting via SSH tunnel (localhost:3003)
     since the robot at 192.168.0.11 isn't directly reachable.
+
+    IMPORTANT: flask-sock's ws object is NOT thread-safe. All ws.send/receive/close
+    calls must happen in a single thread. We use a Queue to pass messages from
+    the background thread (robot->client) to the main thread which does all ws operations.
     """
     logger.info("[CameraProxy] Client connected, connecting to robot...")
     logger.info(f"[CameraProxy] Target URL: {REGGIE_CAMERA_SIGNALING_URL}")
@@ -2743,56 +2765,85 @@ def reggie_camera_signaling_proxy(ws):
         return
 
     running = True
-    connection_error = None
-    ws_closed = False
+    send_queue = Queue()  # Thread-safe queue for robot->browser messages
+    CLOSE_SENTINEL = object()  # Marker to signal close
 
-    def forward_to_client():
-        nonlocal running, connection_error, ws_closed
+    def robot_to_queue():
+        """Background thread: reads from robot, puts messages in queue.
+        Does NOT touch the browser ws object."""
+        nonlocal running
         try:
             while running:
                 opcode, data = target.recv_data(control_frame=True)
                 if opcode == ws_client.ABNF.OPCODE_TEXT:
                     decoded = data.decode('utf-8')
                     preview = decoded[:100] + ('...' if len(decoded) > 100 else '')
-                    logger.info(f"[CameraProxy] Robot->Client: {preview}")
-                    ws.send(decoded)
+                    logger.info(f"[CameraProxy] Robot->Queue: {preview}")
+                    send_queue.put(('text', decoded))
                 elif opcode == ws_client.ABNF.OPCODE_BINARY:
-                    logger.info(f"[CameraProxy] Robot->Client: (binary {len(data)} bytes)")
-                    ws.send(data)
+                    logger.info(f"[CameraProxy] Robot->Queue: (binary {len(data)} bytes)")
+                    send_queue.put(('binary', data))
                 elif opcode == ws_client.ABNF.OPCODE_CLOSE:
                     logger.info("[CameraProxy] Robot sent close frame")
+                    send_queue.put(CLOSE_SENTINEL)
                     break
                 elif opcode == ws_client.ABNF.OPCODE_PING:
                     target.pong(data)
                 elif opcode == ws_client.ABNF.OPCODE_PONG:
                     pass
         except Exception as e:
-            connection_error = str(e)
-            logger.info(f"[CameraProxy] Forward thread ended: {e}")
+            logger.info(f"[CameraProxy] Robot reader ended: {e}")
+            send_queue.put(('error', str(e)))
         finally:
             running = False
-            # Notify client and close properly
-            if connection_error and not ws_closed:
-                ws_closed = True
-                send_ws_error_and_close_typed(ws, "error", "connection_lost",
-                                               f"Connection to camera server lost: {connection_error}")
+            try:
+                target.close()
+            except Exception:
+                pass
 
-    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread = threading.Thread(target=robot_to_queue, daemon=True)
     thread.start()
-    logger.info("[CameraProxy] Forward thread started, listening for client messages...")
+    logger.info("[CameraProxy] Robot reader thread started, main loop handling all ws operations...")
 
     try:
         while running:
-            msg = ws.receive(timeout=1)
-            if msg is None:
-                continue
-            if isinstance(msg, bytes):
-                logger.info(f"[CameraProxy] Client->Robot: (binary {len(msg)} bytes)")
-                target.send_binary(msg)
-            else:
-                preview = msg[:100] + ('...' if len(msg) > 100 else '')
-                logger.info(f"[CameraProxy] Client->Robot: {preview}")
-                target.send(msg)
+            # Drain the queue - send all robot messages to browser
+            # This is the ONLY place we call ws.send()
+            try:
+                while True:
+                    item = send_queue.get_nowait()
+                    if item is CLOSE_SENTINEL:
+                        logger.info("[CameraProxy] Got close sentinel, closing browser ws")
+                        running = False
+                        break
+                    msg_type, payload = item
+                    if msg_type == 'text':
+                        ws.send(payload)
+                    elif msg_type == 'binary':
+                        ws.send(payload)
+                    elif msg_type == 'error':
+                        logger.info(f"[CameraProxy] Sending error to browser: {payload}")
+                        ws.send(json.dumps({"type": "error", "error": "connection_lost",
+                                            "message": f"Connection to camera server lost: {payload}"}))
+                        running = False
+                        break
+            except Empty:
+                pass
+
+            if not running:
+                break
+
+            # Check for browser->robot messages (short timeout to stay responsive)
+            msg = ws.receive(timeout=0.1)
+            if msg is not None:
+                if isinstance(msg, bytes):
+                    logger.info(f"[CameraProxy] Client->Robot: (binary {len(msg)} bytes)")
+                    target.send_binary(msg)
+                else:
+                    preview = msg[:100] + ('...' if len(msg) > 100 else '')
+                    logger.info(f"[CameraProxy] Client->Robot: {preview}")
+                    target.send(msg)
+
     except Exception as e:
         logger.info(f"[CameraProxy] Main loop ended: {e}")
     finally:
@@ -2802,13 +2853,10 @@ def reggie_camera_signaling_proxy(ws):
             target.close()
         except Exception:
             pass
-        # Close browser WebSocket properly if not already closed
-        if not ws_closed:
-            ws_closed = True
-            try:
-                ws.close()
-            except Exception:
-                pass
+        try:
+            ws.close()
+        except Exception:
+            pass
 
 
 # ============================================
@@ -2822,6 +2870,10 @@ def reggie_state_ws_proxy(ws):
 
     This enables real-time state updates when connecting via localhost:3003
     since the robot at 192.168.0.11 isn't directly reachable.
+
+    IMPORTANT: flask-sock's ws object is NOT thread-safe. All ws.send/receive/close
+    calls must happen in a single thread. We use a Queue to pass messages from
+    the background thread (robot->client) to the main thread which does all ws operations.
     """
     logger.info("[StateProxy] Client connected, connecting to robot...")
 
@@ -2841,46 +2893,74 @@ def reggie_state_ws_proxy(ws):
         return
 
     running = True
-    connection_error = None
-    ws_closed = False
+    send_queue = Queue()  # Thread-safe queue for robot->browser messages
+    CLOSE_SENTINEL = object()  # Marker to signal close
 
-    def forward_to_client():
-        nonlocal running, connection_error, ws_closed
+    def robot_to_queue():
+        """Background thread: reads from robot, puts messages in queue.
+        Does NOT touch the browser ws object."""
+        nonlocal running
         try:
             while running:
                 opcode, data = target.recv_data(control_frame=True)
                 if opcode == ws_client.ABNF.OPCODE_TEXT:
-                    ws.send(data.decode('utf-8'))
+                    send_queue.put(('text', data.decode('utf-8')))
                 elif opcode == ws_client.ABNF.OPCODE_BINARY:
-                    ws.send(data)
+                    send_queue.put(('binary', data))
                 elif opcode == ws_client.ABNF.OPCODE_CLOSE:
                     logger.info("[StateProxy] Robot closed connection")
+                    send_queue.put(CLOSE_SENTINEL)
                     break
                 elif opcode == ws_client.ABNF.OPCODE_PING:
                     target.pong(data)
         except Exception as e:
-            connection_error = str(e)
-            logger.debug(f"[StateProxy] Forward thread ended: {e}")
+            logger.debug(f"[StateProxy] Robot reader ended: {e}")
+            send_queue.put(('error', str(e)))
         finally:
             running = False
-            # Notify client and close properly
-            if connection_error and not ws_closed:
-                ws_closed = True
-                send_ws_error_and_close(ws, "connection_lost",
-                                        f"Connection to robot lost: {connection_error}")
+            try:
+                target.close()
+            except Exception:
+                pass
 
-    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread = threading.Thread(target=robot_to_queue, daemon=True)
     thread.start()
 
     try:
         while running:
-            msg = ws.receive(timeout=1)
-            if msg is None:
-                continue
-            if isinstance(msg, bytes):
-                target.send_binary(msg)
-            else:
-                target.send(msg)
+            # Drain the queue - send all robot messages to browser
+            # This is the ONLY place we call ws.send()
+            try:
+                while True:
+                    item = send_queue.get_nowait()
+                    if item is CLOSE_SENTINEL:
+                        logger.info("[StateProxy] Got close sentinel, closing browser ws")
+                        running = False
+                        break
+                    msg_type, payload = item
+                    if msg_type == 'text':
+                        ws.send(payload)
+                    elif msg_type == 'binary':
+                        ws.send(payload)
+                    elif msg_type == 'error':
+                        ws.send(json.dumps({"type": "error", "error": "connection_lost",
+                                            "message": f"Connection to robot lost: {payload}"}))
+                        running = False
+                        break
+            except Empty:
+                pass
+
+            if not running:
+                break
+
+            # Check for browser->robot messages (short timeout to stay responsive)
+            msg = ws.receive(timeout=0.1)
+            if msg is not None:
+                if isinstance(msg, bytes):
+                    target.send_binary(msg)
+                else:
+                    target.send(msg)
+
     except Exception as e:
         logger.debug(f"[StateProxy] Main loop ended: {e}")
     finally:
@@ -2889,13 +2969,10 @@ def reggie_state_ws_proxy(ws):
             target.close()
         except Exception:
             pass
-        # Close browser WebSocket properly if not already closed
-        if not ws_closed:
-            ws_closed = True
-            try:
-                ws.close()
-            except Exception:
-                pass
+        try:
+            ws.close()
+        except Exception:
+            pass
 
 
 @app.route('/api/team-videos/<team>')
