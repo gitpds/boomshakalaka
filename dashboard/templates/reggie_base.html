@@ -47,6 +47,15 @@
             </svg>
             <span>OpenClaw</span>
         </a>
+        <a href="{{ url_for('reggie_voice') }}" class="reggie-nav-item {% if reggie_page == 'voice' %}active{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            <span>Voice</span>
+        </a>
         <a href="{{ url_for('reggie_settings') }}" class="reggie-nav-item {% if reggie_page == 'settings' %}active{% endif %}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
@@ -407,6 +416,18 @@ const ReggieShared = {
         return { robot: false, daemon: null, openclaw: false };
     },
 
+    // Get state WebSocket URL based on connection mode
+    getStateWsUrl() {
+        const hostname = window.location.hostname;
+        // SSH tunnel (localhost) -> use proxy through Boomshakalaka
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${wsProtocol}//${window.location.host}/reggie/state-ws`;
+        }
+        // VPN or local network -> direct connection to robot
+        return 'ws://192.168.0.11:8000/api/state/ws/full';
+    },
+
     // WebSocket connection
     connectWebSocket() {
         if (this.ws?.readyState === WebSocket.OPEN) return;
@@ -414,7 +435,9 @@ const ReggieShared = {
         this.updateStatusDot('ws-dot', 'connecting');
 
         try {
-            this.ws = new WebSocket('ws://192.168.0.11:8000/api/state/ws/full');
+            const wsUrl = this.getStateWsUrl();
+            console.log('[State] Using WebSocket URL:', wsUrl);
+            this.ws = new WebSocket(wsUrl);
 
             this.ws.onopen = () => {
                 console.log('WebSocket connected');
@@ -423,9 +446,22 @@ const ReggieShared = {
 
             this.ws.onmessage = (event) => {
                 try {
-                    const state = JSON.parse(event.data);
-                    this.processWebSocketState(state);
-                } catch (e) {}
+                    const data = JSON.parse(event.data);
+                    // Check for proxy error messages
+                    if (data.error) {
+                        console.warn('[State] Proxy error:', data.error, data.message);
+                        this.updateStatusDot('ws-dot', 'offline');
+                        // Don't reconnect immediately if daemon is down
+                        if (data.error === 'robot_daemon_not_running') {
+                            this.state.daemonRunning = false;
+                            this.emit('connectionChange', { connected: this.state.connected, daemon: 'not_initialized', openclaw: this.state.openclawConnected });
+                        }
+                        return;
+                    }
+                    this.processWebSocketState(data);
+                } catch (e) {
+                    console.warn('[State] Failed to parse WebSocket message:', e);
+                }
             };
 
             this.ws.onclose = () => {

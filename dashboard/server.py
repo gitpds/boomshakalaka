@@ -17,8 +17,10 @@ import json
 import uuid
 import logging
 import sqlite3
+import socket
 import threading
 import time
+from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import websocket as ws_client
@@ -128,12 +130,26 @@ try:
         get_stats as get_pm_stats,
         create_task_attachment, get_task_attachment, get_task_attachments,
         delete_task_attachment, get_project_for_task,
+        # SMS Allowlist functions
+        add_to_sms_allowlist, get_sms_allowlist_entry, is_phone_allowed,
+        get_sms_allowlist, remove_from_sms_allowlist, update_sms_allowlist_name,
+        log_sms_message, get_sms_conversation, get_recent_sms_messages,
+        normalize_phone_number,
         AVAILABLE_ICONS, DEFAULT_COLORS
     )
     PROJECTS_AVAILABLE = True
 except ImportError as e:
     print(f"Projects import failed: {e}")
     PROJECTS_AVAILABLE = False
+
+# Twilio SMS Client (voice is handled by MacBook)
+try:
+    from twilio.rest import Client as TwilioClient
+    from twilio.twiml.messaging_response import MessagingResponse
+    TWILIO_AVAILABLE = True
+except ImportError:
+    print("Twilio import failed - SMS features disabled")
+    TWILIO_AVAILABLE = False
 
 # Setup logging for AI Studio debugging
 logging.basicConfig(
@@ -176,6 +192,23 @@ MODELS_DIR = PROJECT_ROOT / 'models'  # Symlink to ComfyUI models
 GENERATIONS_DIR = PROJECT_ROOT / 'data' / 'generations'
 DATABASES_DIR = PROJECT_ROOT / 'data' / 'databases'
 THEMES_FILE = PROJECT_ROOT / 'data' / 'themes.json'
+
+# Twilio SMS/Voice Configuration
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '+16122559398')
+
+# Initialize Twilio client
+twilio_client = None
+if TWILIO_AVAILABLE and TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    try:
+        twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        print(f"Twilio client initialized for {TWILIO_PHONE_NUMBER}")
+    except Exception as e:
+        print(f"Failed to initialize Twilio client: {e}")
+
+# OpenClaw Gateway for AI responses
+OPENCLAW_GATEWAY_URL = 'http://192.168.0.168:18789'
 
 # Dev server port ranges to monitor
 # Each tuple: (start, end, category_name)
@@ -2197,6 +2230,16 @@ def reggie_openclaw():
                          **get_common_context())
 
 
+@app.route('/reggie/voice')
+def reggie_voice():
+    """Voice conversation interface for Reggie"""
+    return render_template('reggie_voice.html',
+                         active_page='reggie',
+                         reggie_page='voice',
+                         page_name='Voice',
+                         **get_common_context())
+
+
 # Keep old routes for backwards compatibility
 @app.route('/overview')
 def overview():
@@ -2645,6 +2688,53 @@ def openclaw_root_ws_proxy(ws):
 
 
 # ============================================
+# WebSocket Proxy Helpers
+# ============================================
+def send_ws_error_and_close(ws, code, msg, close_status=1011, close_reason='proxy error'):
+    """Send a JSON error frame and then properly close the WebSocket.
+
+    This prevents 'Invalid frame header' errors by:
+    1. Sending a JSON error message
+    2. Sending a proper WebSocket close frame
+    3. Closing the underlying socket (prevents Flask from sending HTTP bytes)
+    """
+    try:
+        ws.send(json.dumps({"error": code, "message": msg}))
+    except Exception:
+        pass  # Client may already be gone
+    try:
+        ws.close(close_status, close_reason)
+    except Exception:
+        pass
+    # CRITICAL: Close underlying socket to prevent Flask/Werkzeug
+    # from writing HTTP response bytes on the WebSocket connection
+    try:
+        ws.sock.shutdown(socket.SHUT_RDWR)
+        ws.sock.close()
+    except Exception:
+        pass
+
+
+def send_ws_error_and_close_typed(ws, error_type, code, msg, close_status=1011, close_reason='proxy error'):
+    """Send a typed JSON error frame (for camera signaling) and close properly."""
+    try:
+        ws.send(json.dumps({"type": error_type, "error": code, "message": msg}))
+    except Exception:
+        pass
+    try:
+        ws.close(close_status, close_reason)
+    except Exception:
+        pass
+    # CRITICAL: Close underlying socket to prevent Flask/Werkzeug
+    # from writing HTTP response bytes on the WebSocket connection
+    try:
+        ws.sock.shutdown(socket.SHUT_RDWR)
+        ws.sock.close()
+    except Exception:
+        pass
+
+
+# ============================================
 # Camera Signaling Proxy (SSH Tunnel Support)
 # ============================================
 REGGIE_CAMERA_SIGNALING_URL = 'ws://192.168.0.11:8443'
@@ -2655,6 +2745,10 @@ def reggie_camera_signaling_proxy(ws):
 
     This enables camera access when connecting via SSH tunnel (localhost:3003)
     since the robot at 192.168.0.11 isn't directly reachable.
+
+    IMPORTANT: flask-sock's ws object is NOT thread-safe. All ws.send/receive/close
+    calls must happen in a single thread. We use a Queue to pass messages from
+    the background thread (robot->client) to the main thread which does all ws operations.
     """
     logger.info("[CameraProxy] Client connected, connecting to robot...")
     logger.info(f"[CameraProxy] Target URL: {REGGIE_CAMERA_SIGNALING_URL}")
@@ -2663,12 +2757,20 @@ def reggie_camera_signaling_proxy(ws):
         target = ws_client.create_connection(REGGIE_CAMERA_SIGNALING_URL, timeout=30)
         logger.info("[CameraProxy] Connected to robot signaling server")
     except Exception as e:
-        logger.error(f"[CameraProxy] Failed to connect to robot: {e}")
+        error_msg = str(e)
+        logger.error(f"[CameraProxy] Failed to connect to robot: {error_msg}")
+        # Send error and close with proper WebSocket close frame
+        send_ws_error_and_close_typed(ws, "error", "connection_failed",
+                                       f"Failed to connect to camera server: {error_msg}")
         return
 
     running = True
+    send_queue = Queue()  # Thread-safe queue for robot->browser messages
+    CLOSE_SENTINEL = object()  # Marker to signal close
 
-    def forward_to_client():
+    def robot_to_queue():
+        """Background thread: reads from robot, puts messages in queue.
+        Does NOT touch the browser ws object."""
         nonlocal running
         try:
             while running:
@@ -2676,39 +2778,72 @@ def reggie_camera_signaling_proxy(ws):
                 if opcode == ws_client.ABNF.OPCODE_TEXT:
                     decoded = data.decode('utf-8')
                     preview = decoded[:100] + ('...' if len(decoded) > 100 else '')
-                    logger.info(f"[CameraProxy] Robot->Client: {preview}")
-                    ws.send(decoded)
+                    logger.info(f"[CameraProxy] Robot->Queue: {preview}")
+                    send_queue.put(('text', decoded))
                 elif opcode == ws_client.ABNF.OPCODE_BINARY:
-                    logger.info(f"[CameraProxy] Robot->Client: (binary {len(data)} bytes)")
-                    ws.send(data)
+                    logger.info(f"[CameraProxy] Robot->Queue: (binary {len(data)} bytes)")
+                    send_queue.put(('binary', data))
                 elif opcode == ws_client.ABNF.OPCODE_CLOSE:
                     logger.info("[CameraProxy] Robot sent close frame")
+                    send_queue.put(CLOSE_SENTINEL)
                     break
                 elif opcode == ws_client.ABNF.OPCODE_PING:
                     target.pong(data)
                 elif opcode == ws_client.ABNF.OPCODE_PONG:
                     pass
         except Exception as e:
-            logger.info(f"[CameraProxy] Forward thread ended: {e}")
+            logger.info(f"[CameraProxy] Robot reader ended: {e}")
+            send_queue.put(('error', str(e)))
         finally:
             running = False
+            try:
+                target.close()
+            except Exception:
+                pass
 
-    thread = threading.Thread(target=forward_to_client, daemon=True)
+    thread = threading.Thread(target=robot_to_queue, daemon=True)
     thread.start()
-    logger.info("[CameraProxy] Forward thread started, listening for client messages...")
+    logger.info("[CameraProxy] Robot reader thread started, main loop handling all ws operations...")
 
     try:
         while running:
-            msg = ws.receive(timeout=1)
-            if msg is None:
-                continue
-            if isinstance(msg, bytes):
-                logger.info(f"[CameraProxy] Client->Robot: (binary {len(msg)} bytes)")
-                target.send_binary(msg)
-            else:
-                preview = msg[:100] + ('...' if len(msg) > 100 else '')
-                logger.info(f"[CameraProxy] Client->Robot: {preview}")
-                target.send(msg)
+            # Drain the queue - send all robot messages to browser
+            # This is the ONLY place we call ws.send()
+            try:
+                while True:
+                    item = send_queue.get_nowait()
+                    if item is CLOSE_SENTINEL:
+                        logger.info("[CameraProxy] Got close sentinel, closing browser ws")
+                        running = False
+                        break
+                    msg_type, payload = item
+                    if msg_type == 'text':
+                        ws.send(payload)
+                    elif msg_type == 'binary':
+                        ws.send(payload)
+                    elif msg_type == 'error':
+                        logger.info(f"[CameraProxy] Sending error to browser: {payload}")
+                        ws.send(json.dumps({"type": "error", "error": "connection_lost",
+                                            "message": f"Connection to camera server lost: {payload}"}))
+                        running = False
+                        break
+            except Empty:
+                pass
+
+            if not running:
+                break
+
+            # Check for browser->robot messages (short timeout to stay responsive)
+            msg = ws.receive(timeout=0.1)
+            if msg is not None:
+                if isinstance(msg, bytes):
+                    logger.info(f"[CameraProxy] Client->Robot: (binary {len(msg)} bytes)")
+                    target.send_binary(msg)
+                else:
+                    preview = msg[:100] + ('...' if len(msg) > 100 else '')
+                    logger.info(f"[CameraProxy] Client->Robot: {preview}")
+                    target.send(msg)
+
     except Exception as e:
         logger.info(f"[CameraProxy] Main loop ended: {e}")
     finally:
@@ -2716,6 +2851,126 @@ def reggie_camera_signaling_proxy(ws):
         logger.info("[CameraProxy] Connection closed")
         try:
             target.close()
+        except Exception:
+            pass
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+
+# ============================================
+# Robot State WebSocket Proxy (SSH Tunnel Support)
+# ============================================
+REGGIE_STATE_WS_URL = 'ws://192.168.0.11:8000/api/state/ws/full'
+
+@sock.route('/reggie/state-ws')
+def reggie_state_ws_proxy(ws):
+    """Proxy robot state WebSocket for SSH tunnel access.
+
+    This enables real-time state updates when connecting via localhost:3003
+    since the robot at 192.168.0.11 isn't directly reachable.
+
+    IMPORTANT: flask-sock's ws object is NOT thread-safe. All ws.send/receive/close
+    calls must happen in a single thread. We use a Queue to pass messages from
+    the background thread (robot->client) to the main thread which does all ws operations.
+    """
+    logger.info("[StateProxy] Client connected, connecting to robot...")
+
+    try:
+        target = ws_client.create_connection(REGGIE_STATE_WS_URL, timeout=10)
+        logger.info("[StateProxy] Connected to robot state WebSocket")
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"[StateProxy] Failed to connect to robot: {error_msg}")
+        # Send error and close with proper WebSocket close frame
+        if "503" in error_msg or "Backend not running" in error_msg:
+            send_ws_error_and_close(ws, "robot_daemon_not_running",
+                                    "Robot daemon is not running. Please start it from the Control page.")
+        else:
+            send_ws_error_and_close(ws, "connection_failed",
+                                    f"Failed to connect to robot: {error_msg}")
+        return
+
+    running = True
+    send_queue = Queue()  # Thread-safe queue for robot->browser messages
+    CLOSE_SENTINEL = object()  # Marker to signal close
+
+    def robot_to_queue():
+        """Background thread: reads from robot, puts messages in queue.
+        Does NOT touch the browser ws object."""
+        nonlocal running
+        try:
+            while running:
+                opcode, data = target.recv_data(control_frame=True)
+                if opcode == ws_client.ABNF.OPCODE_TEXT:
+                    send_queue.put(('text', data.decode('utf-8')))
+                elif opcode == ws_client.ABNF.OPCODE_BINARY:
+                    send_queue.put(('binary', data))
+                elif opcode == ws_client.ABNF.OPCODE_CLOSE:
+                    logger.info("[StateProxy] Robot closed connection")
+                    send_queue.put(CLOSE_SENTINEL)
+                    break
+                elif opcode == ws_client.ABNF.OPCODE_PING:
+                    target.pong(data)
+        except Exception as e:
+            logger.debug(f"[StateProxy] Robot reader ended: {e}")
+            send_queue.put(('error', str(e)))
+        finally:
+            running = False
+            try:
+                target.close()
+            except Exception:
+                pass
+
+    thread = threading.Thread(target=robot_to_queue, daemon=True)
+    thread.start()
+
+    try:
+        while running:
+            # Drain the queue - send all robot messages to browser
+            # This is the ONLY place we call ws.send()
+            try:
+                while True:
+                    item = send_queue.get_nowait()
+                    if item is CLOSE_SENTINEL:
+                        logger.info("[StateProxy] Got close sentinel, closing browser ws")
+                        running = False
+                        break
+                    msg_type, payload = item
+                    if msg_type == 'text':
+                        ws.send(payload)
+                    elif msg_type == 'binary':
+                        ws.send(payload)
+                    elif msg_type == 'error':
+                        ws.send(json.dumps({"type": "error", "error": "connection_lost",
+                                            "message": f"Connection to robot lost: {payload}"}))
+                        running = False
+                        break
+            except Empty:
+                pass
+
+            if not running:
+                break
+
+            # Check for browser->robot messages (short timeout to stay responsive)
+            msg = ws.receive(timeout=0.1)
+            if msg is not None:
+                if isinstance(msg, bytes):
+                    target.send_binary(msg)
+                else:
+                    target.send(msg)
+
+    except Exception as e:
+        logger.debug(f"[StateProxy] Main loop ended: {e}")
+    finally:
+        running = False
+        try:
+            target.close()
+        except Exception:
+            pass
+        try:
+            ws.close()
         except Exception:
             pass
 
@@ -7055,6 +7310,350 @@ def api_dev_port_active():
     return jsonify({
         'active': active,
         'ranges': [{'start': s, 'end': e, 'category': c} for s, e, c in DEV_PORT_RANGES]
+    })
+
+
+# ============================================
+# SMS / Twilio Routes
+# ============================================
+
+def send_to_openclaw(message: str, phone_number: str, channel: str = 'sms', contact_name: str = None) -> str:
+    """Send a message to OpenClaw via CLI and get a response with session persistence.
+
+    Uses the OpenClaw CLI on the MacBook (Reggie's brain) via SSH. This maintains
+    conversation context across all channels through OpenClaw's native session system.
+
+    Args:
+        message: The user's message
+        phone_number: The sender's phone number (used for session key)
+        channel: The channel name (sms, whatsapp, etc.)
+        contact_name: Optional contact name to include in context
+    """
+    import subprocess
+    import json
+    import shlex
+
+    try:
+        # Normalize phone number for session key
+        normalized_phone = normalize_phone_number(phone_number)
+
+        # Build the message with channel context
+        # Include channel and contact info so Reggie knows who's messaging
+        context_prefix = f"[{channel.upper()}]"
+        if contact_name:
+            context_prefix += f" [From: {contact_name}]"
+
+        # Format: [SMS] [From: Paul] Hey Reggie
+        full_message = f"{context_prefix} {message}"
+
+        # Escape the message for shell
+        escaped_message = shlex.quote(full_message)
+
+        # Build the OpenClaw CLI command
+        # Uses --to to maintain session persistence based on phone number
+        # The session is shared with iMessage/WebChat via agent:main:main
+        cmd = f'''ssh reggiembp "source ~/.nvm/nvm.sh && nvm use node >/dev/null 2>&1 && openclaw agent --to {normalized_phone} --message {escaped_message} --json --timeout 60"'''
+
+        logger.info(f"Calling OpenClaw for {channel} from {normalized_phone}")
+
+        # Execute the command
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=90  # Allow time for AI response
+        )
+
+        if result.returncode != 0:
+            logger.error(f"OpenClaw CLI error: {result.stderr}")
+            return "I'm having trouble connecting to my brain. Try again in a bit!"
+
+        # Parse the JSON response
+        # Find the JSON object in the output (skip nvm messages)
+        output = result.stdout.strip()
+        json_start = output.find('{')
+        if json_start == -1:
+            logger.error(f"No JSON in OpenClaw response: {output[:200]}")
+            return "I'm having trouble thinking right now. Try again later!"
+
+        json_str = output[json_start:]
+        data = json.loads(json_str)
+
+        # Extract the response text
+        if data.get('status') == 'ok' and 'result' in data:
+            payloads = data['result'].get('payloads', [])
+            if payloads and payloads[0].get('text'):
+                response_text = payloads[0]['text']
+                logger.info(f"OpenClaw response for {channel}: {response_text[:50]}...")
+                return response_text
+
+        # Handle error status
+        if data.get('status') == 'error':
+            logger.error(f"OpenClaw returned error: {data.get('error', 'unknown')}")
+            return "Something went wrong on my end. Try again later!"
+
+        logger.error(f"Unexpected OpenClaw response format: {json_str[:200]}")
+        return "I'm having trouble thinking right now. Try again later!"
+
+    except subprocess.TimeoutExpired:
+        logger.error("OpenClaw request timed out")
+        return "I'm thinking too hard! Give me a moment and try again."
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse OpenClaw response: {e}")
+        return "I'm having trouble thinking right now. Try again later!"
+    except Exception as e:
+        logger.error(f"Error calling OpenClaw: {e}")
+        return "Something went wrong on my end. Try again later!"
+
+
+@app.route('/sms/webhook', methods=['POST'])
+def sms_webhook():
+    """Receive inbound SMS from Twilio.
+
+    Routes messages through OpenClaw for unified context across all channels.
+    """
+    if not TWILIO_AVAILABLE:
+        return 'SMS not available', 503
+
+    # Get message details from Twilio
+    from_number = request.form.get('From', '')
+    to_number = request.form.get('To', '')
+    body = request.form.get('Body', '').strip()
+    message_sid = request.form.get('MessageSid', '')
+
+    logger.info(f"SMS received from {from_number}: {body[:50]}...")
+
+    # Log the inbound message
+    log_sms_message(from_number, 'inbound', body, message_sid)
+
+    # Check if sender is on allowlist
+    allowlist_entry = get_sms_allowlist_entry(from_number)
+    if not allowlist_entry:
+        logger.info(f"Ignoring SMS from non-allowlisted number: {from_number}")
+        # Return empty TwiML response (no reply)
+        resp = MessagingResponse()
+        return str(resp), 200, {'Content-Type': 'text/xml'}
+
+    # Get contact name for context
+    contact_name = allowlist_entry.get('name') if allowlist_entry else None
+
+    # Get AI response from OpenClaw (with session persistence)
+    ai_response = send_to_openclaw(
+        message=body,
+        phone_number=from_number,
+        channel='sms',
+        contact_name=contact_name
+    )
+
+    # Log the outbound response
+    log_sms_message(from_number, 'outbound', ai_response)
+
+    # Send response via TwiML
+    resp = MessagingResponse()
+    resp.message(ai_response)
+
+    return str(resp), 200, {'Content-Type': 'text/xml'}
+
+
+@app.route('/whatsapp/webhook', methods=['POST'])
+def whatsapp_webhook():
+    """Receive inbound WhatsApp messages from Twilio.
+
+    Uses same allowlist as SMS. Routes through OpenClaw for unified context.
+    """
+    if not TWILIO_AVAILABLE:
+        return 'WhatsApp not available', 503
+
+    # Get message details from Twilio
+    # WhatsApp numbers come as "whatsapp:+15551234567"
+    from_number_raw = request.form.get('From', '')
+    from_number = from_number_raw.replace('whatsapp:', '')
+    to_number = request.form.get('To', '').replace('whatsapp:', '')
+    body = request.form.get('Body', '').strip()
+    message_sid = request.form.get('MessageSid', '')
+
+    logger.info(f"WhatsApp received from {from_number}: {body[:50]}...")
+
+    # Log the inbound message (reuse SMS logging)
+    log_sms_message(from_number, 'inbound', body, message_sid)
+
+    # Check if sender is on allowlist (shared with SMS)
+    allowlist_entry = get_sms_allowlist_entry(from_number)
+    if not allowlist_entry:
+        logger.info(f"Ignoring WhatsApp from non-allowlisted number: {from_number}")
+        resp = MessagingResponse()
+        return str(resp), 200, {'Content-Type': 'text/xml'}
+
+    # Get contact name for context
+    contact_name = allowlist_entry.get('name') if allowlist_entry else None
+
+    # Get AI response from OpenClaw (with session persistence)
+    ai_response = send_to_openclaw(
+        message=body,
+        phone_number=from_number,
+        channel='whatsapp',
+        contact_name=contact_name
+    )
+
+    # Log the outbound response
+    log_sms_message(from_number, 'outbound', ai_response)
+
+    # Send response via TwiML
+    resp = MessagingResponse()
+    resp.message(ai_response)
+
+    return str(resp), 200, {'Content-Type': 'text/xml'}
+
+
+@app.route('/api/sms/send', methods=['POST'])
+def api_sms_send():
+    """Send an outbound SMS (adds recipient to allowlist)."""
+    if not twilio_client:
+        return jsonify({'error': 'Twilio not configured'}), 503
+
+    data = request.get_json() or {}
+    to_number = data.get('to', '')
+    message = data.get('message', '')
+    name = data.get('name')  # Optional contact name
+
+    if not to_number or not message:
+        return jsonify({'error': 'Missing required fields: to, message'}), 400
+
+    try:
+        # Normalize the phone number
+        normalized = normalize_phone_number(to_number)
+
+        # Send the SMS
+        sent_message = twilio_client.messages.create(
+            body=message,
+            from_=TWILIO_PHONE_NUMBER,
+            to=normalized
+        )
+
+        # Add to allowlist (auto-allow anyone Reggie texts first)
+        add_to_sms_allowlist(normalized, added_by='outbound', name=name)
+
+        # Log the outbound message
+        log_sms_message(normalized, 'outbound', message, sent_message.sid)
+
+        logger.info(f"SMS sent to {normalized}: {message[:50]}...")
+
+        return jsonify({
+            'success': True,
+            'sid': sent_message.sid,
+            'to': normalized,
+            'message': message,
+            'status': sent_message.status
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to send SMS: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sms/allowlist', methods=['GET'])
+def api_sms_allowlist_get():
+    """Get the SMS allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    allowlist = get_sms_allowlist()
+    return jsonify({'allowlist': allowlist})
+
+
+@app.route('/api/sms/allowlist', methods=['POST'])
+def api_sms_allowlist_add():
+    """Add a phone number to the allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    data = request.get_json() or {}
+    phone_number = data.get('phone_number', '')
+    name = data.get('name')
+
+    if not phone_number:
+        return jsonify({'error': 'Missing required field: phone_number'}), 400
+
+    entry = add_to_sms_allowlist(phone_number, added_by='manual', name=name)
+    return jsonify({'success': True, 'entry': entry})
+
+
+@app.route('/api/sms/allowlist/<path:phone_number>', methods=['DELETE'])
+def api_sms_allowlist_remove(phone_number):
+    """Remove a phone number from the allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    # URL decode the phone number (+ becomes %2B)
+    from urllib.parse import unquote
+    phone_number = unquote(phone_number)
+
+    removed = remove_from_sms_allowlist(phone_number)
+    if removed:
+        return jsonify({'success': True, 'removed': phone_number})
+    else:
+        return jsonify({'error': 'Phone number not found'}), 404
+
+
+@app.route('/api/sms/allowlist/<path:phone_number>', methods=['PUT'])
+def api_sms_allowlist_update(phone_number):
+    """Update a phone number's name on the allowlist."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    from urllib.parse import unquote
+    phone_number = unquote(phone_number)
+
+    data = request.get_json() or {}
+    name = data.get('name', '')
+
+    entry = update_sms_allowlist_name(phone_number, name)
+    if entry:
+        return jsonify({'success': True, 'entry': entry})
+    else:
+        return jsonify({'error': 'Phone number not found'}), 404
+
+
+@app.route('/api/sms/conversations', methods=['GET'])
+def api_sms_conversations():
+    """Get recent SMS conversations."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    limit = request.args.get('limit', 100, type=int)
+    messages = get_recent_sms_messages(limit)
+    return jsonify({'messages': messages})
+
+
+@app.route('/api/sms/conversation/<path:phone_number>', methods=['GET'])
+def api_sms_conversation(phone_number):
+    """Get conversation history with a specific phone number."""
+    if not PROJECTS_AVAILABLE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    from urllib.parse import unquote
+    phone_number = unquote(phone_number)
+
+    limit = request.args.get('limit', 50, type=int)
+    messages = get_sms_conversation(phone_number, limit)
+    allowlist_entry = get_sms_allowlist_entry(phone_number)
+
+    return jsonify({
+        'phone_number': normalize_phone_number(phone_number),
+        'contact': allowlist_entry,
+        'messages': messages
+    })
+
+
+@app.route('/api/sms/status', methods=['GET'])
+def api_sms_status():
+    """Get SMS system status."""
+    return jsonify({
+        'twilio_available': TWILIO_AVAILABLE,
+        'twilio_configured': twilio_client is not None,
+        'phone_number': TWILIO_PHONE_NUMBER if twilio_client else None,
+        'openclaw_url': OPENCLAW_GATEWAY_URL
     })
 
 

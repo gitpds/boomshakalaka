@@ -1,0 +1,615 @@
+{% extends "reggie_base.html" %}
+{% block reggie_content %}
+<div class="voice-container">
+    <!-- Connection Status Banner -->
+    <div class="voice-status-banner" id="voice-banner">
+        <div class="banner-content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            </svg>
+            <span id="voice-status-text">Checking Voice Bridge...</span>
+        </div>
+        <div class="banner-state" id="voice-state-badge">Idle</div>
+    </div>
+
+    <!-- Main Voice Interface -->
+    <div class="voice-main">
+        <!-- Left Panel: Controls -->
+        <div class="voice-controls reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                Voice Session
+                <span class="reggie-card-badge" id="session-badge">Disconnected</span>
+            </div>
+            <div class="reggie-card-body">
+                <!-- Push to Talk Button -->
+                <div class="ptt-container">
+                    <button class="ptt-button" id="ptt-btn" disabled>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="ptt-icon">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                        </svg>
+                        <span class="ptt-text">Start Voice</span>
+                    </button>
+                    <p class="ptt-hint" id="ptt-hint">Click to start voice conversation</p>
+                </div>
+
+                <!-- Session Info -->
+                <div class="session-info">
+                    <div class="info-row">
+                        <span class="info-label">Session:</span>
+                        <span class="info-value" id="session-id">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Bridge:</span>
+                        <span class="info-value" id="bridge-status">Checking...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Robot Audio:</span>
+                        <span class="info-value" id="robot-audio-status">--</span>
+                    </div>
+                </div>
+
+                <!-- Feature Toggles -->
+                <div class="feature-toggles">
+                    <label class="toggle-row">
+                        <input type="checkbox" id="doa-toggle" checked>
+                        <span class="toggle-label">DoA Head Tracking</span>
+                    </label>
+                    <label class="toggle-row">
+                        <input type="checkbox" id="animations-toggle" checked>
+                        <span class="toggle-label">Antenna Animations</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Transcript -->
+        <div class="voice-transcript reggie-card">
+            <div class="reggie-card-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                Conversation
+                <button class="reggie-btn reggie-btn-sm" onclick="clearTranscript()" style="margin-left: auto;">Clear</button>
+            </div>
+            <div class="transcript-body" id="transcript">
+                <div class="transcript-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    </svg>
+                    <p>Start a voice session to begin conversing with Reggie</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="voice-stats">
+        <div class="stat-item">
+            <span class="stat-label">Audio Received</span>
+            <span class="stat-value" id="audio-received">0 KB</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Audio Sent</span>
+            <span class="stat-value" id="audio-sent">0 KB</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">Transcripts</span>
+            <span class="stat-value" id="transcript-count">0</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">DoA Angle</span>
+            <span class="stat-value" id="doa-angle">--</span>
+        </div>
+    </div>
+</div>
+
+<style>
+.voice-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 12px;
+}
+
+.voice-status-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.voice-status-banner.listening {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+}
+
+.voice-status-banner.processing {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: #f59e0b;
+}
+
+.voice-status-banner.speaking {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: var(--success);
+}
+
+.voice-status-banner.error {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--error);
+}
+
+.banner-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+}
+
+.banner-state {
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.voice-status-banner.listening .banner-state {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.voice-status-banner.processing .banner-state {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.voice-status-banner.speaking .banner-state {
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success);
+}
+
+/* Main Layout */
+.voice-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 16px;
+    min-height: 0;
+}
+
+/* PTT Button */
+.ptt-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+.ptt-button {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 4px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.ptt-button:not(:disabled):hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.ptt-button.active {
+    border-color: var(--success);
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success);
+    animation: pulse-ring 1.5s infinite;
+}
+
+.ptt-button.speaking {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.ptt-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+    70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.ptt-icon {
+    width: 36px;
+    height: 36px;
+}
+
+.ptt-text {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.ptt-hint {
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Session Info */
+.session-info {
+    border-top: 1px solid var(--border-color);
+    padding-top: 14px;
+    margin-top: 14px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 12px;
+}
+
+.info-label {
+    color: var(--text-muted);
+}
+
+.info-value {
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Feature Toggles */
+.feature-toggles {
+    border-top: 1px solid var(--border-color);
+    padding-top: 14px;
+    margin-top: 14px;
+}
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    cursor: pointer;
+}
+
+.toggle-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
+.toggle-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Transcript */
+.voice-transcript {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.transcript-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.transcript-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+    gap: 12px;
+}
+
+.transcript-entry {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.transcript-entry.user {
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid #3b82f6;
+    margin-right: 20%;
+}
+
+.transcript-entry.assistant {
+    background: rgba(34, 197, 94, 0.1);
+    border-left: 3px solid var(--success);
+    margin-left: 20%;
+}
+
+.transcript-entry .entry-label {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.transcript-entry.user .entry-label { color: #3b82f6; }
+.transcript-entry.assistant .entry-label { color: var(--success); }
+
+/* Stats Bar */
+.voice-stats {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.stat-value {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 800px) {
+    .voice-main {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+const BRIDGE_STATUS_URL = '/api/voice/bridge/status';
+const BRIDGE_HOST = '192.168.0.168';
+const BRIDGE_PORT = 18791;
+
+let voiceActive = false;
+let bridgeOnline = false;
+let currentState = 'idle';
+
+// Check bridge status
+async function checkBridgeStatus() {
+    const banner = document.getElementById('voice-banner');
+    const statusText = document.getElementById('voice-status-text');
+    const bridgeStatus = document.getElementById('bridge-status');
+    const pttBtn = document.getElementById('ptt-btn');
+    const sessionBadge = document.getElementById('session-badge');
+
+    try {
+        const response = await fetch(`http://${BRIDGE_HOST}:${BRIDGE_PORT}/status`, {
+            signal: AbortSignal.timeout(3000)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            bridgeOnline = true;
+            bridgeStatus.textContent = 'Online';
+            bridgeStatus.style.color = 'var(--success)';
+            statusText.textContent = 'Voice Bridge Ready';
+            pttBtn.disabled = false;
+
+            // Update stats
+            updateStats(data);
+
+            // Update state
+            if (data.state) {
+                updateState(data.state);
+            }
+
+            // Update session info
+            if (data.robot_connected) {
+                sessionBadge.textContent = 'Connected';
+                sessionBadge.style.background = 'var(--success)';
+            }
+        } else {
+            throw new Error('Bridge not responding');
+        }
+    } catch (err) {
+        bridgeOnline = false;
+        bridgeStatus.textContent = 'Offline';
+        bridgeStatus.style.color = 'var(--error)';
+        statusText.textContent = 'Voice Bridge Offline - Start it on MacBook';
+        pttBtn.disabled = true;
+        sessionBadge.textContent = 'Disconnected';
+        sessionBadge.style.background = 'var(--bg-tertiary)';
+    }
+}
+
+function updateStats(data) {
+    document.getElementById('audio-received').textContent =
+        formatBytes(data.audio_received_bytes || 0);
+    document.getElementById('audio-sent').textContent =
+        formatBytes(data.audio_sent_bytes || 0);
+    document.getElementById('transcript-count').textContent =
+        data.transcripts_count || 0;
+
+    // Show last transcript if available
+    if (data.last_transcript && data.last_transcript !== lastShownTranscript) {
+        addTranscriptEntry('user', data.last_transcript);
+        lastShownTranscript = data.last_transcript;
+    }
+    if (data.last_response && data.last_response !== lastShownResponse) {
+        addTranscriptEntry('assistant', data.last_response);
+        lastShownResponse = data.last_response;
+    }
+}
+
+let lastShownTranscript = '';
+let lastShownResponse = '';
+
+function updateState(state) {
+    currentState = state;
+    const banner = document.getElementById('voice-banner');
+    const stateBadge = document.getElementById('voice-state-badge');
+    const pttBtn = document.getElementById('ptt-btn');
+
+    // Remove all state classes
+    banner.className = 'voice-status-banner';
+    pttBtn.classList.remove('active', 'speaking');
+
+    // Apply new state
+    stateBadge.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+
+    switch (state) {
+        case 'listening':
+            banner.classList.add('listening');
+            pttBtn.classList.add('active');
+            break;
+        case 'processing':
+            banner.classList.add('processing');
+            break;
+        case 'speaking':
+            banner.classList.add('speaking');
+            pttBtn.classList.add('speaking');
+            break;
+        case 'error':
+            banner.classList.add('error');
+            break;
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+// PTT Button handler
+document.getElementById('ptt-btn').addEventListener('click', async function() {
+    if (!bridgeOnline) return;
+
+    const btn = this;
+    const hint = document.getElementById('ptt-hint');
+
+    if (!voiceActive) {
+        // Start voice session
+        try {
+            const response = await fetch(`http://${BRIDGE_HOST}:${BRIDGE_PORT}/start`, {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                voiceActive = true;
+                btn.querySelector('.ptt-text').textContent = 'Stop Voice';
+                btn.classList.add('active');
+                hint.textContent = 'Speak to Reggie - Click to stop';
+
+                // Clear transcript
+                clearTranscriptContent();
+            }
+        } catch (err) {
+            console.error('Failed to start voice:', err);
+        }
+    } else {
+        // Stop voice session
+        try {
+            await fetch(`http://${BRIDGE_HOST}:${BRIDGE_PORT}/stop`, {
+                method: 'POST'
+            });
+        } catch (err) {
+            console.error('Failed to stop voice:', err);
+        }
+
+        voiceActive = false;
+        btn.querySelector('.ptt-text').textContent = 'Start Voice';
+        btn.classList.remove('active', 'speaking');
+        hint.textContent = 'Click to start voice conversation';
+        updateState('idle');
+    }
+});
+
+function addTranscriptEntry(type, text) {
+    const transcript = document.getElementById('transcript');
+
+    // Remove empty state if present
+    const empty = transcript.querySelector('.transcript-empty');
+    if (empty) empty.remove();
+
+    const entry = document.createElement('div');
+    entry.className = `transcript-entry ${type}`;
+    entry.innerHTML = `
+        <div class="entry-label">${type === 'user' ? 'You' : 'Reggie'}</div>
+        <div class="entry-text">${escapeHtml(text)}</div>
+    `;
+
+    transcript.appendChild(entry);
+    transcript.scrollTop = transcript.scrollHeight;
+}
+
+function clearTranscript() {
+    clearTranscriptContent();
+    lastShownTranscript = '';
+    lastShownResponse = '';
+}
+
+function clearTranscriptContent() {
+    const transcript = document.getElementById('transcript');
+    transcript.innerHTML = `
+        <div class="transcript-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            </svg>
+            <p>Start a voice session to begin conversing with Reggie</p>
+        </div>
+    `;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    checkBridgeStatus();
+    // Check status periodically
+    setInterval(checkBridgeStatus, 5000);
+});
+</script>
+{% endblock %}
