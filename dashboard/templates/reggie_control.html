@@ -58,23 +58,23 @@
     <!-- Quick Actions Row -->
     <div class="quick-actions-section">
         <div class="quick-actions-row">
-            <button class="quick-action-btn" onclick="ControlPage.playAnimation('happy')" title="Wave">
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('welcoming1')" title="Wave">
                 <span class="action-icon">&#128075;</span>
                 <span class="action-label">Wave</span>
             </button>
-            <button class="quick-action-btn" onclick="ControlPage.playAnimation('dance_1')" title="Dance">
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('groovy_sway_and_roll')" title="Dance">
                 <span class="action-icon">&#128131;</span>
                 <span class="action-label">Dance</span>
             </button>
-            <button class="quick-action-btn" onclick="ControlPage.playAnimation('happy')" title="Happy">
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('cheerful1')" title="Happy">
                 <span class="action-icon">&#128522;</span>
                 <span class="action-label">Happy</span>
             </button>
-            <button class="quick-action-btn" onclick="ControlPage.playAnimation('sad')" title="Sad">
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('sad1')" title="Sad">
                 <span class="action-icon">&#128546;</span>
                 <span class="action-label">Sad</span>
             </button>
-            <button class="quick-action-btn" onclick="ControlPage.playAnimation('surprised')" title="Surprised">
+            <button class="quick-action-btn" onclick="ControlPage.playAnimation('surprised1')" title="Surprised">
                 <span class="action-icon">&#128558;</span>
                 <span class="action-label">Surprise</span>
             </button>
@@ -828,6 +828,7 @@ const ControlPage = {
             this.pc.onicecandidate = (event) => {
                 if (event.candidate) {
                     if (this.sessionId) {
+                        // Use peer wrapper with sessionId for routing
                         this.sendMessage({
                             type: 'peer',
                             sessionId: this.sessionId,
@@ -863,12 +864,27 @@ const ControlPage = {
 
             this.ws.onerror = (err) => {
                 console.error('[Control] WebSocket ERROR:', err);
+                // If ICE is connected, video is working - don't tear it down
+                const iceState = this.pc?.iceConnectionState;
+                if (iceState === 'connected' || iceState === 'completed') {
+                    console.log('[Control] Signaling error after ICE connected - video still working');
+                    this.ws = null;
+                    return;
+                }
                 statusText.textContent = 'Connection failed';
                 this.cleanupCamera();
             };
 
             this.ws.onclose = (event) => {
                 console.log('[Control] WebSocket CLOSED:', event.code);
+                // If ICE is connected, video is working - don't tear it down
+                const iceState = this.pc?.iceConnectionState;
+                if (iceState === 'connected' || iceState === 'completed') {
+                    console.log('[Control] Signaling closed after ICE connected - video still working');
+                    this.ws = null;
+                    this.isConnecting = false;
+                    return;
+                }
                 if (this.isConnecting) {
                     statusText.textContent = 'Connection closed';
                     this.cleanupCamera();
@@ -912,17 +928,31 @@ const ControlPage = {
 
             case 'peer':
                 if (msg.sdp && msg.sdp.type === 'offer') {
-                    await this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp }));
+                    await this.pc.setRemoteDescription(
+                        new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp })
+                    );
                     const answer = await this.pc.createAnswer();
                     await this.pc.setLocalDescription(answer);
-                    this.sendMessage({ type: 'peer', sessionId: this.sessionId, sdp: { type: 'answer', sdp: answer.sdp } });
+                    // Use original nested format - robot needs sdp.type to know it's an answer
+                    this.sendMessage({
+                        type: 'peer',
+                        sessionId: this.sessionId,
+                        sdp: {
+                            type: 'answer',
+                            sdp: answer.sdp
+                        }
+                    });
 
                     // Flush pending ICE candidates
                     for (const candidate of this.pendingIceCandidates) {
                         this.sendMessage({
                             type: 'peer',
                             sessionId: this.sessionId,
-                            ice: { candidate: candidate.candidate, sdpMLineIndex: candidate.sdpMLineIndex, sdpMid: candidate.sdpMid }
+                            ice: {
+                                candidate: candidate.candidate,
+                                sdpMLineIndex: candidate.sdpMLineIndex,
+                                sdpMid: candidate.sdpMid
+                            }
                         });
                     }
                     this.pendingIceCandidates = [];
@@ -938,16 +968,14 @@ const ControlPage = {
 
             case 'error':
                 const errorMsg = msg.message || msg.details || 'Unknown error';
-                // Signaling WebSocket closing after WebRTC connects is NORMAL
-                // Only treat as error if peer connection isn't already working
+                // If ICE is connected, video is working - don't tear it down
                 if (this.pc && (this.pc.iceConnectionState === 'connected' || this.pc.iceConnectionState === 'completed')) {
-                    console.log('[Control] Signaling closed (normal after WebRTC connects):', errorMsg);
-                    // Don't tear down - video is working!
-                } else {
-                    console.error('[Control] Signaling error:', errorMsg);
-                    statusText.textContent = 'Error: ' + errorMsg;
-                    this.cleanupCamera();
+                    console.log('[Control] Signaling error after ICE connected:', errorMsg);
+                    return;
                 }
+                console.error('[Control] Signaling error:', errorMsg);
+                statusText.textContent = 'Error: ' + errorMsg;
+                this.cleanupCamera();
                 break;
         }
     },
@@ -1223,7 +1251,7 @@ const ControlPage = {
             const icon = icons[index % icons.length];
 
             return `
-                <button class="move-btn" onclick="ControlPage.playMove('${name}')">
+                <button class="move-btn" onclick="ControlPage.playMove('${name}', event)">
                     <span class="move-icon">${icon}</span>
                     <span class="move-name">${name}</span>
                 </button>
@@ -1231,7 +1259,7 @@ const ControlPage = {
         }).join('');
     },
 
-    async playMove(name) {
+    async playMove(name, evt) {
         const datasetPath = this.currentDataset === 'dances'
             ? 'pollen-robotics/reachy-mini-dances-library'
             : 'pollen-robotics/reachy-mini-emotions-library';
@@ -1243,7 +1271,7 @@ const ControlPage = {
 
             // Visual feedback
             document.querySelectorAll('.move-btn').forEach(btn => btn.classList.remove('playing'));
-            event.target.closest('.move-btn')?.classList.add('playing');
+            evt?.target?.closest('.move-btn')?.classList.add('playing');
 
             setTimeout(() => {
                 document.querySelectorAll('.move-btn').forEach(btn => btn.classList.remove('playing'));
@@ -1255,14 +1283,24 @@ const ControlPage = {
     },
 
     async playAnimation(name) {
-        const datasetPath = name.includes('dance')
+        // Dance library moves (from pollen-robotics/reachy-mini-dances-library)
+        const danceMoves = [
+            'side_glance_flick', 'jackson_square', 'side_peekaboo', 'groovy_sway_and_roll',
+            'chin_lead', 'side_to_side_sway', 'neck_recoil', 'head_tilt_roll', 'simple_nod',
+            'uh_huh_tilt', 'interwoven_spirals', 'pendulum_swing', 'chicken_peck', 'yeah_nod',
+            'stumble_and_recover', 'dizzy_spin', 'grid_snap', 'polyrhythm_combo', 'sharp_side_tilt'
+        ];
+        const datasetPath = danceMoves.includes(name)
             ? 'pollen-robotics/reachy-mini-dances-library'
             : 'pollen-robotics/reachy-mini-emotions-library';
 
         try {
-            await fetch(`/api/reggie/move/play/recorded-move-dataset/${datasetPath}/${name}`, {
+            const resp = await fetch(`/api/reggie/move/play/recorded-move-dataset/${datasetPath}/${name}`, {
                 method: 'POST'
             });
+            if (!resp.ok) {
+                console.error(`[Control] Animation ${name} failed: ${resp.status}`);
+            }
         } catch (err) {
             console.error('[Control] Failed to play animation:', err);
         }
@@ -1279,6 +1317,21 @@ const ControlPage = {
 
 document.addEventListener('DOMContentLoaded', () => {
     ControlPage.init();
+});
+
+// Cleanup camera on page unload - CRITICAL for preventing FD leak
+window.addEventListener('beforeunload', () => {
+    console.log('[ControlPage] Page unload - cleaning up camera');
+    ControlPage.cleanupCamera();
+});
+
+// Pause camera when tab hidden
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        console.log('[ControlPage] Tab hidden - stopping camera');
+        ControlPage.cleanupCamera();
+    }
+    // Don't auto-reconnect camera on visibility - user can click Connect
 });
 
 // Keyboard shortcuts

@@ -461,6 +461,41 @@ const CameraPage = {
     pendingIceCandidates: [],
     isConnecting: false,
     isFullscreen: false,
+    producerTimeout: null,  // Timeout for waiting for producer to appear
+
+    // Debug logging - connection lifecycle tracking
+    connectionLog: [],
+    connectStartTime: null,
+
+    logEvent(event, data = {}) {
+        const entry = {
+            ts: new Date().toISOString(),
+            elapsed: this.connectStartTime ? Date.now() - this.connectStartTime : 0,
+            event,
+            ...data
+        };
+        this.connectionLog.push(entry);
+        console.log('[Camera]', JSON.stringify(entry));
+    },
+
+    dumpCrashLog(context) {
+        console.error('[Camera] ===== CRASH LOG =====');
+        console.error('[Camera] Context:', context);
+        console.error('[Camera] Full event log:');
+        this.connectionLog.forEach((entry, i) => {
+            console.error(`[Camera]   [${i}]`, JSON.stringify(entry));
+        });
+        console.error('[Camera] Final state:', JSON.stringify({
+            wsReadyState: this.ws?.readyState,
+            pcConnectionState: this.pc?.connectionState,
+            pcIceState: this.pc?.iceConnectionState,
+            pcSignalingState: this.pc?.signalingState,
+            sessionId: this.sessionId,
+            producerPeerId: this.producerPeerId,
+            isConnecting: this.isConnecting
+        }));
+        console.error('[Camera] ===== END CRASH LOG =====');
+    },
 
     getSignalingUrl() {
         const hostname = window.location.hostname;
@@ -522,13 +557,53 @@ const CameraPage = {
         }
     },
 
+    // Try to attach to the reachymini producer (called on list/producer-added)
+    // Does NOT give up if producer isn't found - waits for timeout instead
+    tryAttachProducer(producers) {
+        if (this.producerPeerId) {
+            this.logEvent('producer_skip', {reason: 'already_attached'});
+            return;  // Already found and attached
+        }
+
+        const statusText = document.getElementById('camera-status-text');
+        const producerName = document.getElementById('producer-name');
+
+        const producerNames = producers.map(p => p.meta?.name || 'unnamed');
+        this.logEvent('checking_producers', {count: producers.length, names: producerNames});
+
+        const producer = producers.find(p => p.meta?.name === 'reachymini');
+
+        if (producer) {
+            this.logEvent('producer_found', {id: producer.id, name: producer.meta?.name});
+            this.producerPeerId = producer.id;
+            producerName.textContent = producer.meta?.name || 'Unknown';
+            this.sendMessage({ type: 'startSession', peerId: producer.id });
+            statusText.textContent = 'Starting session...';
+
+            // Clear the timeout since we found the producer
+            if (this.producerTimeout) {
+                clearTimeout(this.producerTimeout);
+                this.producerTimeout = null;
+            }
+        } else {
+            this.logEvent('producer_waiting', {availableNames: producerNames});
+            statusText.textContent = 'Waiting for camera...';
+            document.getElementById('stream-status').textContent = 'Waiting...';
+        }
+    },
+
     connect() {
-        console.log('[Camera] ====== CONNECT STARTED ======');
-        console.log('[Camera] Signaling URL:', this.signalingUrl);
-        console.log('[Camera] Mode:', this.signalingMode);
+        // Reset connection log for new connection attempt
+        this.connectionLog = [];
+        this.connectStartTime = Date.now();
+
+        this.logEvent('connect_start', {
+            signalingUrl: this.signalingUrl,
+            mode: this.signalingMode
+        });
 
         if (this.isConnecting || this.pc) {
-            console.log('[Camera] Already connecting or connected, aborting');
+            this.logEvent('connect_abort', {reason: 'already_connecting_or_connected'});
             return;
         }
         this.isConnecting = true;
@@ -560,7 +635,7 @@ const CameraPage = {
             console.log('[Camera] RTCPeerConnection created, transceivers added');
 
             this.pc.ontrack = (event) => {
-                console.log('[Camera] ontrack - Received track:', event.track.kind, 'streams:', event.streams.length);
+                this.logEvent('track_received', {kind: event.track.kind, streams: event.streams.length});
                 const video = document.getElementById('camera-video');
                 if (video && event.streams[0]) {
                     video.srcObject = event.streams[0];
@@ -589,28 +664,37 @@ const CameraPage = {
             };
 
             this.pc.onconnectionstatechange = () => {
-                console.log('[Camera] RTCPeerConnection state:', this.pc.connectionState);
+                this.logEvent('pc_state', {state: this.pc.connectionState});
                 if (this.pc.connectionState === 'disconnected' || this.pc.connectionState === 'failed') {
+                    this.dumpCrashLog('pc_state_' + this.pc.connectionState);
                     this.handleDisconnect();
                 }
             };
 
             this.pc.onicegatheringstatechange = () => {
-                console.log('[Camera] ICE gathering state:', this.pc.iceGatheringState);
+                this.logEvent('ice_gathering', {state: this.pc.iceGatheringState});
             };
 
             this.pc.oniceconnectionstatechange = () => {
-                console.log('[Camera] ICE connection state:', this.pc.iceConnectionState);
+                this.logEvent('ice_state', {state: this.pc.iceConnectionState});
+                // Dump log on ICE failure for debugging
+                if (this.pc.iceConnectionState === 'failed' || this.pc.iceConnectionState === 'disconnected') {
+                    this.dumpCrashLog('ice_state_' + this.pc.iceConnectionState);
+                }
             };
 
             this.pc.onsignalingstatechange = () => {
-                console.log('[Camera] Signaling state:', this.pc.signalingState);
+                this.logEvent('signaling_state', {state: this.pc.signalingState});
             };
 
             this.pc.onicecandidate = (event) => {
                 if (event.candidate) {
-                    console.log('[Camera] ICE candidate:', event.candidate.candidate.substring(0, 60) + '...');
+                    const candidateType = event.candidate.candidate.includes('typ host') ? 'host' :
+                                         event.candidate.candidate.includes('typ srflx') ? 'srflx' :
+                                         event.candidate.candidate.includes('typ relay') ? 'relay' : 'unknown';
+                    this.logEvent('ice_candidate', {type: candidateType, hasSession: !!this.sessionId});
                     if (this.sessionId) {
+                        // Use peer wrapper with sessionId for routing
                         this.sendMessage({
                             type: 'peer',
                             sessionId: this.sessionId,
@@ -621,48 +705,88 @@ const CameraPage = {
                             }
                         });
                     } else {
-                        console.log('[Camera] ICE candidate queued (no sessionId yet)');
                         this.pendingIceCandidates.push(event.candidate);
                     }
                 } else {
-                    console.log('[Camera] ICE gathering complete');
+                    this.logEvent('ice_gathering_complete');
                 }
             };
 
             // Connect to signaling server
-            console.log('[Camera] Creating WebSocket to:', this.signalingUrl);
+            this.logEvent('ws_creating', {url: this.signalingUrl});
             this.ws = new WebSocket(this.signalingUrl);
 
             this.ws.onopen = () => {
-                console.log('[Camera] WebSocket OPEN - readyState:', this.ws.readyState);
+                this.logEvent('ws_open', {readyState: this.ws.readyState});
                 statusText.textContent = 'Connected to signaling...';
             };
 
             this.ws.onmessage = async (event) => {
-                console.log('[Camera] <<< RECV:', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
+                const preview = event.data.substring(0, 100) + (event.data.length > 100 ? '...' : '');
+                this.logEvent('ws_recv', {len: event.data.length, preview: preview});
                 try {
                     const msg = JSON.parse(event.data);
                     await this.handleMessage(msg);
                 } catch (e) {
-                    console.warn('[Camera] Failed to parse message:', e);
+                    this.logEvent('ws_parse_error', {error: e.message});
                 }
             };
 
             this.ws.onerror = (err) => {
-                console.error('[Camera] WebSocket ERROR:', err);
-                console.error('[Camera] WebSocket ERROR details - readyState:', this.ws?.readyState);
+                this.logEvent('ws_error', {
+                    readyState: this.ws?.readyState,
+                    pcState: this.pc?.connectionState,
+                    iceState: this.pc?.iceConnectionState
+                });
+                // If ICE is connected, video is working - don't tear it down
+                const iceState = this.pc?.iceConnectionState;
+                if (iceState === 'connected' || iceState === 'completed') {
+                    console.log('[Camera] Signaling error after ICE connected - video still working');
+                    this.ws = null;
+                    return;
+                }
+                this.dumpCrashLog('ws_error');
                 statusText.textContent = 'Connection failed';
                 streamStatus.textContent = 'Error';
                 this.cleanup();
             };
 
             this.ws.onclose = (event) => {
-                console.log('[Camera] WebSocket CLOSED - code:', event.code, 'reason:', event.reason || '(none)', 'wasClean:', event.wasClean);
+                this.logEvent('ws_close', {
+                    code: event.code,
+                    reason: event.reason || '(none)',
+                    wasClean: event.wasClean,
+                    pcState: this.pc?.connectionState,
+                    iceState: this.pc?.iceConnectionState
+                });
+
+                // If ICE is connected, video is working - don't tear it down
+                const iceState = this.pc?.iceConnectionState;
+                if (iceState === 'connected' || iceState === 'completed') {
+                    console.log('[Camera] Signaling closed after ICE connected - video still working');
+                    this.ws = null;
+                    this.isConnecting = false;
+                    return;
+                }
+
+                // If WebSocket closes while still connecting, it's an error
                 if (this.isConnecting) {
+                    this.dumpCrashLog('ws_close_unexpected');
                     statusText.textContent = 'Connection closed';
                     this.cleanup();
                 }
             };
+
+            // Set a timeout to give up if producer never appears
+            // GStreamer pipeline can take 200-500ms to start; 5 seconds is ample
+            this.producerTimeout = setTimeout(() => {
+                if (!this.producerPeerId) {
+                    console.log('[Camera] Timeout waiting for producer (5s elapsed)');
+                    statusText.textContent = 'Camera not available (timeout)';
+                    document.getElementById('stream-status').textContent = 'Timeout';
+                    this.cleanup();
+                }
+            }, 5000);
 
         } catch (err) {
             console.error('[Camera] Error:', err);
@@ -672,7 +796,7 @@ const CameraPage = {
     },
 
     async handleMessage(msg) {
-        console.log('[Camera] Processing message type:', msg.type);
+        this.logEvent('msg_handle', {type: msg.type});
         const statusText = document.getElementById('camera-status-text');
         const producerName = document.getElementById('producer-name');
 
@@ -685,56 +809,55 @@ const CameraPage = {
                 break;
 
             case 'list':
-                console.log('[Camera] Received producer list:', msg.producers?.length || 0, 'producers');
-                if (msg.producers) {
-                    msg.producers.forEach((p, i) => {
-                        console.log(`[Camera]   Producer ${i}: id=${p.id} name=${p.meta?.name}`);
-                    });
-                }
-                const producer = msg.producers.find(p => p.meta?.name === 'reachymini');
-                if (!producer) {
-                    console.log('[Camera] No reachymini producer found!');
-                    statusText.textContent = 'Camera not available';
-                    document.getElementById('stream-status').textContent = 'No producer';
-                    this.cleanup();
-                    return;
-                }
-                this.producerPeerId = producer.id;
-                producerName.textContent = producer.meta?.name || 'Unknown';
-                console.log('[Camera] Found producer, starting session with peerId:', producer.id);
-                this.sendMessage({ type: 'startSession', peerId: producer.id });
-                statusText.textContent = 'Starting session...';
+            case 'producer-added':  // Handle dynamic producer additions
+                console.log('[Camera] Received', msg.type, '- producers:', msg.producers?.length || 0);
+                // Use tryAttachProducer which waits for producer instead of failing immediately
+                this.tryAttachProducer(msg.producers || []);
                 break;
 
             case 'sessionStarted':
                 this.sessionId = msg.sessionId;
-                console.log('[Camera] Session started, sessionId:', this.sessionId);
+                this.logEvent('session_started', {sessionId: this.sessionId});
                 statusText.textContent = 'Waiting for stream...';
                 break;
 
             case 'peer':
                 if (msg.sdp && msg.sdp.type === 'offer') {
-                    console.log('[Camera] Received SDP offer, creating answer...');
-                    await this.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp }));
-                    console.log('[Camera] Remote description set');
+                    this.logEvent('sdp_offer_received', {sdpLen: msg.sdp.sdp?.length || 0});
+                    await this.pc.setRemoteDescription(
+                        new RTCSessionDescription({ type: 'offer', sdp: msg.sdp.sdp })
+                    );
+                    this.logEvent('remote_desc_set');
                     const answer = await this.pc.createAnswer();
                     await this.pc.setLocalDescription(answer);
-                    console.log('[Camera] Local description set, sending answer');
-                    this.sendMessage({ type: 'peer', sessionId: this.sessionId, sdp: { type: 'answer', sdp: answer.sdp } });
+                    this.logEvent('local_desc_set', {answerLen: answer.sdp?.length || 0});
+                    // Use original nested format - robot needs sdp.type to know it's an answer
+                    this.sendMessage({
+                        type: 'peer',
+                        sessionId: this.sessionId,
+                        sdp: {
+                            type: 'answer',
+                            sdp: answer.sdp
+                        }
+                    });
 
                     // Flush pending ICE candidates
-                    console.log('[Camera] Flushing', this.pendingIceCandidates.length, 'pending ICE candidates');
+                    this.logEvent('flushing_candidates', {count: this.pendingIceCandidates.length});
                     for (const candidate of this.pendingIceCandidates) {
                         this.sendMessage({
                             type: 'peer',
                             sessionId: this.sessionId,
-                            ice: { candidate: candidate.candidate, sdpMLineIndex: candidate.sdpMLineIndex, sdpMid: candidate.sdpMid }
+                            ice: {
+                                candidate: candidate.candidate,
+                                sdpMLineIndex: candidate.sdpMLineIndex,
+                                sdpMid: candidate.sdpMid
+                            }
                         });
                     }
                     this.pendingIceCandidates = [];
                 }
                 if (msg.ice) {
-                    console.log('[Camera] Received remote ICE candidate');
+                    this.logEvent('remote_ice_received');
                     await this.pc.addIceCandidate(new RTCIceCandidate({
                         candidate: msg.ice.candidate,
                         sdpMLineIndex: msg.ice.sdpMLineIndex,
@@ -745,16 +868,14 @@ const CameraPage = {
 
             case 'error':
                 const errorMsg = msg.message || msg.details || 'Unknown error';
-                // Signaling WebSocket closing after WebRTC connects is NORMAL
-                // Only treat as error if peer connection isn't already working
+                // If ICE is connected, video is working - don't tear it down
                 if (this.pc && (this.pc.iceConnectionState === 'connected' || this.pc.iceConnectionState === 'completed')) {
-                    console.log('[Camera] Signaling closed (normal after WebRTC connects):', errorMsg);
-                    // Don't tear down - video is working!
-                } else {
-                    console.error('[Camera] Signaling error:', errorMsg);
-                    statusText.textContent = 'Error: ' + errorMsg;
-                    this.handleDisconnect();
+                    console.log('[Camera] Signaling error after ICE connected:', errorMsg);
+                    return;
                 }
+                console.error('[Camera] Signaling error:', errorMsg);
+                statusText.textContent = 'Error: ' + errorMsg;
+                this.handleDisconnect();
                 break;
 
             default:
@@ -765,10 +886,10 @@ const CameraPage = {
     sendMessage(msg) {
         if (this.ws?.readyState === WebSocket.OPEN) {
             const json = JSON.stringify(msg);
-            console.log('[Camera] >>> SEND:', json.substring(0, 200) + (json.length > 200 ? '...' : ''));
+            this.logEvent('ws_send', {type: msg.type, len: json.length});
             this.ws.send(json);
         } else {
-            console.warn('[Camera] Cannot send - WebSocket not open, readyState:', this.ws?.readyState);
+            this.logEvent('ws_send_failed', {type: msg.type, readyState: this.ws?.readyState});
         }
     },
 
@@ -784,7 +905,19 @@ const CameraPage = {
     },
 
     cleanup() {
+        this.logEvent('cleanup_start', {
+            hadWs: !!this.ws,
+            hadPc: !!this.pc,
+            wsState: this.ws?.readyState,
+            pcState: this.pc?.connectionState
+        });
         this.isConnecting = false;
+
+        // Clear producer timeout
+        if (this.producerTimeout) {
+            clearTimeout(this.producerTimeout);
+            this.producerTimeout = null;
+        }
 
         if (this.ws) {
             this.ws.onopen = null;
@@ -854,6 +987,21 @@ const CameraPage = {
 
 document.addEventListener('DOMContentLoaded', () => {
     CameraPage.init();
+});
+
+// Cleanup camera on page unload - CRITICAL for preventing FD leak
+window.addEventListener('beforeunload', () => {
+    console.log('[CameraPage] Page unload - cleaning up');
+    CameraPage.cleanup();
+});
+
+// Pause camera when tab hidden
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        console.log('[CameraPage] Tab hidden - stopping camera');
+        CameraPage.cleanup();
+    }
+    // Don't auto-reconnect camera on visibility - user can click Connect
 });
 
 // Exit fullscreen on Escape
