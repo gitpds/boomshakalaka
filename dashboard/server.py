@@ -2399,6 +2399,93 @@ def api_reggie_health():
     return jsonify(result)
 
 
+@app.route('/api/reggie/system-status')
+def api_reggie_system_status():
+    """Aggregated status of all Reggie subsystems for Command Center.
+
+    Checks robot, OpenClaw, voice bridge, SMS/Twilio config, and recent messages
+    in parallel using ThreadPoolExecutor.
+    """
+    result = {
+        'brain': {'online': False},
+        'robot': {'online': False, 'daemon': None},
+        'voice': {'online': False},
+        'sms': {'online': False, 'phone': None},
+        'channels': {
+            'imessage': {'online': False},
+            'slack': {'online': False},
+            'email': {'online': False, 'address': 'reggie@paulstotts.com'},
+            'webchat': {'online': False},
+            'google_workspace': {'online': True},
+            'quickbooks': {'online': True},
+        },
+        'recent_sms': [],
+        'timestamp': datetime.now().isoformat()
+    }
+
+    def check_robot():
+        try:
+            resp = requests.get(f'{REGGIE_ROBOT_URL}/api/daemon/status', timeout=3)
+            if resp.status_code == 200:
+                data = resp.json()
+                return ('robot', True, data.get('state', 'unknown'))
+        except requests.RequestException:
+            pass
+        return ('robot', False, None)
+
+    def check_openclaw():
+        try:
+            resp = requests.get(REGGIE_OPENCLAW_URL, timeout=3, headers={'Connection': 'close'})
+            return ('openclaw', resp.status_code == 200)
+        except requests.RequestException:
+            return ('openclaw', False)
+
+    def check_voice():
+        try:
+            resp = requests.get(f'{REGGIE_VOICE_BRIDGE_URL}/status', timeout=3)
+            return ('voice', resp.status_code == 200)
+        except requests.RequestException:
+            return ('voice', False)
+
+    def get_sms_info():
+        sms_online = twilio_client is not None
+        phone = TWILIO_PHONE_NUMBER if sms_online else None
+        recent = []
+        if PROJECTS_AVAILABLE:
+            try:
+                recent = get_recent_sms_messages(20)
+            except Exception:
+                pass
+        return ('sms', sms_online, phone, recent)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(check_robot),
+            executor.submit(check_openclaw),
+            executor.submit(check_voice),
+            executor.submit(get_sms_info),
+        ]
+        for future in as_completed(futures):
+            res = future.result()
+            if res[0] == 'robot':
+                result['robot'] = {'online': res[1], 'daemon': res[2]}
+            elif res[0] == 'openclaw':
+                openclaw_online = res[1]
+                result['brain'] = {'online': openclaw_online}
+                # Channels that depend on OpenClaw
+                result['channels']['imessage']['online'] = openclaw_online
+                result['channels']['slack']['online'] = openclaw_online
+                result['channels']['email']['online'] = openclaw_online
+                result['channels']['webchat']['online'] = openclaw_online
+            elif res[0] == 'voice':
+                result['voice'] = {'online': res[1]}
+            elif res[0] == 'sms':
+                result['sms'] = {'online': res[1], 'phone': res[2]}
+                result['recent_sms'] = res[3]
+
+    return jsonify(result)
+
+
 @app.route('/api/reggie/status')
 def api_reggie_status():
     """Get Reggie's full robot state"""
@@ -2542,6 +2629,163 @@ def api_reggie_proxy(endpoint):
         return jsonify({'error': 'Request timed out'}), 504
     except requests.RequestException as e:
         return jsonify({'error': str(e)}), 503
+
+
+# ============================================
+# Voice Bridge Proxy Routes (SSH Tunnel Support)
+# ============================================
+# Proxy voice bridge requests for SSH tunnel access
+# Voice bridge runs on MacBook at 192.168.0.168:18791
+REGGIE_VOICE_BRIDGE_URL = 'http://192.168.0.168:18791'
+
+
+@app.route('/api/voice/bridge/status')
+def voice_bridge_status():
+    """Proxy voice bridge status for SSH tunnel access."""
+    try:
+        resp = requests.get(f'{REGGIE_VOICE_BRIDGE_URL}/status', timeout=3)
+        return jsonify(resp.json()), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Voice bridge timeout', 'running': False}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e), 'running': False}), 503
+
+
+@app.route('/api/voice/bridge/start', methods=['POST'])
+def voice_bridge_start():
+    """Proxy voice bridge start for SSH tunnel access."""
+    try:
+        resp = requests.post(f'{REGGIE_VOICE_BRIDGE_URL}/start', timeout=5)
+        return jsonify(resp.json()), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Voice bridge timeout'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@app.route('/api/voice/bridge/stop', methods=['POST'])
+def voice_bridge_stop():
+    """Proxy voice bridge stop for SSH tunnel access."""
+    try:
+        resp = requests.post(f'{REGGIE_VOICE_BRIDGE_URL}/stop', timeout=5)
+        return jsonify(resp.json()), resp.status_code
+    except requests.Timeout:
+        return jsonify({'error': 'Voice bridge timeout'}), 504
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 503
+
+
+@sock.route('/api/voice/bridge/ws')
+def voice_bridge_ws_proxy(ws):
+    """Proxy WebSocket to voice bridge for browser-based voice conversations.
+
+    Enables dashboard press-to-talk when connecting via SSH tunnel (localhost:3003).
+    The voice bridge runs on MacBook at 192.168.0.168:18791.
+
+    Protocol:
+    - Browser sends: Binary audio chunks (PCM int16, 16kHz) or JSON commands
+    - Server sends: JSON status messages and binary TTS audio chunks
+
+    IMPORTANT: flask-sock's ws object is NOT thread-safe. All ws.send calls
+    must happen in a single thread. We use a Queue to pass messages.
+    """
+    voice_bridge_ws_url = REGGIE_VOICE_BRIDGE_URL.replace('http://', 'ws://') + '/browser'
+    logger.info(f"[VoiceBridgeProxy] Client connected, connecting to {voice_bridge_ws_url}...")
+
+    try:
+        target = ws_client.create_connection(voice_bridge_ws_url, timeout=30)
+        logger.info("[VoiceBridgeProxy] Connected to voice bridge")
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"[VoiceBridgeProxy] Failed to connect: {error_msg}")
+        send_ws_error_and_close(ws, "connection_failed",
+                                f"Failed to connect to voice bridge: {error_msg}")
+        return
+
+    running = True
+    send_queue = Queue()  # Thread-safe queue for voice-bridge->browser messages
+    CLOSE_SENTINEL = object()
+
+    def bridge_to_queue():
+        """Background thread: reads from voice bridge, puts messages in queue."""
+        nonlocal running
+        try:
+            while running:
+                try:
+                    opcode, data = target.recv_data(control_frame=True)
+                    if opcode == ws_client.ABNF.OPCODE_TEXT:
+                        send_queue.put(('text', data.decode('utf-8')))
+                    elif opcode == ws_client.ABNF.OPCODE_BINARY:
+                        logger.info(f"[VoiceBridgeProxy] Received {len(data)} binary bytes from voice bridge (type: {type(data).__name__})")
+                        send_queue.put(('binary', data))
+                    elif opcode == ws_client.ABNF.OPCODE_CLOSE:
+                        logger.info("[VoiceBridgeProxy] Voice bridge closed connection")
+                        break
+                    elif opcode == ws_client.ABNF.OPCODE_PING:
+                        target.pong(data)
+                except Exception as e:
+                    if running:
+                        logger.debug(f"[VoiceBridgeProxy] bridge_to_queue recv error: {e}")
+                    break
+        finally:
+            running = False
+            send_queue.put(CLOSE_SENTINEL)
+
+    thread = threading.Thread(target=bridge_to_queue, daemon=True)
+    thread.start()
+
+    binary_bytes_forwarded = 0
+    text_messages_forwarded = 0
+
+    try:
+        while running:
+            # Check for messages from voice bridge to send to browser
+            try:
+                item = send_queue.get(timeout=0.05)
+                if item is CLOSE_SENTINEL:
+                    break
+                msg_type, data = item
+                if msg_type == 'text':
+                    ws.send(data)
+                    text_messages_forwarded += 1
+                elif msg_type == 'binary':
+                    # Explicitly send as bytes for binary audio
+                    ws.send(bytes(data))
+                    binary_bytes_forwarded += len(data)
+                    logger.info(f"[VoiceBridgeProxy] Forwarded {len(data)} binary bytes to browser (total: {binary_bytes_forwarded})")
+            except Empty:
+                pass
+
+            # Check for messages from browser to send to voice bridge
+            try:
+                msg = ws.receive(timeout=0.05)
+                if msg is None:
+                    continue
+                if isinstance(msg, bytes):
+                    # Binary audio data from browser
+                    target.send_binary(msg)
+                else:
+                    # JSON command from browser
+                    target.send(msg)
+            except Exception as e:
+                if 'timed out' not in str(e).lower():
+                    if running:
+                        logger.debug(f"[VoiceBridgeProxy] browser recv error: {e}")
+                    break
+
+    except Exception as e:
+        logger.debug(f"[VoiceBridgeProxy] main loop error: {e}")
+    finally:
+        running = False
+        logger.info(f"[VoiceBridgeProxy] Closing connections - forwarded {text_messages_forwarded} text msgs, {binary_bytes_forwarded} binary bytes")
+        try:
+            target.close()
+        except Exception:
+            pass
+        try:
+            ws.close()
+        except Exception:
+            pass
 
 
 # ============================================
@@ -2750,15 +2994,23 @@ def reggie_camera_signaling_proxy(ws):
     calls must happen in a single thread. We use a Queue to pass messages from
     the background thread (robot->client) to the main thread which does all ws operations.
     """
-    logger.info("[CameraProxy] Client connected, connecting to robot...")
+    import time
+    connect_start = time.time()
+    msg_count = {'robot_to_browser': 0, 'browser_to_robot': 0}
+
+    logger.info("[CameraProxy] ====== NEW CONNECTION ======")
     logger.info(f"[CameraProxy] Target URL: {REGGIE_CAMERA_SIGNALING_URL}")
 
     try:
+        logger.info(f"[CameraProxy] Connecting to robot at {REGGIE_CAMERA_SIGNALING_URL}...")
         target = ws_client.create_connection(REGGIE_CAMERA_SIGNALING_URL, timeout=30)
-        logger.info("[CameraProxy] Connected to robot signaling server")
+        connect_elapsed = time.time() - connect_start
+        logger.info(f"[CameraProxy] Connected to robot in {connect_elapsed:.2f}s")
     except Exception as e:
+        connect_elapsed = time.time() - connect_start
         error_msg = str(e)
-        logger.error(f"[CameraProxy] Failed to connect to robot: {error_msg}")
+        error_type = type(e).__name__
+        logger.error(f"[CameraProxy] Failed to connect after {connect_elapsed:.2f}s: {error_type}: {error_msg}")
         # Send error and close with proper WebSocket close frame
         send_ws_error_and_close_typed(ws, "error", "connection_failed",
                                        f"Failed to connect to camera server: {error_msg}")
@@ -2772,19 +3024,32 @@ def reggie_camera_signaling_proxy(ws):
         """Background thread: reads from robot, puts messages in queue.
         Does NOT touch the browser ws object."""
         nonlocal running
+        frame_count = 0
+        logger.info(f"[CameraProxy] Reader thread starting, target.connected={target.connected}")
         try:
             while running:
+                recv_start = time.time()
                 opcode, data = target.recv_data(control_frame=True)
+                recv_time = time.time() - recv_start
+                frame_count += 1
+
+                # Log slow receives
+                if recv_time > 0.5:
+                    logger.warning(f"[CameraProxy] Slow recv: {recv_time:.3f}s (frame #{frame_count})")
+
+                opcode_name = {1: 'TEXT', 2: 'BINARY', 8: 'CLOSE', 9: 'PING', 10: 'PONG'}.get(opcode, f'UNKNOWN({opcode})')
+                logger.debug(f"[CameraProxy] Frame recv: opcode={opcode_name}, len={len(data)}, target.connected={target.connected}")
+
                 if opcode == ws_client.ABNF.OPCODE_TEXT:
                     decoded = data.decode('utf-8')
                     preview = decoded[:100] + ('...' if len(decoded) > 100 else '')
-                    logger.info(f"[CameraProxy] Robot->Queue: {preview}")
+                    logger.info(f"[CameraProxy] Robot->Queue #{frame_count}: {preview}")
                     send_queue.put(('text', decoded))
                 elif opcode == ws_client.ABNF.OPCODE_BINARY:
-                    logger.info(f"[CameraProxy] Robot->Queue: (binary {len(data)} bytes)")
+                    logger.info(f"[CameraProxy] Robot->Queue #{frame_count}: (binary {len(data)} bytes)")
                     send_queue.put(('binary', data))
                 elif opcode == ws_client.ABNF.OPCODE_CLOSE:
-                    logger.info("[CameraProxy] Robot sent close frame")
+                    logger.info(f"[CameraProxy] Robot sent close frame (frame #{frame_count})")
                     send_queue.put(CLOSE_SENTINEL)
                     break
                 elif opcode == ws_client.ABNF.OPCODE_PING:
@@ -2792,18 +3057,23 @@ def reggie_camera_signaling_proxy(ws):
                 elif opcode == ws_client.ABNF.OPCODE_PONG:
                     pass
         except Exception as e:
-            logger.info(f"[CameraProxy] Robot reader ended: {e}")
-            send_queue.put(('error', str(e)))
+            elapsed = time.time() - connect_start
+            error_type = type(e).__name__
+            logger.error(f"[CameraProxy] Reader thread CRASHED after {elapsed:.2f}s, {frame_count} frames")
+            logger.error(f"[CameraProxy] Error: {error_type}: {e}")
+            logger.error(f"[CameraProxy] target.connected={getattr(target, 'connected', 'unknown')}, queue_size={send_queue.qsize()}")
+            send_queue.put(('error', f"{error_type}: {e}"))
         finally:
             running = False
+            logger.info(f"[CameraProxy] Reader thread exiting, processed {frame_count} frames")
             try:
                 target.close()
             except Exception:
                 pass
 
-    thread = threading.Thread(target=robot_to_queue, daemon=True)
-    thread.start()
-    logger.info("[CameraProxy] Robot reader thread started, main loop handling all ws operations...")
+    reader_thread = threading.Thread(target=robot_to_queue, daemon=True)
+    reader_thread.start()
+    logger.info("[CameraProxy] Reader thread started, main loop handling all ws operations...")
 
     try:
         while running:
@@ -2817,6 +3087,8 @@ def reggie_camera_signaling_proxy(ws):
                         running = False
                         break
                     msg_type, payload = item
+                    msg_count['robot_to_browser'] += 1
+                    logger.debug(f"[CameraProxy] Queue->Browser #{msg_count['robot_to_browser']}: type={msg_type}, len={len(payload) if payload else 0}")
                     if msg_type == 'text':
                         ws.send(payload)
                     elif msg_type == 'binary':
@@ -2834,21 +3106,44 @@ def reggie_camera_signaling_proxy(ws):
                 break
 
             # Check for browser->robot messages (short timeout to stay responsive)
+            recv_start = time.time()
             msg = ws.receive(timeout=0.1)
+            recv_time = time.time() - recv_start
+            if recv_time > 0.5:
+                logger.warning(f"[CameraProxy] Slow browser recv: {recv_time:.3f}s")
+
             if msg is not None:
+                msg_count['browser_to_robot'] += 1
                 if isinstance(msg, bytes):
-                    logger.info(f"[CameraProxy] Client->Robot: (binary {len(msg)} bytes)")
+                    logger.info(f"[CameraProxy] Browser->Robot #{msg_count['browser_to_robot']}: (binary {len(msg)} bytes)")
                     target.send_binary(msg)
                 else:
                     preview = msg[:100] + ('...' if len(msg) > 100 else '')
-                    logger.info(f"[CameraProxy] Client->Robot: {preview}")
+                    logger.info(f"[CameraProxy] Browser->Robot #{msg_count['browser_to_robot']}: {preview}")
                     target.send(msg)
 
     except Exception as e:
-        logger.info(f"[CameraProxy] Main loop ended: {e}")
+        elapsed = time.time() - connect_start
+        error_type = type(e).__name__
+        # CRASH DUMP - capture full diagnostic state
+        crash_info = {
+            'error': str(e),
+            'error_type': error_type,
+            'elapsed_seconds': round(elapsed, 2),
+            'msgs_robot_to_browser': msg_count['robot_to_browser'],
+            'msgs_browser_to_robot': msg_count['browser_to_robot'],
+            'target_connected': getattr(target, 'connected', 'unknown'),
+            'queue_size': send_queue.qsize(),
+            'reader_thread_alive': reader_thread.is_alive() if reader_thread else False,
+        }
+        logger.error(f"[CameraProxy] ====== CRASH DUMP ======")
+        logger.error(f"[CameraProxy] {json.dumps(crash_info)}")
+        logger.error(f"[CameraProxy] ====== END CRASH DUMP ======")
     finally:
         running = False
-        logger.info("[CameraProxy] Connection closed")
+        elapsed = time.time() - connect_start
+        logger.info(f"[CameraProxy] Connection closed after {elapsed:.2f}s, "
+                    f"r2b={msg_count['robot_to_browser']}, b2r={msg_count['browser_to_robot']}")
         try:
             target.close()
         except Exception:
@@ -7317,6 +7612,43 @@ def api_dev_port_active():
 # SMS / Twilio Routes
 # ============================================
 
+_openclaw_session_cache = {'id': None, 'ts': 0}
+
+
+def get_openclaw_session_id() -> str:
+    """Look up the OpenClaw system session UUID via SSH.
+
+    The CLI --session-id flag uses literal IDs, not aliases.
+    We must pass the actual UUID that Slack's native plugin uses.
+    Cached for 5 minutes to avoid repeated subprocess calls.
+    """
+    import time as _time
+    cache = _openclaw_session_cache
+    if cache['id'] and (_time.time() - cache['ts']) < 300:
+        return cache['id']
+    try:
+        result = subprocess.run(
+            'ssh reggiembp "source ~/.nvm/nvm.sh && nvm use node >/dev/null 2>&1 && openclaw sessions list --json"',
+            shell=True, capture_output=True, text=True, timeout=15
+        )
+        if result.returncode == 0:
+            # Skip nvm output, find JSON
+            output = result.stdout.strip()
+            json_start = output.find('{')
+            if json_start >= 0:
+                data = json.loads(output[json_start:])
+                for s in data.get('sessions', []):
+                    if s.get('systemSent') is True:
+                        cache['id'] = s['sessionId']
+                        cache['ts'] = _time.time()
+                        logger.info(f"Resolved OpenClaw session: {cache['id']}")
+                        return cache['id']
+    except Exception as e:
+        logger.error(f"Failed to resolve OpenClaw session: {e}")
+    logger.warning("Using fallback session id 'main'")
+    return 'main'
+
+
 def send_to_openclaw(message: str, phone_number: str, channel: str = 'sms', contact_name: str = None) -> str:
     """Send a message to OpenClaw via CLI and get a response with session persistence.
 
@@ -7350,9 +7682,10 @@ def send_to_openclaw(message: str, phone_number: str, channel: str = 'sms', cont
         escaped_message = shlex.quote(full_message)
 
         # Build the OpenClaw CLI command
-        # Uses --to to maintain session persistence based on phone number
-        # The session is shared with iMessage/WebChat via agent:main:main
-        cmd = f'''ssh reggiembp "source ~/.nvm/nvm.sh && nvm use node >/dev/null 2>&1 && openclaw agent --to {normalized_phone} --message {escaped_message} --json --timeout 60"'''
+        # Uses --session-id with the real system UUID so SMS shares
+        # the same session as Slack, WebChat, and iMessage
+        session_id = get_openclaw_session_id()
+        cmd = f'''ssh reggiembp "source ~/.nvm/nvm.sh && nvm use node >/dev/null 2>&1 && openclaw agent --session-id {session_id} --message {escaped_message} --json --timeout 60"'''
 
         logger.info(f"Calling OpenClaw for {channel} from {normalized_phone}")
 
