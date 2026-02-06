@@ -1,6 +1,7 @@
 # Unified Multi-Channel Messaging for Reggie
 
 > **Created:** 2026-02-03
+> **Updated:** 2026-02-06
 > **Status:** Production
 
 This document describes how Reggie maintains unified memory and context across all communication channels.
@@ -413,6 +414,27 @@ what he's done.
 **Files:**
 - `robotics/reggie/automation/memory.py` - Memory logging module
 - Sessions stored on MacBook: `~/.openclaw/agents/main/sessions/*.jsonl`
+
+### Two-System Automation Architecture (2026-02-06)
+
+Reggie's automation runs on two independent systems with separate Google Workspace identities:
+
+| | Workstation (boomshakalaka) | MacBook (reggiesmbp) |
+|---|---|---|
+| **Identity** | automation@paulstotts.com | reggie@millcity.ai |
+| **Service Account** | automation-paulstotts-com@default-486615.iam.gserviceaccount.com | reggiesmbp@reggie-486615.iam.gserviceaccount.com |
+| **Domain** | paulstotts.com (Google Workspace) | millcity.ai (Google Workspace) |
+| **Runner** | `run.sh` (conda robotics_env) | `python3` (system) |
+| **Scripts Path** | `/home/pds/robotics/reggie/automation/` | `~/Reggie/automation/` |
+| **Branding** | "Boomshakalaka" | "Reggie" |
+| **Use Case** | True Tracking workflows, workstation automation | OpenClaw skills, Reggie-initiated actions |
+
+**Key Points:**
+- OpenClaw skills on MacBook execute **locally** (not via SSH to workstation)
+- Workstation automation scripts are called by Claude Code or cron jobs
+- Both systems log actions to OpenClaw memory for cross-channel recall
+- Each system has its own `config.json` with the full 25-scope set
+- Technician schedule queries still SSH to workstation (tech config lives there)
 
 ### Testing Memory
 ```bash
